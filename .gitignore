@@ -1,0 +1,50 @@
+# Dependencies
+frontend/node_modules/
+.pnp
+.pnp.js
+
+# Testing & Coverage
+coverage/
+*.lcov
+
+# Next.js Build
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# Environment Files
+.env
+.env*.local
+backend/.env
+frontend/.env.local
+
+# Go Binaries & Output
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+backend/server.exe
+backend/bin/
+backend/test.exe
+
+# Debug & Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Legacy / Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/

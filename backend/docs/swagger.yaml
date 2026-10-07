@@ -1,0 +1,1778 @@
+basePath: /
+definitions:
+  handlers.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      token_type:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+    type: object
+  handlers.BulkActionRequest:
+    properties:
+      action:
+        type: string
+      lead_numbers:
+        items:
+          type: string
+        type: array
+      lost_reason:
+        type: string
+      owner_id:
+        type: integer
+      status:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+    required:
+    - action
+    - lead_numbers
+    type: object
+  handlers.BulkCreateRequest:
+    properties:
+      leads:
+        items:
+          $ref: '#/definitions/repository.CreateLeadInput'
+        type: array
+    required:
+    - leads
+    type: object
+  handlers.CreateApiKeyRequest:
+    properties:
+      custom_expiry_date:
+        type: string
+      expiry:
+        type: string
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+    required:
+    - name
+    type: object
+  handlers.CreateCustomFieldRequest:
+    properties:
+      field_key:
+        type: string
+      field_label:
+        type: string
+      field_order:
+        type: integer
+      field_type:
+        type: string
+      options:
+        items:
+          type: string
+        type: array
+      required:
+        type: boolean
+      section:
+        type: string
+      visibility:
+        type: boolean
+    required:
+    - field_key
+    - field_label
+    - field_type
+    type: object
+  handlers.CreateFollowUpRequest:
+    properties:
+      due_date:
+        type: string
+      follow_up_type:
+        type: string
+      notes:
+        type: string
+      title:
+        type: string
+    required:
+    - due_date
+    - title
+    type: object
+  handlers.CreateNoteRequest:
+    properties:
+      content:
+        maxLength: 5000
+        minLength: 1
+        type: string
+    required:
+    - content
+    type: object
+  handlers.CreateSavedViewRequest:
+    properties:
+      filters:
+        additionalProperties: true
+        type: object
+      is_default:
+        type: boolean
+      name:
+        type: string
+    required:
+    - filters
+    - name
+    type: object
+  handlers.CreateSourceRequest:
+    properties:
+      is_default:
+        type: boolean
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  handlers.CreateStatusRequest:
+    properties:
+      color:
+        type: string
+      is_default:
+        type: boolean
+      name:
+        type: string
+      order:
+        type: integer
+    required:
+    - name
+    type: object
+  handlers.CreateTagRequest:
+    properties:
+      color:
+        type: string
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  handlers.DuplicateSettingsRequest:
+    properties:
+      action:
+        description: '"prevent" or "warn"'
+        type: string
+      check_email:
+        type: boolean
+      check_phone:
+        type: boolean
+    type: object
+  handlers.ImportRequest:
+    properties:
+      duplicate_strategy:
+        description: '"skip", "update", "error"'
+        type: string
+      leads:
+        items:
+          additionalProperties: true
+          type: object
+        type: array
+    required:
+    - leads
+    type: object
+  handlers.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  handlers.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      password:
+        maxLength: 100
+        minLength: 6
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  handlers.UpdateCustomFieldRequest:
+    properties:
+      field_label:
+        type: string
+      field_order:
+        type: integer
+      options:
+        items:
+          type: string
+        type: array
+      required:
+        type: boolean
+      section:
+        type: string
+      visibility:
+        type: boolean
+    type: object
+  handlers.UpdateFollowUpRequest:
+    properties:
+      completed:
+        type: boolean
+      due_date:
+        type: string
+      follow_up_type:
+        type: string
+      notes:
+        type: string
+      title:
+        type: string
+    type: object
+  handlers.WebhookLeadPayload:
+    properties:
+      city:
+        type: string
+      contact:
+        type: string
+      custom_fields:
+        additionalProperties: true
+        type: object
+      description:
+        type: string
+      email:
+        type: string
+      email_address:
+        type: string
+      first_name:
+        type: string
+      full_name:
+        type: string
+      last_name:
+        type: string
+      lead_source:
+        type: string
+      location:
+        type: string
+      message:
+        type: string
+      mobile:
+        type: string
+      name:
+        type: string
+      notes:
+        type: string
+      number:
+        type: string
+      phone:
+        type: string
+      phone_number:
+        type: string
+      query:
+        type: string
+      requirement:
+        type: string
+      source:
+        type: string
+    type: object
+  handlers.WebhookResponse:
+    properties:
+      lead:
+        $ref: '#/definitions/models.LeadResponse'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  models.ApiKey:
+    properties:
+      created_at:
+        type: string
+      created_by_id:
+        type: integer
+      expires_at:
+        type: string
+      id:
+        type: integer
+      key_prefix:
+        type: string
+      key_suffix:
+        type: string
+      last_used_at:
+        type: string
+      masked_key:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.ApiKeyCreatedResponse:
+    properties:
+      api_key:
+        type: string
+      created_at:
+        type: string
+      created_by_id:
+        type: integer
+      expires_at:
+        type: string
+      id:
+        type: integer
+      key_prefix:
+        type: string
+      key_suffix:
+        type: string
+      last_used_at:
+        type: string
+      masked_key:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.CustomFieldDefinitionResponse:
+    properties:
+      created_at:
+        type: string
+      field_key:
+        type: string
+      field_label:
+        type: string
+      field_order:
+        type: integer
+      field_type:
+        type: string
+      id:
+        type: integer
+      options:
+        items:
+          type: string
+        type: array
+      required:
+        type: boolean
+      section:
+        type: string
+      visibility:
+        type: boolean
+      workspace_id:
+        type: integer
+    type: object
+  models.CustomFieldValueItem:
+    properties:
+      field_key:
+        type: string
+      field_label:
+        type: string
+      field_type:
+        type: string
+      value: {}
+    type: object
+  models.DuplicateCheckSettings:
+    properties:
+      action:
+        description: '"prevent" or "warn"'
+        type: string
+      check_email:
+        type: boolean
+      check_phone:
+        type: boolean
+    type: object
+  models.FollowUp:
+    properties:
+      completed:
+        type: boolean
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      due_date:
+        type: string
+      follow_up_type:
+        type: string
+      id:
+        type: integer
+      lead_number:
+        type: string
+      notes:
+        type: string
+      reminder_state:
+        type: string
+      title:
+        type: string
+      user:
+        $ref: '#/definitions/models.UserSummary'
+      user_id:
+        type: integer
+    type: object
+  models.LeadActivity:
+    properties:
+      activity_type:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      lead_number:
+        type: string
+      title:
+        type: string
+      user:
+        $ref: '#/definitions/models.UserSummary'
+      user_id:
+        type: integer
+    type: object
+  models.LeadListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/models.LeadResponse'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      pages:
+        type: integer
+      total:
+        type: integer
+      view_counts:
+        additionalProperties:
+          type: integer
+        type: object
+    type: object
+  models.LeadNote:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      lead_number:
+        type: string
+      user:
+        $ref: '#/definitions/models.UserSummary'
+      user_id:
+        type: integer
+    type: object
+  models.LeadResponse:
+    properties:
+      city:
+        type: string
+      created_at:
+        type: string
+      created_by_id:
+        type: integer
+      creator:
+        $ref: '#/definitions/models.UserSummary'
+      custom_field_details:
+        items:
+          $ref: '#/definitions/models.CustomFieldValueItem'
+        type: array
+      custom_fields:
+        additionalProperties: true
+        type: object
+      deleted_at:
+        type: string
+      email:
+        type: string
+      follow_up_completed:
+        type: boolean
+      follow_up_date:
+        type: string
+      follow_up_notes:
+        type: string
+      follow_up_type:
+        type: string
+      last_activity_at:
+        type: string
+      lead_age_days:
+        type: integer
+      lost_reason:
+        type: string
+      name:
+        type: string
+      notes_count:
+        type: integer
+      number:
+        type: string
+      owner:
+        $ref: '#/definitions/models.UserSummary'
+      owner_id:
+        type: integer
+      phone:
+        type: string
+      requirement:
+        type: string
+      score:
+        type: integer
+      source:
+        type: string
+      status:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+    type: object
+  models.LeadSource:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_default:
+        type: boolean
+      name:
+        type: string
+      workspace_id:
+        type: integer
+    type: object
+  models.LeadStatus:
+    properties:
+      color:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      is_default:
+        type: boolean
+      name:
+        type: string
+      order:
+        type: integer
+      workspace_id:
+        type: integer
+    type: object
+  models.SavedView:
+    properties:
+      created_at:
+        type: string
+      filters:
+        additionalProperties: true
+        type: object
+      id:
+        type: integer
+      is_default:
+        type: boolean
+      name:
+        type: string
+      user_id:
+        type: integer
+    type: object
+  models.Tag:
+    properties:
+      color:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+      workspace_id:
+        type: integer
+    type: object
+  models.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  models.UserSummary:
+    properties:
+      email:
+        type: string
+      id:
+        type: integer
+      name:
+        type: string
+    type: object
+  repository.CreateLeadInput:
+    properties:
+      city:
+        type: string
+      custom_fields:
+        additionalProperties: true
+        type: object
+      email:
+        type: string
+      follow_up_completed:
+        type: boolean
+      follow_up_date:
+        type: string
+      follow_up_notes:
+        type: string
+      follow_up_type:
+        type: string
+      lost_reason:
+        type: string
+      name:
+        type: string
+      number:
+        type: string
+      owner_id:
+        type: integer
+      phone:
+        type: string
+      requirement:
+        type: string
+      score:
+        type: integer
+      source:
+        type: string
+      status:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
+  repository.UpdateLeadInput:
+    properties:
+      city:
+        type: string
+      custom_fields:
+        additionalProperties: true
+        type: object
+      email:
+        type: string
+      follow_up_completed:
+        type: boolean
+      follow_up_date:
+        type: string
+      follow_up_notes:
+        type: string
+      follow_up_type:
+        type: string
+      lost_reason:
+        type: string
+      name:
+        type: string
+      owner_id:
+        type: integer
+      phone:
+        type: string
+      requirement:
+        type: string
+      score:
+        type: integer
+      source:
+        type: string
+      status:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
+info:
+  contact: {}
+  description: High-performance Go + Gin + PostgreSQL 17 CRM Lead Management backend.
+  title: Universal CRM - Lead Management API (Go)
+  version: 2.0.0
+paths:
+  /api/api-keys:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.ApiKey'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List all generated API keys
+      tags:
+      - API Keys
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: API Key Details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateApiKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.ApiKeyCreatedResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate a new programmatic API key
+      tags:
+      - API Keys
+  /api/api-keys/{key_id}:
+    delete:
+      parameters:
+      - description: Key ID
+        in: path
+        name: key_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete an API key
+      tags:
+      - API Keys
+    get:
+      parameters:
+      - description: Key ID
+        in: path
+        name: key_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ApiKey'
+      security:
+      - BearerAuth: []
+      summary: Get API key metadata by ID
+      tags:
+      - API Keys
+  /api/api-keys/{key_id}/revoke:
+    post:
+      parameters:
+      - description: Key ID
+        in: path
+        name: key_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.ApiKey'
+      security:
+      - BearerAuth: []
+      summary: Revoke an active API key
+      tags:
+      - API Keys
+  /api/leads:
+    get:
+      parameters:
+      - description: Saved view (all, my, unassigned, hot, today, overdue, trash)
+        in: query
+        name: view
+        type: string
+      - description: Search query
+        in: query
+        name: search
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by source
+        in: query
+        name: source
+        type: string
+      - description: Filter by owner ID
+        in: query
+        name: owner_id
+        type: integer
+      - description: Filter by tag
+        in: query
+        name: tag
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - default: created_at
+        description: Sort field
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: Sort direction
+        in: query
+        name: sort_dir
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.LeadListResponse'
+      security:
+      - BearerAuth: []
+      summary: List leads with filtering, search, pagination, and saved views
+      tags:
+      - Leads
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Lead Data
+        in: body
+        name: lead
+        required: true
+        schema:
+          $ref: '#/definitions/repository.CreateLeadInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.LeadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a new lead
+      tags:
+      - Leads
+  /api/leads/{number}:
+    delete:
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      - default: false
+        description: Hard delete permanently
+        in: query
+        name: permanent
+        type: boolean
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete lead (soft delete or permanent delete)
+      tags:
+      - Leads
+    get:
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.LeadResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get lead by unique number
+      tags:
+      - Leads
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: update
+        required: true
+        schema:
+          $ref: '#/definitions/repository.UpdateLeadInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.LeadResponse'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update lead fields
+      tags:
+      - Leads
+  /api/leads/{number}/activities:
+    get:
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.LeadActivity'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Get chronological audit timeline for a lead
+      tags:
+      - Leads
+  /api/leads/{number}/follow-ups:
+    get:
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.FollowUp'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List follow-ups for a lead
+      tags:
+      - Leads
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      - description: Follow-up Details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateFollowUpRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.FollowUp'
+      security:
+      - BearerAuth: []
+      summary: Schedule a follow-up for a lead
+      tags:
+      - Leads
+  /api/leads/{number}/follow-ups/{follow_up_id}:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      - description: Follow-up ID
+        in: path
+        name: follow_up_id
+        required: true
+        type: integer
+      - description: Update fields
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateFollowUpRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.FollowUp'
+      security:
+      - BearerAuth: []
+      summary: Update follow-up status or details
+      tags:
+      - Leads
+  /api/leads/{number}/notes:
+    get:
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.LeadNote'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List internal notes for a lead
+      tags:
+      - Leads
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      - description: Note content
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateNoteRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.LeadNote'
+      security:
+      - BearerAuth: []
+      summary: Add internal note to a lead
+      tags:
+      - Leads
+  /api/leads/{number}/notes/{note_id}:
+    delete:
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      - description: Note ID
+        in: path
+        name: note_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete internal note from a lead
+      tags:
+      - Leads
+  /api/leads/{number}/restore:
+    post:
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Restore soft-deleted lead from trash
+      tags:
+      - Leads
+  /api/leads/{number}/tags:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Lead Number
+        in: path
+        name: number
+        required: true
+        type: string
+      - description: Tags to append
+        in: body
+        name: tags
+        required: true
+        schema:
+          items:
+            type: string
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add tags to a lead
+      tags:
+      - Leads
+  /api/leads/bulk:
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bulk Action Details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.BulkActionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Perform bulk operations on multiple leads
+      tags:
+      - Leads
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: List of leads
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.BulkCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Batch insert multiple leads
+      tags:
+      - Leads
+  /api/leads/custom-fields:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.CustomFieldDefinitionResponse'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List custom field definitions
+      tags:
+      - Leads
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Custom Field definition
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateCustomFieldRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.CustomFieldDefinitionResponse'
+      security:
+      - BearerAuth: []
+      summary: Define a new dynamic custom field
+      tags:
+      - Leads
+  /api/leads/custom-fields/{field_id}:
+    delete:
+      parameters:
+      - description: Custom Field ID
+        in: path
+        name: field_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a custom field definition
+      tags:
+      - Leads
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Custom Field ID
+        in: path
+        name: field_id
+        required: true
+        type: integer
+      - description: Fields to update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateCustomFieldRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.CustomFieldDefinitionResponse'
+      security:
+      - BearerAuth: []
+      summary: Update an existing custom field definition
+      tags:
+      - Leads
+  /api/leads/export:
+    get:
+      produces:
+      - text/csv
+      responses: {}
+      security:
+      - BearerAuth: []
+      summary: Export leads to CSV file respecting active filters
+      tags:
+      - Leads
+  /api/leads/import:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Import payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ImportRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Import leads with configurable duplicate resolution
+      tags:
+      - Leads
+  /api/leads/saved-views:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.SavedView'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List saved views for current user
+      tags:
+      - Leads
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Saved View Details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateSavedViewRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.SavedView'
+      security:
+      - BearerAuth: []
+      summary: Create a saved filter view
+      tags:
+      - Leads
+  /api/leads/saved-views/{view_id}:
+    delete:
+      parameters:
+      - description: Saved View ID
+        in: path
+        name: view_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete saved filter view
+      tags:
+      - Leads
+  /api/leads/settings/duplicates:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DuplicateCheckSettings'
+      security:
+      - BearerAuth: []
+      summary: Get workspace duplicate prevention rules
+      tags:
+      - Leads
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Duplicate Settings
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.DuplicateSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.DuplicateCheckSettings'
+      security:
+      - BearerAuth: []
+      summary: Update workspace duplicate prevention rules
+      tags:
+      - Leads
+  /api/leads/sources:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.LeadSource'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List lead sources
+      tags:
+      - Leads
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Source details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateSourceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.LeadSource'
+      security:
+      - BearerAuth: []
+      summary: Create a lead source
+      tags:
+      - Leads
+  /api/leads/sources/{source_id}:
+    delete:
+      parameters:
+      - description: Source ID
+        in: path
+        name: source_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete lead source
+      tags:
+      - Leads
+  /api/leads/statuses:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.LeadStatus'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List lead statuses
+      tags:
+      - Leads
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Status details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.LeadStatus'
+      security:
+      - BearerAuth: []
+      summary: Create a lead status
+      tags:
+      - Leads
+  /api/leads/statuses/{status_id}:
+    delete:
+      parameters:
+      - description: Status ID
+        in: path
+        name: status_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete lead status
+      tags:
+      - Leads
+  /api/leads/tags:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Tag'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List tags
+      tags:
+      - Leads
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tag details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateTagRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/models.Tag'
+      security:
+      - BearerAuth: []
+      summary: Create a tag
+      tags:
+      - Leads
+  /api/leads/tags/{tag_id}:
+    delete:
+      parameters:
+      - description: Tag ID
+        in: path
+        name: tag_id
+        required: true
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete tag
+      tags:
+      - Leads
+  /api/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Login Credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: User login
+      tags:
+      - Auth
+  /api/me:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get currently authenticated user profile
+      tags:
+      - Auth
+  /api/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Register Credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.AuthResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register a new CRM user
+      tags:
+      - Auth
+  /api/users:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.UserSummary'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List all active users for assignment
+      tags:
+      - Auth
+  /api/webhooks/lead:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Webhook Lead Payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.WebhookLeadPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handlers.WebhookResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Ingest lead from external webhooks using Bearer API Key
+      tags:
+      - Webhooks
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
