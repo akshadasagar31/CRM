@@ -134,7 +134,7 @@ export default function ApiKeysPage({
 
   const handleLogout = () => {
     authApi.logout();
-    router.push("/login");
+    router.push("/");
   };
 
   // Copy helper with safe fallback for all environments

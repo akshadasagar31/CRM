@@ -95,6 +95,12 @@ func main() {
 		api.POST("/login", authHandler.Login)
 		api.POST("/auth/register", authHandler.Register)
 		api.POST("/auth/login", authHandler.Login)
+		api.POST("/auth/google", authHandler.GoogleAuth)
+		api.POST("/google", authHandler.GoogleAuth)
+		api.POST("/auth/verify-email", authHandler.VerifyEmail)
+		api.POST("/verify-email", authHandler.VerifyEmail)
+		api.POST("/auth/reset-password", authHandler.ResetPassword)
+		api.POST("/reset-password", authHandler.ResetPassword)
 		api.POST("/webhooks/lead", webhookHandler.IngestLead)
 	}
 

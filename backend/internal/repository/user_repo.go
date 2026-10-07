@@ -90,3 +90,16 @@ func (r *UserRepository) ListSummaries(ctx context.Context) ([]models.UserSummar
 	}
 	return users, nil
 }
+
+func (r *UserRepository) UpdatePassword(ctx context.Context, email, hashedPassword string) error {
+	cleanEmail := strings.ToLower(strings.TrimSpace(email))
+	query := `UPDATE users SET hashed_password = $1 WHERE LOWER(email) = $2`
+	tag, err := r.db.Pool.Exec(ctx, query, hashedPassword, cleanEmail)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errors.New("user not found")
+	}
+	return nil
+}

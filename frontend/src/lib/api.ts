@@ -344,25 +344,43 @@ export function setApiBaseUrl(url: string) {
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("crm_auth_token");
+  // Purge any legacy persistent localStorage tokens so restarts/new launches never auto-login
+  try {
+    localStorage.removeItem("crm_auth_token");
+    localStorage.removeItem("crm_user");
+  } catch {
+    // Ignore storage errors
+  }
+  return sessionStorage.getItem("crm_auth_token");
 }
 
 export function setToken(token: string) {
   if (typeof window !== "undefined") {
-    localStorage.setItem("crm_auth_token", token);
+    sessionStorage.setItem("crm_auth_token", token);
+    try {
+      localStorage.removeItem("crm_auth_token");
+    } catch {
+      // Ignore
+    }
   }
 }
 
 export function removeToken() {
   if (typeof window !== "undefined") {
-    localStorage.removeItem("crm_auth_token");
-    localStorage.removeItem("crm_user");
+    sessionStorage.removeItem("crm_auth_token");
+    sessionStorage.removeItem("crm_user");
+    try {
+      localStorage.removeItem("crm_auth_token");
+      localStorage.removeItem("crm_user");
+    } catch {
+      // Ignore
+    }
   }
 }
 
 export function getStoredUser(): User | null {
   if (typeof window === "undefined") return null;
-  const userJson = localStorage.getItem("crm_user");
+  const userJson = sessionStorage.getItem("crm_user");
   if (!userJson) return null;
   try {
     return JSON.parse(userJson);
@@ -373,7 +391,12 @@ export function getStoredUser(): User | null {
 
 export function setStoredUser(user: User) {
   if (typeof window !== "undefined") {
-    localStorage.setItem("crm_user", JSON.stringify(user));
+    sessionStorage.setItem("crm_user", JSON.stringify(user));
+    try {
+      localStorage.removeItem("crm_user");
+    } catch {
+      // Ignore
+    }
   }
 }
 
@@ -542,12 +565,44 @@ export const authApi = {
     return res;
   },
 
+  loginWithGoogle: async (payload: { credential?: string; email?: string; name?: string }): Promise<AuthResponse> => {
+    const res = await request<AuthResponse>("/auth/google", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    setToken(res.access_token);
+    setStoredUser(res.user);
+    return res;
+  },
+
   getMe: async (): Promise<User> => {
     return request<User>("/auth/me");
   },
 
   getUsers: async (): Promise<LeadUserSummary[]> => {
     return request<LeadUserSummary[]>("/auth/users");
+  },
+
+  verifyEmail: async (email: string): Promise<{ status: string; email: string; message: string }> => {
+    return request<{ status: string; email: string; message: string }>("/auth/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword: async (
+    email: string,
+    newPassword: string,
+    confirmPassword: string
+  ): Promise<{ message: string }> => {
+    return request<{ message: string }>("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        new_password: newPassword,
+        confirm_password: confirmPassword,
+      }),
+    });
   },
 
   logout: () => {

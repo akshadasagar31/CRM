@@ -277,7 +277,7 @@ export default function UniversalLeadsPage() {
 
   const handleLogout = () => {
     authApi.logout();
-    router.push("/login");
+    router.push("/");
   };
 
   // Debounced search timeout
