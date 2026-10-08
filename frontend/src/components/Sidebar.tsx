@@ -10,16 +10,27 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  CalendarClock,
+  Briefcase,
+  Package,
+  FileText,
+  Building2,
+  PackageCheck,
 } from "lucide-react";
 import { User } from "@/lib/api";
 
-export type SidebarTab = "leads" | "api-keys" | "api-docs" | "profile";
+export type SidebarTab = "leads" | "deals" | "quotations" | "orders" | "products" | "follow-ups" | "company" | "api-keys" | "api-docs" | "profile";
 
 interface SidebarProps {
   activeTab: SidebarTab;
   onSelectTab: (tab: SidebarTab) => void;
   keyCount?: number;
   leadsCount?: number;
+  dealsCount?: number;
+  quotationsCount?: number;
+  ordersCount?: number;
+  productsCount?: number;
+  followUpsCount?: number;
   user?: User | null;
   onLogout?: () => void;
   isCollapsed: boolean;
@@ -32,6 +43,11 @@ export default function Sidebar({
   onSelectTab,
   keyCount,
   leadsCount,
+  dealsCount,
+  quotationsCount,
+  ordersCount,
+  productsCount,
+  followUpsCount,
   user,
   onLogout,
   isCollapsed,
@@ -45,6 +61,48 @@ export default function Sidebar({
       icon: Users,
       domId: "sidebar-nav-leads",
       badge: leadsCount !== undefined ? leadsCount : null,
+    },
+    {
+      id: "deals" as SidebarTab,
+      label: "Deals & Pipeline",
+      icon: Briefcase,
+      domId: "sidebar-nav-deals",
+      badge: dealsCount !== undefined ? dealsCount : null,
+    },
+    {
+      id: "quotations" as SidebarTab,
+      label: "Quotations",
+      icon: FileText,
+      domId: "sidebar-nav-quotations",
+      badge: quotationsCount !== undefined ? quotationsCount : null,
+    },
+    {
+      id: "orders" as SidebarTab,
+      label: "Orders",
+      icon: PackageCheck,
+      domId: "sidebar-nav-orders",
+      badge: ordersCount !== undefined ? ordersCount : null,
+    },
+    {
+      id: "products" as SidebarTab,
+      label: "Products",
+      icon: Package,
+      domId: "sidebar-nav-products",
+      badge: productsCount !== undefined ? productsCount : null,
+    },
+    {
+      id: "follow-ups" as SidebarTab,
+      label: "Follow-ups",
+      icon: CalendarClock,
+      domId: "sidebar-nav-followups",
+      badge: followUpsCount !== undefined ? followUpsCount : null,
+    },
+    {
+      id: "company" as SidebarTab,
+      label: "Company Profile",
+      icon: Building2,
+      domId: "sidebar-nav-company",
+      badge: null,
     },
     {
       id: "api-keys" as SidebarTab,

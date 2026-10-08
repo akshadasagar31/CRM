@@ -25,12 +25,12 @@ func (r *UserRepository) Create(ctx context.Context, name, email, hashedPassword
 
 	var user models.User
 	query := `
-		INSERT INTO users (name, email, hashed_password, created_at)
-		VALUES ($1, $2, $3, NOW())
-		RETURNING id, email, name, hashed_password, created_at
+		INSERT INTO users (name, email, hashed_password, role, created_at)
+		VALUES ($1, $2, $3, 'sales_rep', NOW())
+		RETURNING id, email, name, hashed_password, COALESCE(role, 'sales_rep'), created_at
 	`
 	err := r.db.Pool.QueryRow(ctx, query, cleanName, cleanEmail, hashedPassword).Scan(
-		&user.ID, &user.Email, &user.Name, &user.HashedPassword, &user.CreatedAt,
+		&user.ID, &user.Email, &user.Name, &user.HashedPassword, &user.Role, &user.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -41,9 +41,9 @@ func (r *UserRepository) Create(ctx context.Context, name, email, hashedPassword
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	cleanEmail := strings.ToLower(strings.TrimSpace(email))
 	var user models.User
-	query := `SELECT id, email, name, hashed_password, created_at FROM users WHERE LOWER(email) = $1`
+	query := `SELECT id, email, name, hashed_password, COALESCE(role, 'sales_rep'), created_at FROM users WHERE LOWER(email) = $1`
 	err := r.db.Pool.QueryRow(ctx, query, cleanEmail).Scan(
-		&user.ID, &user.Email, &user.Name, &user.HashedPassword, &user.CreatedAt,
+		&user.ID, &user.Email, &user.Name, &user.HashedPassword, &user.Role, &user.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -56,9 +56,9 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 
 func (r *UserRepository) GetByID(ctx context.Context, id int) (*models.User, error) {
 	var user models.User
-	query := `SELECT id, email, name, hashed_password, created_at FROM users WHERE id = $1`
+	query := `SELECT id, email, name, hashed_password, COALESCE(role, 'sales_rep'), created_at FROM users WHERE id = $1`
 	err := r.db.Pool.QueryRow(ctx, query, id).Scan(
-		&user.ID, &user.Email, &user.Name, &user.HashedPassword, &user.CreatedAt,
+		&user.ID, &user.Email, &user.Name, &user.HashedPassword, &user.Role, &user.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -70,7 +70,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id int) (*models.User, err
 }
 
 func (r *UserRepository) ListSummaries(ctx context.Context) ([]models.UserSummary, error) {
-	query := `SELECT id, name, email FROM users ORDER BY name ASC`
+	query := `SELECT id, name, email, COALESCE(role, 'sales_rep') FROM users ORDER BY name ASC`
 	rows, err := r.db.Pool.Query(ctx, query)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (r *UserRepository) ListSummaries(ctx context.Context) ([]models.UserSummar
 	var users []models.UserSummary
 	for rows.Next() {
 		var u models.UserSummary
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.Role); err != nil {
 			return nil, err
 		}
 		users = append(users, u)

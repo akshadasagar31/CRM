@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"crm-backend-go/internal/database"
@@ -296,4 +297,126 @@ func (r *InteractionRepository) UpdateFollowUp(ctx context.Context, leadNumber s
 	}
 
 	return &current, nil
+}
+
+func (r *InteractionRepository) ListAllFollowUps(ctx context.Context, filter string) ([]models.FollowUp, map[string]int, error) {
+	query := `
+		SELECT f.id, f.lead_number, COALESCE(l.name, f.lead_number) AS lead_name, CAST('' AS TEXT) AS lead_company,
+		       f.user_id, f.title, f.follow_up_type, f.due_date, f.completed, f.completed_at, f.notes, f.reminder_state, f.created_at,
+		       u.id, u.name, u.email
+		FROM follow_ups f
+		LEFT JOIN leads l ON f.lead_number = l.number
+		LEFT JOIN users u ON f.user_id = u.id
+		ORDER BY f.due_date ASC
+	`
+	rows, err := r.db.Pool.Query(ctx, query)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	now := time.Now().UTC()
+	todayDate := now.Format("2006-01-02")
+
+	counts := map[string]int{
+		"all":       0,
+		"overdue":   0,
+		"today":     0,
+		"pending":   0,
+		"completed": 0,
+	}
+
+	var allItems []models.FollowUp
+
+	for rows.Next() {
+		var f models.FollowUp
+		var compInt int
+		var uID *int
+		var uName, uEmail *string
+
+		err := rows.Scan(
+			&f.ID, &f.LeadNumber, &f.LeadName, &f.LeadCompany,
+			&f.UserID, &f.Title, &f.FollowUpType, &f.DueDate,
+			&compInt, &f.CompletedAt, &f.Notes, &f.ReminderState, &f.CreatedAt,
+			&uID, &uName, &uEmail,
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+		f.Completed = compInt == 1
+		if uID != nil && uName != nil && uEmail != nil {
+			f.User = &models.UserSummary{ID: *uID, Name: *uName, Email: *uEmail}
+		}
+
+		counts["all"]++
+		if f.Completed {
+			counts["completed"]++
+		} else {
+			counts["pending"]++
+			dueDateStr := f.DueDate.UTC().Format("2006-01-02")
+			if dueDateStr == todayDate {
+				counts["today"]++
+			} else if f.DueDate.Before(now) {
+				counts["overdue"]++
+			}
+		}
+
+		allItems = append(allItems, f)
+	}
+
+	var filtered []models.FollowUp
+	filter = strings.ToLower(strings.TrimSpace(filter))
+
+	for _, item := range allItems {
+		dueDateStr := item.DueDate.UTC().Format("2006-01-02")
+		isDueToday := dueDateStr == todayDate
+		isPast := item.DueDate.Before(now)
+
+		switch filter {
+		case "overdue":
+			if !item.Completed && isPast && !isDueToday {
+				filtered = append(filtered, item)
+			}
+		case "today", "due_today", "due today":
+			if !item.Completed && isDueToday {
+				filtered = append(filtered, item)
+			}
+		case "pending":
+			if !item.Completed {
+				filtered = append(filtered, item)
+			}
+		case "completed":
+			if item.Completed {
+				filtered = append(filtered, item)
+			}
+		default: // "all"
+			filtered = append(filtered, item)
+		}
+	}
+
+	if filtered == nil {
+		filtered = []models.FollowUp{}
+	}
+
+	return filtered, counts, nil
+}
+
+func (r *InteractionRepository) UpdateFollowUpByID(ctx context.Context, fupID int, title, fType *string, dueDate *time.Time, completed *bool, notes *string) (*models.FollowUp, error) {
+	var leadNumber string
+	err := r.db.Pool.QueryRow(ctx, "SELECT lead_number FROM follow_ups WHERE id = $1", fupID).Scan(&leadNumber)
+	if err != nil {
+		return nil, errors.New("follow-up not found")
+	}
+	return r.UpdateFollowUp(ctx, leadNumber, fupID, title, fType, dueDate, completed, notes)
+}
+
+func (r *InteractionRepository) DeleteFollowUpByID(ctx context.Context, fupID int) error {
+	cmd, err := r.db.Pool.Exec(ctx, "DELETE FROM follow_ups WHERE id = $1", fupID)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return errors.New("follow-up not found")
+	}
+	return nil
 }

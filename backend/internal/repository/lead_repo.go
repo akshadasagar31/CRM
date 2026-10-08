@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -19,13 +20,26 @@ type LeadRepository struct {
 	db              *database.DB
 	interactionRepo *InteractionRepository
 	metadataRepo    *MetadataRepository
+	customerRepo    *CustomerRepository
+	dealRepo        *DealRepository
+	pipeRepo        *PipelineRepository
 }
 
-func NewLeadRepository(db *database.DB, iRepo *InteractionRepository, mRepo *MetadataRepository) *LeadRepository {
+func NewLeadRepository(
+	db *database.DB,
+	iRepo *InteractionRepository,
+	mRepo *MetadataRepository,
+	cRepo *CustomerRepository,
+	dRepo *DealRepository,
+	pRepo *PipelineRepository,
+) *LeadRepository {
 	return &LeadRepository{
 		db:              db,
 		interactionRepo: iRepo,
 		metadataRepo:    mRepo,
+		customerRepo:    cRepo,
+		dealRepo:        dRepo,
+		pipeRepo:        pRepo,
 	}
 }
 
@@ -217,6 +231,26 @@ func (r *LeadRepository) FormatLeadResponse(ctx context.Context, lead *models.Le
 		}
 	}
 
+	var dealID *int
+	var dealNumber *string
+	var dealStage *string
+	var dealStageColor *string
+	var dID int
+	var dNum, sName, sColor string
+	errD := r.db.Pool.QueryRow(ctx, `
+		SELECT d.id, d.deal_number, s.name, s.color
+		FROM deals d
+		JOIN deal_stages s ON d.stage_id = s.id
+		WHERE d.lead_number = $1
+		ORDER BY d.id DESC LIMIT 1
+	`, lead.Number).Scan(&dID, &dNum, &sName, &sColor)
+	if errD == nil && dID > 0 {
+		dealID = &dID
+		dealNumber = &dNum
+		dealStage = &sName
+		dealStageColor = &sColor
+	}
+
 	return &models.LeadResponse{
 		Number:             lead.Number,
 		Name:               lead.Name,
@@ -243,6 +277,10 @@ func (r *LeadRepository) FormatLeadResponse(ctx context.Context, lead *models.Le
 		LeadAgeDays:        leadAge,
 		CustomFields:       cfMap,
 		CustomFieldDetails: cfDetails,
+		DealID:             dealID,
+		DealNumber:         dealNumber,
+		DealStage:          dealStage,
+		DealStageColor:     dealStageColor,
 		CreatedAt:          lead.CreatedAt,
 		UpdatedAt:          lead.UpdatedAt,
 	}, nil
@@ -261,13 +299,12 @@ type CreateLeadInput struct {
 	Score             *int                   `json:"score"`
 	LostReason        *string                `json:"lost_reason"`
 	Tags              []string               `json:"tags"`
-	FollowUpDate      *time.Time             `json:"follow_up_date"`
+	FollowUpDate      utils.NullableTime     `json:"follow_up_date"`
 	FollowUpType      *string                `json:"follow_up_type"`
 	FollowUpNotes     *string                `json:"follow_up_notes"`
 	FollowUpCompleted *bool                  `json:"follow_up_completed"`
 	CustomFields      map[string]interface{} `json:"custom_fields"`
 }
-
 func (r *LeadRepository) Create(ctx context.Context, in CreateLeadInput, currentUserID int) (*models.LeadResponse, error) {
 	cleanNumber := strings.TrimSpace(in.Number)
 	phoneVal := ""
@@ -277,6 +314,13 @@ func (r *LeadRepository) Create(ctx context.Context, in CreateLeadInput, current
 		phoneVal = cleanNumber
 	}
 	normPhone := utils.NormalizePhone(phoneVal)
+	if cleanNumber == "" {
+		if normPhone != "" {
+			cleanNumber = normPhone
+		} else {
+			cleanNumber = fmt.Sprintf("LEAD-%d", time.Now().UnixNano()%1000000)
+		}
+	}
 	cleanEmail := strings.ToLower(strings.TrimSpace(in.Email))
 
 	if err := r.CheckDuplicates(ctx, cleanNumber, normPhone, cleanEmail, ""); err != nil {
@@ -326,7 +370,9 @@ func (r *LeadRepository) Create(ctx context.Context, in CreateLeadInput, current
 	lead.Score = scoreVal
 	lead.LostReason = in.LostReason
 	lead.Tags = string(tagsJSON)
-	lead.FollowUpDate = in.FollowUpDate
+	if in.FollowUpDate.Set {
+		lead.FollowUpDate = in.FollowUpDate.Val
+	}
 	lead.FollowUpType = in.FollowUpType
 	lead.FollowUpNotes = in.FollowUpNotes
 	lead.FollowUpCompleted = compInt
@@ -359,15 +405,25 @@ func (r *LeadRepository) Create(ctx context.Context, in CreateLeadInput, current
 		_ = r.SaveCustomFields(ctx, lead.Number, in.CustomFields)
 	}
 
-	if in.FollowUpDate != nil {
+	if in.FollowUpDate.Set && in.FollowUpDate.Val != nil {
 		fType := "Call"
 		if in.FollowUpType != nil && *in.FollowUpType != "" {
 			fType = *in.FollowUpType
 		}
-		_, _ = r.interactionRepo.CreateFollowUp(ctx, lead.Number, lead.OwnerID, "Initial Follow-up", fType, *in.FollowUpDate, in.FollowUpNotes)
+		_, _ = r.interactionRepo.CreateFollowUp(ctx, lead.Number, lead.OwnerID, "Initial Follow-up", fType, *in.FollowUpDate.Val, in.FollowUpNotes)
 	}
 
 	_ = r.interactionRepo.LogActivity(ctx, lead.Number, &currentUserID, "lead_created", "Lead created", nil)
+
+	// Automatically create Deal in mapped stage (New Opportunity, etc.)
+	deal, errSync := r.AutoCreateOrSyncDealForLead(ctx, &lead, &currentUserID, lead.WorkspaceID)
+	if errSync != nil {
+		log.Printf("[AutoSyncDeal] FAILED for lead %s: %v", lead.Number, errSync)
+	} else if deal != nil {
+		log.Printf("[AutoSyncDeal] SUCCESS: Created deal ID %d (%s) for lead %s", deal.ID, deal.DealNumber, lead.Number)
+	} else {
+		log.Printf("[AutoSyncDeal] Deal returned was nil for lead %s", lead.Number)
+	}
 
 	return r.FormatLeadResponse(ctx, &lead)
 }
@@ -589,7 +645,7 @@ type UpdateLeadInput struct {
 	Score             *int                   `json:"score"`
 	LostReason        *string                `json:"lost_reason"`
 	Tags              []string               `json:"tags"`
-	FollowUpDate      *time.Time             `json:"follow_up_date"`
+	FollowUpDate      utils.NullableTime     `json:"follow_up_date"`
 	FollowUpType      *string                `json:"follow_up_type"`
 	FollowUpNotes     *string                `json:"follow_up_notes"`
 	FollowUpCompleted *bool                  `json:"follow_up_completed"`
@@ -670,8 +726,8 @@ func (r *LeadRepository) Update(ctx context.Context, number string, in UpdateLea
 		b, _ := json.Marshal(in.Tags)
 		lead.Tags = string(b)
 	}
-	if in.FollowUpDate != nil {
-		lead.FollowUpDate = in.FollowUpDate
+	if in.FollowUpDate.Set {
+		lead.FollowUpDate = in.FollowUpDate.Val
 	}
 	if in.FollowUpType != nil {
 		lead.FollowUpType = in.FollowUpType
@@ -712,6 +768,16 @@ func (r *LeadRepository) Update(ctx context.Context, number string, in UpdateLea
 	if in.Status != nil && *in.Status != oldStatus {
 		desc := fmt.Sprintf("Status changed from %s to %s", oldStatus, *in.Status)
 		_ = r.interactionRepo.LogActivity(ctx, number, &currentUserID, "status_change", "Status updated", &desc)
+	}
+
+	// When Lead status changes, synchronize the linked Deal stage (New -> New Opportunity, Contacted -> Requirement Discussion, Qualified -> Quotation Preparation, Won/Lost -> Won/Lost)
+	if in.Status != nil && *in.Status != oldStatus {
+		d, aErr := r.AutoCreateOrSyncDealForLead(ctx, &lead, &currentUserID, lead.WorkspaceID)
+		if aErr != nil {
+			log.Printf("[AutoSyncDeal] Error syncing deal for lead %s: %v", lead.Number, aErr)
+		} else if d != nil {
+			log.Printf("[AutoSyncDeal] Successfully synced deal %s for lead %s", d.DealNumber, lead.Number)
+		}
 	}
 
 	// Owner assignment activity
@@ -783,6 +849,13 @@ func (r *LeadRepository) BulkAction(ctx context.Context, numbers []string, actio
 				affected++
 				desc := "Bulk status updated to " + *status
 				_ = r.interactionRepo.LogActivity(ctx, num, &currentUserID, "status_change", "Bulk status update", &desc)
+
+				var bulkLead models.Lead
+				if lErr := r.db.Pool.QueryRow(ctx, "SELECT number, name, email, phone, status, requirement, owner_id, workspace_id FROM leads WHERE number = $1", num).Scan(
+					&bulkLead.Number, &bulkLead.Name, &bulkLead.Email, &bulkLead.Phone, &bulkLead.Status, &bulkLead.Requirement, &bulkLead.OwnerID, &bulkLead.WorkspaceID,
+				); lErr == nil {
+					_, _ = r.AutoCreateOrSyncDealForLead(ctx, &bulkLead, &currentUserID, bulkLead.WorkspaceID)
+				}
 			}
 		}
 
@@ -881,3 +954,172 @@ func (r *LeadRepository) BulkAction(ctx context.Context, numbers []string, actio
 
 	return affected, nil
 }
+
+// AutoCreateOrSyncDealForLead automatically creates a Deal or synchronizes its stage for any Lead.
+// Mappings:
+// New -> New Opportunity
+// Contacted / Follow-up -> Requirement Discussion
+// Qualified -> Quotation Preparation
+// Won -> Won
+// Lost -> Lost
+func (r *LeadRepository) AutoCreateOrSyncDealForLead(ctx context.Context, lead *models.Lead, currentUserID *int, workspaceID int) (*models.Deal, error) {
+	if lead == nil || r.dealRepo == nil || r.customerRepo == nil || r.pipeRepo == nil {
+		log.Printf("[AutoSyncDeal] Skipping: repo dependencies not fully initialized or lead is nil: lead=%v, dealRepo=%v, customerRepo=%v, pipeRepo=%v", lead != nil, r.dealRepo != nil, r.customerRepo != nil, r.pipeRepo != nil)
+		return nil, nil
+	}
+
+	log.Printf("[AutoSyncDeal] Processing for lead=%s, status=%s, workspace=%d", lead.Number, lead.Status, workspaceID)
+
+	if workspaceID <= 0 {
+		workspaceID = 1
+	}
+
+	normStatus := strings.ToLower(strings.TrimSpace(lead.Status))
+	targetStageName := "New Opportunity"
+	switch normStatus {
+	case "contacted", "follow-up":
+		targetStageName = "Requirement Discussion"
+	case "qualified":
+		targetStageName = "Quotation Preparation"
+	case "won":
+		targetStageName = "Won"
+	case "lost":
+		targetStageName = "Lost"
+	default:
+		targetStageName = "New Opportunity"
+	}
+
+	// 1. If Deal already exists, synchronize stage if needed
+	var existingDealID, currentStageID int
+	err := r.db.Pool.QueryRow(ctx, "SELECT id, stage_id FROM deals WHERE lead_number = $1 AND workspace_id = $2 LIMIT 1", lead.Number, workspaceID).Scan(&existingDealID, &currentStageID)
+	if err == nil && existingDealID > 0 {
+		var targetStageID int
+		_ = r.db.Pool.QueryRow(ctx, `
+			SELECT s.id FROM deal_stages s
+			JOIN deals d ON d.pipeline_id = s.pipeline_id
+			WHERE d.id = $1 AND LOWER(TRIM(s.name)) = LOWER(TRIM($2))
+			LIMIT 1`,
+			existingDealID, targetStageName,
+		).Scan(&targetStageID)
+
+		if targetStageID > 0 && targetStageID != currentStageID {
+			d, sErr := r.dealRepo.ChangeStage(ctx, existingDealID, targetStageID, lead.LostReason, currentUserID, workspaceID)
+			if sErr == nil {
+				return d, nil
+			}
+		}
+		return r.dealRepo.GetByID(ctx, existingDealID, workspaceID)
+	}
+
+	// 2. Find default pipeline (or first available pipeline in workspace)
+	var pipelineID int
+	err = r.db.Pool.QueryRow(ctx, "SELECT id FROM pipelines WHERE workspace_id = $1 ORDER BY is_default DESC, id ASC LIMIT 1", workspaceID).Scan(&pipelineID)
+	if err != nil {
+		// If no pipeline exists, create default pipeline
+		err = r.db.Pool.QueryRow(ctx, "INSERT INTO pipelines (name, is_default, workspace_id) VALUES ('Sales Pipeline', 1, $1) RETURNING id", workspaceID).Scan(&pipelineID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find or create pipeline: %w", err)
+		}
+	}
+
+	// 3. Find target stage in this pipeline
+	var stageID int
+	err = r.db.Pool.QueryRow(ctx, `
+		SELECT id FROM deal_stages 
+		WHERE pipeline_id = $1 AND LOWER(TRIM(name)) = LOWER(TRIM($2))
+		LIMIT 1
+	`, pipelineID, targetStageName).Scan(&stageID)
+	if err != nil {
+		// Fallback 1: Try "New Opportunity"
+		_ = r.db.Pool.QueryRow(ctx, `
+			SELECT id FROM deal_stages 
+			WHERE pipeline_id = $1 AND LOWER(TRIM(name)) = 'new opportunity' 
+			LIMIT 1
+		`, pipelineID).Scan(&stageID)
+		if stageID == 0 {
+			// Fallback 2: pick the first active stage or first stage in this pipeline
+			_ = r.db.Pool.QueryRow(ctx, "SELECT id FROM deal_stages WHERE pipeline_id = $1 AND is_active = true ORDER BY stage_order ASC, id ASC LIMIT 1", pipelineID).Scan(&stageID)
+			if stageID == 0 {
+				_ = r.db.Pool.QueryRow(ctx, "SELECT id FROM deal_stages WHERE pipeline_id = $1 ORDER BY stage_order ASC, id ASC LIMIT 1", pipelineID).Scan(&stageID)
+			}
+		}
+	}
+
+	if stageID == 0 {
+		return nil, fmt.Errorf("could not determine stage for deal in pipeline %d", pipelineID)
+	}
+
+	// 4. Link/create Customer using existing conversion logic
+	custName := strings.TrimSpace(lead.Name)
+	if custName == "" {
+		custName = "Lead " + lead.Number
+	}
+	custEmail := strings.TrimSpace(lead.Email)
+	custPhone := ""
+	if lead.Phone != nil {
+		custPhone = strings.TrimSpace(*lead.Phone)
+	}
+
+	customer, err := r.customerRepo.FindOrCreateByEmailOrPhone(ctx, custName, custEmail, custPhone, "", currentUserID, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to link or create customer: %w", err)
+	}
+
+	// 5. Create the Deal
+	dealOwnerID := lead.OwnerID
+	if dealOwnerID == nil {
+		dealOwnerID = currentUserID
+	}
+
+	dealName := fmt.Sprintf("%s - Opportunity", custName)
+	dealInput := models.DealCreateInput{
+		Name:        dealName,
+		CustomerID:  customer.ID,
+		LeadNumber:  &lead.Number,
+		PipelineID:  pipelineID,
+		StageID:     stageID,
+		OwnerID:     dealOwnerID,
+		Value:       0,
+		Currency:    "INR",
+		Priority:    "Medium",
+		Requirement: lead.Requirement,
+	}
+
+	deal, err := r.dealRepo.Create(ctx, dealInput, currentUserID, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to auto-create deal: %w", err)
+	}
+
+	// 6. Copy lead notes to deal notes
+	noteRows, err := r.db.Pool.Query(ctx, "SELECT user_id, content FROM lead_notes WHERE lead_number = $1 ORDER BY created_at ASC", lead.Number)
+	if err == nil {
+		defer noteRows.Close()
+		for noteRows.Next() {
+			var nUserID *int
+			var nContent string
+			if err := noteRows.Scan(&nUserID, &nContent); err == nil {
+				_, _ = r.dealRepo.CreateNote(ctx, deal.ID, nUserID, fmt.Sprintf("[From Lead Note] %s", nContent))
+			}
+		}
+	}
+
+	// 7. Timeline events
+	// On Lead:
+	leadTimelineDesc := fmt.Sprintf("Lead synced: automatically created Deal %s (%s) in '%s' stage", deal.DealNumber, deal.Name, targetStageName)
+	_, _ = r.db.Pool.Exec(ctx, `
+		INSERT INTO lead_activities (lead_number, user_id, activity_type, title, description, created_at)
+		VALUES ($1, $2, 'converted_to_deal', 'Synced to Deal', $3, NOW())
+	`, lead.Number, currentUserID, leadTimelineDesc)
+
+	// On Deal:
+	dealTimelineDesc := fmt.Sprintf("Deal automatically generated from Lead %s (%s) in '%s' stage", lead.Number, lead.Name, targetStageName)
+	_ = r.dealRepo.CreateActivity(ctx, deal.ID, currentUserID, "lead_converted", "Converted from Lead", dealTimelineDesc)
+
+	return deal, nil
+}
+
+// AutoCreateDealForQualifiedLead provides backward compatibility calling AutoCreateOrSyncDealForLead
+func (r *LeadRepository) AutoCreateDealForQualifiedLead(ctx context.Context, lead *models.Lead, currentUserID *int, workspaceID int) (*models.Deal, error) {
+	return r.AutoCreateOrSyncDealForLead(ctx, lead, currentUserID, workspaceID)
+}
+

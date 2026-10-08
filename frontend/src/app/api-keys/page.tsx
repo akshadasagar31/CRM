@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   Calendar,
+  CalendarClock,
   AlertTriangle,
   Zap,
 } from "lucide-react";
@@ -363,7 +364,27 @@ export default function ApiKeysPage({
             <span>Leads</span>
           </Link>
 
-          {/* 2. API Keys Link (Active) */}
+          {/* 2. Follow-ups Link */}
+          <Link
+            href="/leads?tab=follow-ups"
+            id="sidebar-nav-followups"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.625rem",
+              padding: "0.65rem 0.85rem",
+              borderRadius: "var(--radius-md)",
+              color: "var(--text-secondary)",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <CalendarClock size={18} />
+            <span>Follow-ups</span>
+          </Link>
+
+          {/* 3. API Keys Link (Active) */}
           <div
             id="sidebar-nav-apikeys"
             style={{

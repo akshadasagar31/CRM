@@ -9,6 +9,7 @@ import (
 
 	"crm-backend-go/internal/middleware"
 	"crm-backend-go/internal/repository"
+	"crm-backend-go/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -110,10 +111,10 @@ func (h *InteractionHandler) DeleteNote(c *gin.Context) {
 }
 
 type CreateFollowUpRequest struct {
-	Title        string    `json:"title" binding:"required"`
-	FollowUpType string    `json:"follow_up_type"`
-	DueDate      time.Time `json:"due_date" binding:"required"`
-	Notes        *string   `json:"notes"`
+	Title        string             `json:"title" binding:"required"`
+	FollowUpType string             `json:"follow_up_type"`
+	DueDate      utils.NullableTime `json:"due_date" binding:"required"`
+	Notes        *string            `json:"notes"`
 }
 
 // ListFollowUps godoc
@@ -158,7 +159,14 @@ func (h *InteractionHandler) CreateFollowUp(c *gin.Context) {
 		userID = &user.ID
 	}
 
-	fup, err := h.interactionRepo.CreateFollowUp(c.Request.Context(), number, userID, req.Title, req.FollowUpType, req.DueDate, req.Notes)
+	var dueDate time.Time
+	if req.DueDate.Val != nil {
+		dueDate = *req.DueDate.Val
+	} else {
+		dueDate = time.Now()
+	}
+
+	fup, err := h.interactionRepo.CreateFollowUp(c.Request.Context(), number, userID, req.Title, req.FollowUpType, dueDate, req.Notes)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to schedule follow-up: " + err.Error()})
 		return
@@ -168,11 +176,11 @@ func (h *InteractionHandler) CreateFollowUp(c *gin.Context) {
 }
 
 type UpdateFollowUpRequest struct {
-	Title        *string    `json:"title"`
-	FollowUpType *string    `json:"follow_up_type"`
-	DueDate      *time.Time `json:"due_date"`
-	Completed    *bool      `json:"completed"`
-	Notes        *string    `json:"notes"`
+	Title        *string            `json:"title"`
+	FollowUpType *string            `json:"follow_up_type"`
+	DueDate      utils.NullableTime `json:"due_date"`
+	Completed    *bool              `json:"completed"`
+	Notes        *string            `json:"notes"`
 }
 
 // UpdateFollowUp godoc
@@ -200,7 +208,12 @@ func (h *InteractionHandler) UpdateFollowUp(c *gin.Context) {
 		return
 	}
 
-	fup, err := h.interactionRepo.UpdateFollowUp(c.Request.Context(), number, fupID, req.Title, req.FollowUpType, req.DueDate, req.Completed, req.Notes)
+	var dueDatePtr *time.Time
+	if req.DueDate.Set {
+		dueDatePtr = req.DueDate.Val
+	}
+
+	fup, err := h.interactionRepo.UpdateFollowUp(c.Request.Context(), number, fupID, req.Title, req.FollowUpType, dueDatePtr, req.Completed, req.Notes)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Follow-up not found: " + err.Error()})
 		return
@@ -225,4 +238,132 @@ func (h *InteractionHandler) ListActivities(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, activities)
+}
+
+type CreateGlobalFollowUpRequest struct {
+	LeadNumber   string             `json:"lead_number" binding:"required"`
+	Title        string             `json:"title" binding:"required"`
+	FollowUpType string             `json:"follow_up_type"`
+	DueDate      utils.NullableTime `json:"due_date" binding:"required"`
+	Notes        *string            `json:"notes"`
+}
+
+// ListAllFollowUps godoc
+// @Summary List all follow-ups across CRM with tab counts
+// @Tags FollowUps
+// @Produce json
+// @Security BearerAuth
+// @Param status query string false "Filter by tab: all, overdue, today, pending, completed"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/follow-ups [get]
+func (h *InteractionHandler) ListAllFollowUps(c *gin.Context) {
+	status := c.DefaultQuery("status", "all")
+	items, counts, err := h.interactionRepo.ListAllFollowUps(c.Request.Context(), status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to list follow-ups: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items":  items,
+		"counts": counts,
+	})
+}
+
+// CreateFollowUpGlobal godoc
+// @Summary Create a follow-up for any lead
+// @Tags FollowUps
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body CreateGlobalFollowUpRequest true "Follow-up Details"
+// @Success 201 {object} models.FollowUp
+// @Router /api/follow-ups [post]
+func (h *InteractionHandler) CreateFollowUpGlobal(c *gin.Context) {
+	var req CreateGlobalFollowUpRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid follow-up details: " + err.Error()})
+		return
+	}
+
+	user := middleware.GetCurrentUser(c)
+	var userID *int
+	if user != nil {
+		userID = &user.ID
+	}
+
+	var dueDate time.Time
+	if req.DueDate.Val != nil {
+		dueDate = *req.DueDate.Val
+	} else {
+		dueDate = time.Now()
+	}
+
+	fup, err := h.interactionRepo.CreateFollowUp(c.Request.Context(), req.LeadNumber, userID, req.Title, req.FollowUpType, dueDate, req.Notes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to schedule follow-up: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, fup)
+}
+
+// UpdateFollowUpGlobal godoc
+// @Summary Update follow-up status or reschedule by ID
+// @Tags FollowUps
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path int true "Follow-up ID"
+// @Param request body UpdateFollowUpRequest true "Update fields"
+// @Success 200 {object} models.FollowUp
+// @Router /api/follow-ups/{id} [patch]
+func (h *InteractionHandler) UpdateFollowUpGlobal(c *gin.Context) {
+	fupID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid follow-up ID"})
+		return
+	}
+
+	var req UpdateFollowUpRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid update request: " + err.Error()})
+		return
+	}
+
+	var dueDatePtr *time.Time
+	if req.DueDate.Set {
+		dueDatePtr = req.DueDate.Val
+	}
+
+	fup, err := h.interactionRepo.UpdateFollowUpByID(c.Request.Context(), fupID, req.Title, req.FollowUpType, dueDatePtr, req.Completed, req.Notes)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Follow-up not found: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, fup)
+}
+
+// DeleteFollowUpGlobal godoc
+// @Summary Delete a follow-up by ID
+// @Tags FollowUps
+// @Security BearerAuth
+// @Param id path int true "Follow-up ID"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/follow-ups/{id} [delete]
+func (h *InteractionHandler) DeleteFollowUpGlobal(c *gin.Context) {
+	fupID, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid follow-up ID"})
+		return
+	}
+
+	err = h.interactionRepo.DeleteFollowUpByID(c.Request.Context(), fupID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Follow-up not found: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Follow-up deleted"})
 }

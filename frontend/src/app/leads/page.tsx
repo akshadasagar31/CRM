@@ -75,11 +75,15 @@ import {
   TagItem,
   DuplicateSettings,
   FollowUpItem,
+  Pipeline,
+  pipelinesApi,
 } from "@/lib/api";
 import Sidebar, { SidebarTab } from "@/components/Sidebar";
 import ProfileView from "@/components/ProfileView";
 import ApiKeysPage from "@/app/api-keys/page";
 import ApiDocumentationPage from "@/app/api-docs/page";
+import FollowUpsPage from "@/app/follow-ups/page";
+import DealsPage from "@/app/deals/page";
 
 type ViewType =
   | "all"
@@ -158,7 +162,12 @@ export default function UniversalLeadsPage() {
   });
 
   // UI Toast & Error Modals
-  const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+    actionText?: string;
+    onAction?: () => void;
+  } | null>(null);
   const [duplicateErrorPopup, setDuplicateErrorPopup] = useState<string | null>(null);
 
   // Modals & Drawers State
@@ -236,13 +245,40 @@ export default function UniversalLeadsPage() {
   // Single-page layout active tab state
   const [activeTab, setActiveTab] = useState<SidebarTab>("leads");
   const [keyCount, setKeyCount] = useState<number | undefined>(undefined);
+  const [followUpsCount, setFollowUpsCount] = useState<number | undefined>(undefined);
+  const [dealsCount, setDealsCount] = useState<number | undefined>(undefined);
+  const [productsCount, setProductsCount] = useState<number | undefined>(undefined);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Convert Lead to Deal Modal State
+  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [leadToConvert, setLeadToConvert] = useState<Lead | null>(null);
+  const [convDealName, setConvDealName] = useState("");
+  const [convDealValue, setConvDealValue] = useState<number | "">(10000);
+  const [convPipelineId, setConvPipelineId] = useState<number | "">("");
+  const [convStageId, setConvStageId] = useState<number | "">("");
+  const [convExpectedCloseDate, setConvExpectedCloseDate] = useState("");
+  const [convPriority, setConvPriority] = useState("Medium");
+  const [convCustomerName, setConvCustomerName] = useState("");
+  const [convCustomerCompany, setConvCustomerCompany] = useState("");
+  const [convCustomerEmail, setConvCustomerEmail] = useState("");
+  const [convCustomerPhone, setConvCustomerPhone] = useState("");
+  const [convPipelines, setConvPipelines] = useState<Pipeline[]>([]);
+  const [isConverting, setIsConverting] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
       const tabParam = urlParams.get("tab") as SidebarTab | null;
-      if (tabParam && ["leads", "api-keys", "api-docs", "profile"].includes(tabParam)) {
+      if (tabParam === "products") {
+        router.push("/products");
+        return;
+      }
+      if (tabParam === "deals") {
+        router.push("/deals");
+        return;
+      }
+      if (tabParam && ["leads", "follow-ups", "api-keys", "api-docs", "profile"].includes(tabParam)) {
         setActiveTab(tabParam);
       }
       const savedCollapse = localStorage.getItem("crm_sidebar_collapsed");
@@ -250,7 +286,7 @@ export default function UniversalLeadsPage() {
         setIsSidebarCollapsed(savedCollapse === "true");
       }
     }
-  }, []);
+  }, [router]);
 
   const handleToggleSidebar = () => {
     setIsSidebarCollapsed((prev) => {
@@ -263,6 +299,26 @@ export default function UniversalLeadsPage() {
   };
 
   const handleSelectTab = (tab: SidebarTab) => {
+    if (tab === "products") {
+      router.push("/products");
+      return;
+    }
+    if (tab === "deals") {
+      router.push("/deals");
+      return;
+    }
+    if (tab === "quotations") {
+      router.push("/quotations");
+      return;
+    }
+    if (tab === "orders") {
+      router.push("/orders");
+      return;
+    }
+    if (tab === "company") {
+      router.push("/company");
+      return;
+    }
     setActiveTab(tab);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -284,9 +340,14 @@ export default function UniversalLeadsPage() {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Toast Helper
-  const showToast = (type: "success" | "error", text: string) => {
-    setToastMessage({ type, text });
-    setTimeout(() => setToastMessage(null), 4000);
+  const showToast = (
+    type: "success" | "error",
+    text: string,
+    actionText?: string,
+    onAction?: () => void
+  ) => {
+    setToastMessage({ type, text, actionText, onAction });
+    setTimeout(() => setToastMessage(null), actionText ? 8000 : 4000);
   };
 
   // 1. Initial Load: Check auth & fetch metadata
@@ -489,6 +550,12 @@ export default function UniversalLeadsPage() {
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
 
+      let followUpDatePayload: string | null | undefined = undefined;
+      if (formData.follow_up_date && formData.follow_up_date.trim()) {
+        const parsed = new Date(formData.follow_up_date);
+        followUpDatePayload = !isNaN(parsed.getTime()) ? parsed.toISOString() : formData.follow_up_date.trim();
+      }
+
       const created = await leadsApi.create({
         number: formData.number.trim(),
         name: formData.name.trim(),
@@ -501,13 +568,22 @@ export default function UniversalLeadsPage() {
         owner_id: formData.owner_id ? Number(formData.owner_id) : null,
         score: formData.score,
         tags: tagsArray,
-        follow_up_date: formData.follow_up_date || undefined,
+        follow_up_date: followUpDatePayload,
         follow_up_type: formData.follow_up_type,
         follow_up_notes: formData.follow_up_notes,
         custom_fields: formData.customFieldsValues,
       });
 
-      showToast("success", `Lead #${created.number} created successfully`);
+      if (formData.status.toLowerCase() === "qualified") {
+        showToast(
+          "success",
+          `Lead #${created.number} marked Qualified! Deal automatically created in New Opportunity.`,
+          "View Deal in Pipeline",
+          () => router.push("/deals")
+        );
+      } else {
+        showToast("success", `Lead #${created.number} created successfully`);
+      }
       setIsAddModalOpen(false);
       fetchLeads();
     } catch (err: any) {
@@ -536,13 +612,84 @@ export default function UniversalLeadsPage() {
       owner_id: lead.owner_id ? String(lead.owner_id) : "",
       score: lead.score,
       tagsText: (lead.tags || []).join(", "),
-      follow_up_date: lead.follow_up_date ? lead.follow_up_date.slice(0, 16) : "",
+      follow_up_date: lead.follow_up_date || "",
       follow_up_type: lead.follow_up_type || "Call",
       follow_up_notes: lead.follow_up_notes || "",
       lost_reason: lead.lost_reason || "",
       customFieldsValues: { ...(lead.custom_fields || {}) },
     });
     setIsEditModalOpen(true);
+  };
+
+  // Open Convert Lead Modal
+  const openConvertLeadModal = async (lead: Lead) => {
+    setLeadToConvert(lead);
+    setConvDealName(`${lead.name} - Deal`);
+    setConvCustomerName(lead.name);
+    setConvCustomerEmail(lead.email);
+    setConvCustomerPhone(lead.phone || "");
+    setConvCustomerCompany("");
+    setConvDealValue(10000);
+    setConvPriority("Medium");
+    setConvExpectedCloseDate(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+
+    try {
+      const pipes = await pipelinesApi.list();
+      setConvPipelines(pipes);
+      if (pipes.length > 0) {
+        const def = pipes.find((p) => p.is_default) || pipes[0];
+        setConvPipelineId(def.id);
+        if (def.stages && def.stages.length > 0) {
+          setConvStageId(def.stages[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Error loading pipelines for conversion:", err);
+    }
+
+    setIsConvertModalOpen(true);
+  };
+
+  // Submit Lead Conversion
+  const handleExecuteLeadConversion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leadToConvert || !convDealName.trim() || !convPipelineId || !convStageId) {
+      showToast("error", "Please fill all required conversion fields");
+      return;
+    }
+
+    setIsConverting(true);
+    try {
+      const res = await leadsApi.convertToDeal(leadToConvert.number, {
+        deal_name: convDealName.trim(),
+        deal_value: Number(convDealValue) || 0,
+        pipeline_id: Number(convPipelineId),
+        stage_id: Number(convStageId),
+        priority: convPriority,
+        expected_close_date: convExpectedCloseDate ? new Date(convExpectedCloseDate).toISOString() : undefined,
+        owner_id: leadToConvert.owner_id || undefined,
+        requirement: leadToConvert.requirement,
+        customer_name: convCustomerName.trim() || leadToConvert.name,
+        customer_email: convCustomerEmail.trim() || leadToConvert.email,
+        customer_phone: convCustomerPhone.trim() || undefined,
+        customer_company: convCustomerCompany.trim() || undefined,
+      });
+
+      // Update local lead status
+      setLeads((prev) =>
+        prev.map((l) => (l.number === leadToConvert.number ? { ...l, status: "Converted" } : l))
+      );
+      if (activeLead && activeLead.number === leadToConvert.number) {
+        setActiveLead({ ...activeLead, status: "Converted" });
+      }
+
+      setIsConvertModalOpen(false);
+      showToast("success", `🎉 Converted to Deal "${res.deal.deal_number}" and Customer "${res.customer.name}"!`);
+    } catch (err: any) {
+      showToast("error", err.message || "Failed to convert lead");
+    } finally {
+      setIsConverting(false);
+    }
   };
 
   // Submit Lead Edit
@@ -556,6 +703,14 @@ export default function UniversalLeadsPage() {
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
 
+      let followUpDatePayload: string | null | undefined = undefined;
+      if (formData.follow_up_date && formData.follow_up_date.trim()) {
+        const parsed = new Date(formData.follow_up_date);
+        followUpDatePayload = !isNaN(parsed.getTime()) ? parsed.toISOString() : formData.follow_up_date.trim();
+      } else if (activeLead.follow_up_date && !formData.follow_up_date) {
+        followUpDatePayload = null;
+      }
+
       const updated = await leadsApi.update(activeLead.number, {
         name: formData.name.trim(),
         email: formData.email.trim(),
@@ -568,14 +723,27 @@ export default function UniversalLeadsPage() {
         score: formData.score,
         lost_reason: formData.status.toLowerCase() === "lost" ? formData.lost_reason : undefined,
         tags: tagsArray,
-        follow_up_date: formData.follow_up_date || undefined,
+        follow_up_date: followUpDatePayload,
         follow_up_type: formData.follow_up_type,
         follow_up_notes: formData.follow_up_notes,
         custom_fields: formData.customFieldsValues,
       });
 
-      showToast("success", "Lead updated successfully");
+      if (formData.status.toLowerCase() === "qualified") {
+        showToast(
+          "success",
+          "Lead marked Qualified! Deal automatically created in New Opportunity.",
+          "View Deal in Pipeline",
+          () => router.push("/deals")
+        );
+      } else {
+        showToast("success", "Lead updated successfully");
+      }
       setIsEditModalOpen(false);
+      // Immediately reflect updated lead in the table state and active lead drawer
+      setLeads((prev) =>
+        prev.map((l) => (l.number === updated.number ? updated : l))
+      );
       if (activeLead.number === updated.number) {
         setActiveLead(updated);
       }
@@ -641,7 +809,16 @@ export default function UniversalLeadsPage() {
       }
 
       const res = await leadsApi.bulkAction(payload);
-      showToast("success", res.message);
+      if (bulkActionType === "update_status" && bulkStatusValue.toLowerCase() === "qualified") {
+        showToast(
+          "success",
+          `Updated ${numbersList.length} leads to Qualified! Deals automatically created in New Opportunity.`,
+          "View Deals in Pipeline",
+          () => router.push("/deals")
+        );
+      } else {
+        showToast("success", res.message);
+      }
       setIsBulkModalOpen(false);
       setSelectedLeadNumbers(new Set());
       fetchLeads();
@@ -919,7 +1096,7 @@ export default function UniversalLeadsPage() {
             zIndex: 9999,
             display: "flex",
             alignItems: "center",
-            gap: "0.5rem",
+            gap: "0.75rem",
             padding: "0.75rem 1.25rem",
             borderRadius: "8px",
             backgroundColor: toastMessage.type === "success" ? "#0F766E" : "#B91C1C",
@@ -932,6 +1109,30 @@ export default function UniversalLeadsPage() {
         >
           {toastMessage.type === "success" ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
           <span>{toastMessage.text}</span>
+          {toastMessage.actionText && toastMessage.onAction && (
+            <button
+              onClick={() => {
+                toastMessage.onAction?.();
+                setToastMessage(null);
+              }}
+              style={{
+                background: "rgba(255,255,255,0.2)",
+                border: "1px solid rgba(255,255,255,0.4)",
+                color: "#FFFFFF",
+                borderRadius: "4px",
+                padding: "0.25rem 0.6rem",
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.25rem",
+                marginLeft: "0.5rem",
+              }}
+            >
+              {toastMessage.actionText} →
+            </button>
+          )}
         </div>
       )}
 
@@ -994,6 +1195,9 @@ export default function UniversalLeadsPage() {
         activeTab={activeTab}
         onSelectTab={handleSelectTab}
         keyCount={keyCount}
+        followUpsCount={followUpsCount}
+        dealsCount={dealsCount}
+        productsCount={productsCount}
         leadsCount={leads.length}
         user={user}
         onLogout={handleLogout}
@@ -1021,6 +1225,8 @@ export default function UniversalLeadsPage() {
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <h1 style={{ fontSize: "1.125rem", fontWeight: 800, color: "#0F172A", margin: 0 }}>
               {activeTab === "leads" && "Leads Management"}
+              {activeTab === "deals" && "Deals & Sales Pipeline"}
+              {activeTab === "follow-ups" && "Scheduled Follow-ups"}
               {activeTab === "api-keys" && "API Keys & Integrations"}
               {activeTab === "api-docs" && "Interactive API Documentation"}
               {activeTab === "profile" && "Account & Profile"}
@@ -1691,6 +1897,33 @@ export default function UniversalLeadsPage() {
                             >
                               {lead.status}
                             </span>
+                            {lead.deal_number && (
+                              <div style={{ marginTop: "4px" }}>
+                                <Link
+                                  href="/deals"
+                                  title={`Linked Deal: ${lead.deal_number} (${lead.deal_stage || ""})`}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    padding: "0.15rem 0.45rem",
+                                    borderRadius: "4px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 700,
+                                    backgroundColor: lead.deal_stage_color ? `${lead.deal_stage_color}18` : "#EFF6FF",
+                                    color: lead.deal_stage_color || "#2563EB",
+                                    border: `1px solid ${lead.deal_stage_color ? `${lead.deal_stage_color}40` : "#BFDBFE"}`,
+                                    textDecoration: "none",
+                                  }}
+                                >
+                                  <Briefcase size={10} />
+                                  <span>{lead.deal_number}</span>
+                                  {lead.deal_stage && (
+                                    <span style={{ fontWeight: 600, opacity: 0.85 }}>• {lead.deal_stage}</span>
+                                  )}
+                                </Link>
+                              </div>
+                            )}
                           </td>
                         )}
 
@@ -1828,6 +2061,20 @@ export default function UniversalLeadsPage() {
                               <Edit3 size={16} />
                             </button>
 
+                            <button
+                              onClick={() => openConvertLeadModal(lead)}
+                              title="Convert to Customer & Deal"
+                              style={{
+                                background: "none",
+                                border: "none",
+                                padding: "0.25rem",
+                                cursor: "pointer",
+                                color: "#4F46E5",
+                              }}
+                            >
+                              <Briefcase size={16} />
+                            </button>
+
                             {currentView === "trash" ? (
                               <button
                                 onClick={() => handleRestoreLead(lead)}
@@ -1945,7 +2192,17 @@ export default function UniversalLeadsPage() {
     </div>
     {/* End of Leads View (Keep-Alive) */}
 
-        {/* Tab 2: API Keys View (Keep-Alive) */}
+        {/* Tab 2: Deals & Sales Pipeline View (Keep-Alive) */}
+        <div style={{ display: activeTab === "deals" ? "block" : "none", width: "100%" }}>
+          <DealsPage hideSidebar={true} onDealsCountChange={(cnt) => setDealsCount(cnt)} />
+        </div>
+
+        {/* Tab 3: Follow-ups View (Keep-Alive) */}
+        <div style={{ display: activeTab === "follow-ups" ? "block" : "none", width: "100%" }}>
+          <FollowUpsPage hideSidebar={true} onFollowUpsCountChange={(cnt) => setFollowUpsCount(cnt)} />
+        </div>
+
+        {/* Tab 3: API Keys View (Keep-Alive) */}
         <div style={{ display: activeTab === "api-keys" ? "block" : "none", width: "100%" }}>
           <ApiKeysPage hideSidebar={true} onKeyCountChange={(cnt) => setKeyCount(cnt)} />
         </div>
@@ -2010,6 +2267,31 @@ export default function UniversalLeadsPage() {
                     <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
                       Source: <strong>{activeLead.source}</strong>
                     </span>
+                    {activeLead.deal_number && (
+                      <Link
+                        href="/deals"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          padding: "0.2rem 0.6rem",
+                          borderRadius: "999px",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          backgroundColor: activeLead.deal_stage_color ? `${activeLead.deal_stage_color}18` : "#EFF6FF",
+                          color: activeLead.deal_stage_color || "#2563EB",
+                          border: `1px solid ${activeLead.deal_stage_color ? `${activeLead.deal_stage_color}40` : "#BFDBFE"}`,
+                          textDecoration: "none",
+                        }}
+                      >
+                        <Briefcase size={12} />
+                        <span>Deal {activeLead.deal_number}</span>
+                        {activeLead.deal_stage && (
+                          <span style={{ fontWeight: 600, opacity: 0.85 }}>({activeLead.deal_stage})</span>
+                        )}
+                        <ExternalLink size={10} />
+                      </Link>
+                    )}
                   </div>
                   <h2 style={{ fontSize: "1.5rem", fontWeight: 800, color: "#0F172A", margin: 0 }}>
                     {activeLead.name}
@@ -2135,6 +2417,79 @@ export default function UniversalLeadsPage() {
                   }}
                 >
                   <Edit3 size={14} /> Edit
+                </button>
+
+                {activeLead.status.toLowerCase() !== "qualified" ? (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const updated = await leadsApi.update(activeLead.number, { status: "Qualified" });
+                        setActiveLead(updated);
+                        fetchLeads();
+                        showToast(
+                          "success",
+                          "Lead marked Qualified! Deal automatically created in New Opportunity.",
+                          "View Deal in Pipeline",
+                          () => router.push("/deals")
+                        );
+                      } catch (err: any) {
+                        showToast("error", err.message || "Failed to mark as qualified");
+                      }
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.375rem",
+                      padding: "0.4rem 0.75rem",
+                      borderRadius: "6px",
+                      backgroundColor: "#059669",
+                      color: "#FFFFFF",
+                      fontSize: "0.8125rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      border: "none",
+                    }}
+                  >
+                    <CheckCircle size={14} /> Mark Qualified
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => router.push("/deals")}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.375rem",
+                      padding: "0.4rem 0.75rem",
+                      borderRadius: "6px",
+                      backgroundColor: "#0284C7",
+                      color: "#FFFFFF",
+                      fontSize: "0.8125rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      border: "none",
+                    }}
+                  >
+                    <Briefcase size={14} /> View Deal in Pipeline →
+                  </button>
+                )}
+
+                <button
+                  onClick={() => openConvertLeadModal(activeLead)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.375rem",
+                    padding: "0.4rem 0.75rem",
+                    borderRadius: "6px",
+                    backgroundColor: "#4F46E5",
+                    color: "#FFFFFF",
+                    fontSize: "0.8125rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    border: "none",
+                  }}
+                >
+                  <Briefcase size={14} /> Convert to Deal
                 </button>
               </div>
 
@@ -3936,6 +4291,219 @@ export default function UniversalLeadsPage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* CONVERT LEAD TO CUSTOMER & DEAL MODAL                                      */}
+      {/* ========================================================================= */}
+      {isConvertModalOpen && leadToConvert && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 150,
+            backgroundColor: "rgba(15, 23, 42, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+          onClick={() => setIsConvertModalOpen(false)}
+        >
+          <div
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: "12px",
+              maxWidth: "560px",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid #E2E8F0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+                <div style={{ width: "36px", height: "36px", borderRadius: "8px", backgroundColor: "#EEF2FF", color: "#4F46E5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Briefcase size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "1.125rem", fontWeight: 800, color: "#0F172A", margin: 0 }}>
+                    Convert Lead to Deal
+                  </h3>
+                  <p style={{ fontSize: "0.75rem", color: "#64748B", margin: 0 }}>
+                    Creates a Customer record and starts a Deal in your sales pipeline.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsConvertModalOpen(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteLeadConversion} style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
+                  Deal Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={convDealName}
+                  onChange={(e) => setConvDealName(e.target.value)}
+                  style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
+                />
+              </div>
+
+              {/* Target Pipeline & Stage */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
+                    Target Pipeline *
+                  </label>
+                  <select
+                    required
+                    value={convPipelineId}
+                    onChange={(e) => {
+                      const pId = Number(e.target.value);
+                      setConvPipelineId(pId);
+                      const pipe = convPipelines.find((p) => p.id === pId);
+                      if (pipe && pipe.stages && pipe.stages.length > 0) {
+                        setConvStageId(pipe.stages[0].id);
+                      }
+                    }}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem", backgroundColor: "#FFFFFF" }}
+                  >
+                    {convPipelines.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
+                    Initial Stage *
+                  </label>
+                  <select
+                    required
+                    value={convStageId}
+                    onChange={(e) => setConvStageId(Number(e.target.value))}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem", backgroundColor: "#FFFFFF" }}
+                  >
+                    {convPipelines
+                      .find((p) => p.id === convPipelineId)
+                      ?.stages?.map((st) => (
+                        <option key={st.id} value={st.id}>
+                          {st.name} ({st.probability}%)
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Deal Value & Priority */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
+                    Deal Value ($)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={convDealValue}
+                    onChange={(e) => setConvDealValue(e.target.value === "" ? "" : Number(e.target.value))}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
+                    Priority
+                  </label>
+                  <select
+                    value={convPriority}
+                    onChange={(e) => setConvPriority(e.target.value)}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem", backgroundColor: "#FFFFFF" }}
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Customer Details Section */}
+              <div style={{ backgroundColor: "#F8FAFC", padding: "1rem", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                <h4 style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#0F172A", margin: "0 0 0.5rem 0" }}>
+                  Customer Details (New or Linked)
+                </h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                  <input
+                    type="text"
+                    placeholder="Customer Name"
+                    value={convCustomerName}
+                    onChange={(e) => setConvCustomerName(e.target.value)}
+                    style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Company"
+                    value={convCustomerCompany}
+                    onChange={(e) => setConvCustomerCompany(e.target.value)}
+                    style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    value={convCustomerEmail}
+                    onChange={(e) => setConvCustomerEmail(e.target.value)}
+                    style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
+                  />
+                  <input
+                    type="tel"
+                    placeholder="Phone"
+                    value={convCustomerPhone}
+                    onChange={(e) => setConvCustomerPhone(e.target.value)}
+                    style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsConvertModalOpen(false)}
+                  style={{ padding: "0.5rem 1rem", borderRadius: "6px", border: "1px solid #CBD5E1", backgroundColor: "#FFFFFF", fontSize: "0.8125rem", fontWeight: 600, color: "#475569", cursor: "pointer" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isConverting}
+                  style={{
+                    padding: "0.5rem 1.25rem",
+                    borderRadius: "6px",
+                    backgroundColor: "#4F46E5",
+                    color: "#FFFFFF",
+                    fontSize: "0.8125rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {isConverting ? "Converting..." : "Convert to Deal"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

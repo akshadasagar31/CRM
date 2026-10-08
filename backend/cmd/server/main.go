@@ -45,8 +45,16 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	iRepo := repository.NewInteractionRepository(db)
 	metaRepo := repository.NewMetadataRepository(db)
-	leadRepo := repository.NewLeadRepository(db, iRepo, metaRepo)
+	customerRepo := repository.NewCustomerRepository(db)
+	pipeRepo := repository.NewPipelineRepository(db)
+	dealRepo := repository.NewDealRepository(db, customerRepo, pipeRepo)
+	leadRepo := repository.NewLeadRepository(db, iRepo, metaRepo, customerRepo, dealRepo, pipeRepo)
 	apiKeyRepo := repository.NewApiKeyRepository(db)
+	productRepo := repository.NewProductRepository(db)
+	quotationRepo := repository.NewQuotationRepository(db, dealRepo, pipeRepo)
+	orderRepo := repository.NewOrderRepository(db, customerRepo, dealRepo, quotationRepo)
+	dealRepo.SetOrderRepo(orderRepo)
+	companyRepo := repository.NewCompanyRepository(db)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecretKey)
@@ -55,6 +63,13 @@ func main() {
 	metaHandler := handlers.NewMetadataHandler(metaRepo)
 	apiKeyHandler := handlers.NewApiKeyHandler(apiKeyRepo)
 	webhookHandler := handlers.NewWebhookHandler(apiKeyRepo, leadRepo)
+	customerHandler := handlers.NewCustomerHandler(customerRepo)
+	pipeHandler := handlers.NewPipelineHandler(pipeRepo)
+	dealHandler := handlers.NewDealHandler(dealRepo)
+	productHandler := handlers.NewProductHandler(productRepo)
+	quotationHandler := handlers.NewQuotationHandler(quotationRepo)
+	orderHandler := handlers.NewOrderHandler(orderRepo)
+	companyHandler := handlers.NewCompanyHandler(companyRepo)
 
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
@@ -102,6 +117,7 @@ func main() {
 		api.POST("/auth/reset-password", authHandler.ResetPassword)
 		api.POST("/reset-password", authHandler.ResetPassword)
 		api.POST("/webhooks/lead", webhookHandler.IngestLead)
+		api.GET("/company/logo", companyHandler.GetCompanyLogo)
 	}
 
 	// Protected Routes (JWT Required)
@@ -159,6 +175,7 @@ func main() {
 		protected.DELETE("/leads/:number", leadHandler.Delete)
 		protected.POST("/leads/:number/restore", leadHandler.Restore)
 		protected.POST("/leads/:number/tags", leadHandler.AddTags)
+		protected.POST("/leads/:number/convert", dealHandler.ConvertLead)
 
 		// Lead Notes
 		protected.GET("/leads/:number/notes", interactionHandler.ListNotes)
@@ -169,6 +186,10 @@ func main() {
 		protected.GET("/leads/:number/follow-ups", interactionHandler.ListFollowUps)
 		protected.POST("/leads/:number/follow-ups", interactionHandler.CreateFollowUp)
 		protected.PATCH("/leads/:number/follow-ups/:follow_up_id", interactionHandler.UpdateFollowUp)
+		protected.GET("/follow-ups", interactionHandler.ListAllFollowUps)
+		protected.POST("/follow-ups", interactionHandler.CreateFollowUpGlobal)
+		protected.PATCH("/follow-ups/:id", interactionHandler.UpdateFollowUpGlobal)
+		protected.DELETE("/follow-ups/:id", interactionHandler.DeleteFollowUpGlobal)
 
 		// Activities Timeline
 		protected.GET("/leads/:number/activities", interactionHandler.ListActivities)
@@ -179,6 +200,67 @@ func main() {
 		protected.GET("/api-keys/:key_id", apiKeyHandler.Get)
 		protected.POST("/api-keys/:key_id/revoke", apiKeyHandler.Revoke)
 		protected.DELETE("/api-keys/:key_id", apiKeyHandler.Delete)
+
+		// Customers Management
+		protected.GET("/customers", customerHandler.List)
+		protected.POST("/customers", customerHandler.Create)
+		protected.GET("/customers/:id", customerHandler.Get)
+
+		// Pipelines & Stages (Role protected for admin & manager config)
+		protected.GET("/pipelines", pipeHandler.List)
+		protected.GET("/pipelines/:id", pipeHandler.Get)
+		protected.POST("/pipelines", middleware.RequireRole("admin", "manager"), pipeHandler.Create)
+		protected.PATCH("/pipelines/:id", middleware.RequireRole("admin", "manager"), pipeHandler.Update)
+		protected.DELETE("/pipelines/:id", middleware.RequireRole("admin", "manager"), pipeHandler.Delete)
+		protected.POST("/pipelines/:id/stages", middleware.RequireRole("admin", "manager"), pipeHandler.CreateStage)
+		protected.POST("/pipelines/:id/stages/reorder", middleware.RequireRole("admin", "manager"), pipeHandler.ReorderStages)
+		protected.PATCH("/stages/:stage_id", middleware.RequireRole("admin", "manager"), pipeHandler.UpdateStage)
+		protected.DELETE("/stages/:stage_id", middleware.RequireRole("admin", "manager"), pipeHandler.DeleteStage)
+
+		// Deals Management
+		protected.GET("/deals", dealHandler.List)
+		protected.POST("/deals", dealHandler.Create)
+		protected.GET("/deals/:id", dealHandler.Get)
+		protected.PATCH("/deals/:id", dealHandler.Update)
+		protected.DELETE("/deals/:id", dealHandler.Delete)
+		protected.POST("/deals/:id/stage", dealHandler.ChangeStage)
+		protected.GET("/deals/:id/activities", dealHandler.ListActivities)
+		protected.GET("/deals/:id/notes", dealHandler.ListNotes)
+		protected.POST("/deals/:id/notes", dealHandler.CreateNote)
+		protected.DELETE("/deals/:id/notes/:note_id", dealHandler.DeleteNote)
+		protected.GET("/deals/:id/follow-ups", dealHandler.ListFollowUps)
+		protected.POST("/deals/:id/follow-ups", dealHandler.CreateFollowUp)
+
+		// Products Catalog (Admin & Manager can write; sales reps can view & select)
+		protected.GET("/products", productHandler.List)
+		protected.GET("/products/categories", productHandler.ListCategories)
+		protected.GET("/products/:id", productHandler.Get)
+		protected.POST("/products", middleware.RequireRole("admin", "manager"), productHandler.Create)
+		protected.PATCH("/products/:id", middleware.RequireRole("admin", "manager"), productHandler.Update)
+		protected.DELETE("/products/:id", middleware.RequireRole("admin", "manager"), productHandler.Delete)
+
+		// Quotations Management
+		protected.GET("/quotations", quotationHandler.List)
+		protected.POST("/quotations", quotationHandler.Create)
+		protected.GET("/quotations/:id", quotationHandler.Get)
+		protected.PATCH("/quotations/:id", quotationHandler.Update)
+		protected.POST("/quotations/:id/status", quotationHandler.ChangeStatus)
+		protected.DELETE("/quotations/:id", quotationHandler.Delete)
+
+		// Orders Management
+		protected.GET("/orders", orderHandler.List)
+		protected.POST("/orders", orderHandler.Create)
+		protected.GET("/orders/:id", orderHandler.Get)
+		protected.PATCH("/orders/:id", orderHandler.Update)
+		protected.POST("/orders/:id/stage", orderHandler.ChangeStage)
+		protected.DELETE("/orders/:id", middleware.RequireRole("admin", "manager"), orderHandler.Delete)
+		protected.POST("/deals/:id/create-order", orderHandler.CreateFromDeal)
+
+		// Company Profile (Viewable by authenticated users; editable by Admin only)
+		protected.GET("/company", companyHandler.GetCompanyProfile)
+		protected.PUT("/company", middleware.RequireRole("admin"), companyHandler.UpdateCompanyProfile)
+		protected.POST("/company/logo", middleware.RequireRole("admin"), companyHandler.UploadCompanyLogo)
+		protected.DELETE("/company/logo", middleware.RequireRole("admin"), companyHandler.DeleteCompanyLogo)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

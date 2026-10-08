@@ -50,9 +50,9 @@ func AuthMiddleware(db *database.DB, jwtSecret string) gin.HandlerFunc {
 
 		var user models.User
 		err = db.Pool.QueryRow(ctx,
-			"SELECT id, email, name, hashed_password, created_at FROM users WHERE id = $1",
+			"SELECT id, email, name, hashed_password, created_at, COALESCE(role, 'sales_rep') FROM users WHERE id = $1",
 			userID,
-		).Scan(&user.ID, &user.Email, &user.Name, &user.HashedPassword, &user.CreatedAt)
+		).Scan(&user.ID, &user.Email, &user.Name, &user.HashedPassword, &user.CreatedAt, &user.Role)
 
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -64,6 +64,28 @@ func AuthMiddleware(db *database.DB, jwtSecret string) gin.HandlerFunc {
 		c.Set("user", &user)
 		c.Set("user_id", user.ID)
 		c.Next()
+	}
+}
+
+// RequireRole checks if the authenticated user has one of the allowed roles
+func RequireRole(allowedRoles ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := GetCurrentUser(c)
+		if user == nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"detail": "Authentication required."})
+			return
+		}
+
+		for _, r := range allowedRoles {
+			if strings.EqualFold(user.Role, r) {
+				c.Next()
+				return
+			}
+		}
+
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"detail": "Access denied: insufficient permissions.",
+		})
 	}
 }
 

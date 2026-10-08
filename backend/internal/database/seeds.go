@@ -114,5 +114,87 @@ func (db *DB) Seed() error {
 		log.Println("[Database] Seeded default custom field definitions")
 	}
 
+	// 6. Default Sales Pipeline & Stages
+	var pipelineCount int
+	if err := db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM pipelines WHERE workspace_id = 1").Scan(&pipelineCount); err == nil && pipelineCount == 0 {
+		var pipelineID int
+		err := db.Pool.QueryRow(ctx,
+			`INSERT INTO pipelines (name, is_default, workspace_id) VALUES ($1, 1, 1) RETURNING id`,
+			"Standard Sales Pipeline",
+		).Scan(&pipelineID)
+		if err == nil {
+			stages := []struct {
+				name        string
+				order       int
+				probability int
+				color       string
+				isWon       int
+				isLost      int
+			}{
+				{"New Opportunity", 1, 10, "#3B82F6", 0, 0},
+				{"Requirement Discussion", 2, 25, "#6366F1", 0, 0},
+				{"Quotation Preparation", 3, 40, "#8B5CF6", 0, 0},
+				{"Quotation Sent", 4, 55, "#06B6D4", 0, 0},
+				{"Negotiation", 5, 70, "#F59E0B", 0, 0},
+				{"Quotation Accepted", 6, 85, "#14B8A6", 0, 0},
+				{"Final Amount Confirmed", 7, 95, "#10B981", 0, 0},
+				{"Won", 8, 100, "#059669", 1, 0},
+				{"Lost", 9, 0, "#EF4444", 0, 1},
+			}
+			for _, st := range stages {
+				_, _ = db.Pool.Exec(ctx,
+					`INSERT INTO deal_stages (pipeline_id, name, stage_order, probability, color, is_won, is_lost, is_active)
+					 VALUES ($1, $2, $3, $4, $5, $6, $7, true)`,
+					pipelineID, st.name, st.order, st.probability, st.color, st.isWon, st.isLost,
+				)
+			}
+			log.Println("[Database] Seeded Standard Sales Pipeline and 9 default stages")
+		}
+	}
+
+	// 7. Ensure user role defaults
+	_, _ = db.Pool.Exec(ctx, "UPDATE users SET role = 'sales_rep' WHERE role IS NULL OR role = ''")
+	_, _ = db.Pool.Exec(ctx, "UPDATE users SET role = 'admin' WHERE id = 1 OR email IN ('akshadasagar31@gmail.com', 'akshadasagar0924@gmail.com')")
+
+	// 8. Seed default products catalog if empty
+	var prodCount int
+	if err := db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM products WHERE workspace_id = 1").Scan(&prodCount); err == nil && prodCount == 0 {
+		defaultProducts := []struct {
+			name, sku, category, desc, unit, hsn string
+			price, tax                            float64
+		}{
+			{"Cloud CRM Enterprise Annual License", "CRM-ENT-001", "Software", "Annual enterprise user license with full CRM & pipeline access", "License", "997331", 15000.00, 18.00},
+			{"CRM Implementation & Onboarding", "SRV-SETUP-01", "Services", "Dedicated onboarding, data migration, and pipeline configuration service", "Service", "998313", 25000.00, 18.00},
+			{"Dedicated Cloud Hosting Server (12M)", "SRV-HOST-12M", "Subscription", "High-performance isolated cloud infrastructure with automated backups", "Year", "998315", 36000.00, 18.00},
+			{"Priority 24/7 SLA Support (Annual)", "SUP-SLA-01", "Support", "1-hour SLA response time with dedicated account manager and phone escalation", "Year", "998316", 12000.00, 18.00},
+			{"Custom ERP / API Integration Consulting", "CNS-WORK-HR", "Consulting", "Expert engineering consultation for 3rd-party webhook and ERP integrations", "Hours", "998319", 2500.00, 18.00},
+		}
+
+		for _, p := range defaultProducts {
+			_, _ = db.Pool.Exec(ctx, `
+				INSERT INTO products (name, sku, category, description, unit, selling_price, currency, tax_rate, hsn_sac, status, workspace_id, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6, 'INR', $7, $8, 'active', 1, NOW(), NOW())
+			`, p.name, p.sku, p.category, p.desc, p.unit, p.price, p.tax, p.hsn)
+		}
+		log.Println("[Database] Seeded 5 initial catalog products")
+	}
+
+	// 9. Seed default company profile if empty
+	var companyCount int
+	if err := db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM company_profiles WHERE workspace_id = 1").Scan(&companyCount); err == nil && companyCount == 0 {
+		_, _ = db.Pool.Exec(ctx, `
+			INSERT INTO company_profiles (
+				workspace_id, company_name, gst_number, pan_number, email, phone, website,
+				address, city, state, country, pincode, default_currency, created_at, updated_at
+			) VALUES (
+				1, 'BizCopilot Technologies Pvt. Ltd.', '27ABCDE1234F1Z5', 'ABCDE1234F',
+				'billing@bizcopilot.com', '+91 98765 43210', 'https://www.bizcopilot.com',
+				'Level 4, TechHub Towers, Cyber City', 'Pune', 'Maharashtra', 'India',
+				'411001', 'INR', NOW(), NOW()
+			)
+		`)
+		log.Println("[Database] Seeded initial company profile")
+	}
+
 	return nil
 }
