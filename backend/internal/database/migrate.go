@@ -560,6 +560,26 @@ func (db *DB) Migrate() error {
 			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_invoice_payments_invoice ON invoice_payments(invoice_id);`,
+
+		// 37. Automated Reminders table
+		`CREATE TABLE IF NOT EXISTS automated_reminders (
+			id SERIAL PRIMARY KEY,
+			workspace_id INTEGER NOT NULL DEFAULT 1,
+			reminder_type VARCHAR(50) NOT NULL,
+			entity_type VARCHAR(50) NOT NULL,
+			entity_id VARCHAR(50) NOT NULL,
+			title VARCHAR(255) NOT NULL,
+			message TEXT NOT NULL,
+			severity VARCHAR(20) NOT NULL DEFAULT 'warning',
+			status VARCHAR(20) NOT NULL DEFAULT 'pending',
+			due_at TIMESTAMP WITH TIME ZONE,
+			snoozed_until TIMESTAMP WITH TIME ZONE,
+			resolved_at TIMESTAMP WITH TIME ZONE,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_automated_reminders_status ON automated_reminders(workspace_id, status);`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS uq_automated_reminders_entity ON automated_reminders(workspace_id, reminder_type, entity_id);`,
 	}
 
 	for _, query := range queries {

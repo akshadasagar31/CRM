@@ -1779,6 +1779,7 @@ export default function FollowUpsPage({
           else if (tab === "products") router.push("/products");
           else if (tab === "quotations") router.push("/quotations");
           else if (tab === "orders") router.push("/orders");
+          else if (tab === "invoices") router.push("/invoices");
           else if (tab === "company") router.push("/company");
           else if (tab === "api-keys") router.push("/leads?tab=api-keys");
           else if (tab === "api-docs") router.push("/leads?tab=api-docs");

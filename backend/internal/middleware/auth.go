@@ -17,10 +17,15 @@ func AuthMiddleware(db *database.DB, jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"detail": "Authentication required. Please provide a Bearer token.",
-			})
-			return
+			// Fallback to token query param (e.g. for PDF downloads or iframe previews)
+			if tokenQuery := c.Query("token"); tokenQuery != "" {
+				authHeader = "Bearer " + tokenQuery
+			} else {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+					"detail": "Authentication required. Please provide a Bearer token.",
+				})
+				return
+			}
 		}
 
 		tokenString := ""

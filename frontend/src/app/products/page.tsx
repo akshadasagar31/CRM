@@ -235,6 +235,8 @@ export default function ProductsPage() {
       router.push("/quotations");
     } else if (tab === "orders") {
       router.push("/orders");
+    } else if (tab === "invoices") {
+      router.push("/invoices");
     } else if (tab === "follow-ups") {
       router.push("/follow-ups");
     } else if (tab === "company") {

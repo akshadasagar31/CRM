@@ -283,6 +283,7 @@ export default function CompanyPage() {
           else if (tab === "deals") router.push("/deals");
           else if (tab === "quotations") router.push("/quotations");
           else if (tab === "orders") router.push("/orders");
+          else if (tab === "invoices") router.push("/invoices");
           else if (tab === "products") router.push("/products");
           else if (tab === "follow-ups") router.push("/follow-ups");
           else if (tab === "api-keys") router.push("/leads?tab=api-keys");

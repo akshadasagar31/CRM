@@ -299,6 +299,10 @@ export default function UniversalLeadsPage() {
   };
 
   const handleSelectTab = (tab: SidebarTab) => {
+    if (tab === "dashboard") {
+      router.push("/dashboard");
+      return;
+    }
     if (tab === "products") {
       router.push("/products");
       return;
@@ -313,6 +317,14 @@ export default function UniversalLeadsPage() {
     }
     if (tab === "orders") {
       router.push("/orders");
+      return;
+    }
+    if (tab === "invoices") {
+      router.push("/invoices");
+      return;
+    }
+    if (tab === "payments") {
+      router.push("/payments");
       return;
     }
     if (tab === "company") {

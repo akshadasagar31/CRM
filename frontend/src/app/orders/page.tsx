@@ -6,6 +6,7 @@ import Sidebar, { SidebarTab } from "@/components/Sidebar";
 import {
   ordersApi,
   dealsApi,
+  invoicesApi,
   authApi,
   Order,
   OrderItem,
@@ -32,6 +33,7 @@ import {
   ExternalLink,
   Clock,
   PackageCheck,
+  Receipt,
   AlertCircle,
   CheckCircle2,
   FileSpreadsheet,
@@ -100,6 +102,7 @@ export default function OrdersPage() {
   const [drawerNotes, setDrawerNotes] = useState("");
   const [isUpdatingStage, setIsUpdatingStage] = useState(false);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
 
   // Create Order Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -357,12 +360,15 @@ export default function OrdersPage() {
       <Sidebar
         activeTab="orders"
         onSelectTab={(tab: SidebarTab) => {
-          if (tab === "leads") router.push("/leads");
+          if (tab === "dashboard") router.push("/dashboard");
+          else if (tab === "leads") router.push("/leads");
           else if (tab === "deals") router.push("/deals");
           else if (tab === "quotations") router.push("/quotations");
           else if (tab === "orders") {
             // Already on orders
-          } else if (tab === "products") router.push("/products");
+          } else if (tab === "invoices") router.push("/invoices");
+          else if (tab === "payments") router.push("/payments");
+          else if (tab === "products") router.push("/products");
           else if (tab === "follow-ups") router.push("/follow-ups");
           else if (tab === "company") router.push("/company");
           else if (tab === "api-keys") router.push("/leads?tab=api-keys");
@@ -1069,6 +1075,49 @@ export default function OrdersPage() {
                         Quote {selectedOrder.quotation.quotation_number} ↗
                       </span>
                     )}
+
+                    {/* Invoice This Order Action */}
+                    <button
+                      id="btn-order-drawer-create-invoice"
+                      disabled={isCreatingInvoice}
+                      onClick={async () => {
+                        try {
+                          setIsCreatingInvoice(true);
+                          const inv = await invoicesApi.createFromOrder(selectedOrder.id);
+                          showToast(`Invoice ${inv.invoice_number} created successfully!`);
+                          setSelectedOrder((prev) => prev ? { ...prev, invoice_status: "Invoiced" } : null);
+                          setOrders((prev) =>
+                            prev.map((o) => (o.id === selectedOrder.id ? { ...o, invoice_status: "Invoiced" } : o))
+                          );
+                          router.push("/invoices");
+                        } catch (err: any) {
+                          showToast(err.message || "Failed to create invoice", "error");
+                        } finally {
+                          setIsCreatingInvoice(false);
+                        }
+                      }}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: "#0F766E",
+                        backgroundColor: "#CCFBF1",
+                        border: "1px solid #99F6E4",
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <Receipt size={13} />
+                      {isCreatingInvoice
+                        ? "Creating Invoice..."
+                        : selectedOrder.invoice_status === "Invoiced"
+                        ? "Create Another Invoice ↗"
+                        : "Invoice This Order ↗"}
+                    </button>
                   </div>
                 </div>
 

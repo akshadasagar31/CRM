@@ -904,6 +904,7 @@ export default function DealsPage({
             if (tab === "leads") router.push("/leads");
             else if (tab === "quotations") router.push("/quotations");
             else if (tab === "orders") router.push("/orders");
+            else if (tab === "invoices") router.push("/invoices");
             else if (tab === "products") router.push("/products");
             else if (tab === "follow-ups") router.push("/follow-ups");
             else if (tab === "company") router.push("/company");

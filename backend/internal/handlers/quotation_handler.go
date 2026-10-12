@@ -1,23 +1,26 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"crm-backend-go/internal/middleware"
 	"crm-backend-go/internal/models"
+	"crm-backend-go/internal/pdf"
 	"crm-backend-go/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
 type QuotationHandler struct {
-	repo *repository.QuotationRepository
+	repo        *repository.QuotationRepository
+	companyRepo *repository.CompanyRepository
 }
 
-func NewQuotationHandler(repo *repository.QuotationRepository) *QuotationHandler {
-	return &QuotationHandler{repo: repo}
+func NewQuotationHandler(repo *repository.QuotationRepository, companyRepo *repository.CompanyRepository) *QuotationHandler {
+	return &QuotationHandler{repo: repo, companyRepo: companyRepo}
 }
 
 // Create godoc
@@ -236,4 +239,51 @@ func (h *QuotationHandler) Delete(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Quotation deleted successfully"})
+}
+
+// GeneratePDF godoc
+// @Summary Generate Maroto v2 A4 PDF for a Quotation
+// @Tags Quotations
+// @Produce application/pdf
+// @Security BearerAuth
+// @Param id path int true "Quotation ID"
+// @Param action query string false "inline or download"
+// @Router /api/quotations/{id}/pdf [get]
+func (h *QuotationHandler) GeneratePDF(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid quotation ID"})
+		return
+	}
+
+	quote, err := h.repo.GetByID(c.Request.Context(), id, 1)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": "Quotation not found"})
+		return
+	}
+
+	var comp *models.CompanyProfile
+	var logoBytes []byte
+	var logoMime string
+	if h.companyRepo != nil {
+		comp, _ = h.companyRepo.GetProfile(c.Request.Context())
+		logoBytes, logoMime, _ = h.companyRepo.GetLogo(c.Request.Context())
+	}
+
+	pdfBytes, err := pdf.GenerateQuotationPDF(quote, comp, logoBytes, logoMime)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": fmt.Sprintf("Failed to generate PDF: %v", err)})
+		return
+	}
+
+	action := c.DefaultQuery("action", "inline")
+	filename := fmt.Sprintf("Quotation-%s.pdf", quote.QuotationNumber)
+	if action == "download" {
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	} else {
+		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+	}
+
+	c.Header("Content-Type", "application/pdf")
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

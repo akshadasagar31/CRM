@@ -16,10 +16,13 @@ import {
   FileText,
   Building2,
   PackageCheck,
+  Receipt,
+  CreditCard,
+  LayoutDashboard,
 } from "lucide-react";
 import { User } from "@/lib/api";
 
-export type SidebarTab = "leads" | "deals" | "quotations" | "orders" | "products" | "follow-ups" | "company" | "api-keys" | "api-docs" | "profile";
+export type SidebarTab = "dashboard" | "leads" | "deals" | "quotations" | "orders" | "invoices" | "payments" | "products" | "follow-ups" | "company" | "api-keys" | "api-docs" | "profile";
 
 interface SidebarProps {
   activeTab: SidebarTab;
@@ -29,6 +32,9 @@ interface SidebarProps {
   dealsCount?: number;
   quotationsCount?: number;
   ordersCount?: number;
+  invoicesCount?: number;
+  paymentsCount?: number;
+  remindersCount?: number;
   productsCount?: number;
   followUpsCount?: number;
   user?: User | null;
@@ -46,6 +52,9 @@ export default function Sidebar({
   dealsCount,
   quotationsCount,
   ordersCount,
+  invoicesCount,
+  paymentsCount,
+  remindersCount,
   productsCount,
   followUpsCount,
   user,
@@ -55,6 +64,13 @@ export default function Sidebar({
   onOpenAdminSettings,
 }: SidebarProps) {
   const navItems = [
+    {
+      id: "dashboard" as SidebarTab,
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      domId: "sidebar-nav-dashboard",
+      badge: remindersCount !== undefined ? remindersCount : null,
+    },
     {
       id: "leads" as SidebarTab,
       label: "Leads",
@@ -82,6 +98,20 @@ export default function Sidebar({
       icon: PackageCheck,
       domId: "sidebar-nav-orders",
       badge: ordersCount !== undefined ? ordersCount : null,
+    },
+    {
+      id: "invoices" as SidebarTab,
+      label: "Invoices",
+      icon: Receipt,
+      domId: "sidebar-nav-invoices",
+      badge: invoicesCount !== undefined ? invoicesCount : null,
+    },
+    {
+      id: "payments" as SidebarTab,
+      label: "Payments",
+      icon: CreditCard,
+      domId: "sidebar-nav-payments",
+      badge: paymentsCount !== undefined ? paymentsCount : null,
     },
     {
       id: "products" as SidebarTab,

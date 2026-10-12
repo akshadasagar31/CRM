@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -55,6 +56,13 @@ func main() {
 	orderRepo := repository.NewOrderRepository(db, customerRepo, dealRepo, quotationRepo)
 	dealRepo.SetOrderRepo(orderRepo)
 	companyRepo := repository.NewCompanyRepository(db)
+	invoiceRepo := repository.NewInvoiceRepository(db, customerRepo, orderRepo, quotationRepo, dealRepo, companyRepo)
+	paymentRepo := repository.NewPaymentRepository(db, invoiceRepo, orderRepo, companyRepo, customerRepo)
+	automationRepo := repository.NewAutomationRepository(db)
+	dashboardRepo := repository.NewDashboardRepository(db)
+
+	// Start background automated reminders evaluator
+	automationRepo.StartPeriodicEvaluator(context.Background())
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(userRepo, cfg.JWTSecretKey)
@@ -67,9 +75,13 @@ func main() {
 	pipeHandler := handlers.NewPipelineHandler(pipeRepo)
 	dealHandler := handlers.NewDealHandler(dealRepo)
 	productHandler := handlers.NewProductHandler(productRepo)
-	quotationHandler := handlers.NewQuotationHandler(quotationRepo)
-	orderHandler := handlers.NewOrderHandler(orderRepo)
 	companyHandler := handlers.NewCompanyHandler(companyRepo)
+	quotationHandler := handlers.NewQuotationHandler(quotationRepo, companyRepo)
+	orderHandler := handlers.NewOrderHandler(orderRepo)
+	invoiceHandler := handlers.NewInvoiceHandler(invoiceRepo, companyRepo)
+	paymentHandler := handlers.NewPaymentHandler(paymentRepo)
+	automationHandler := handlers.NewAutomationHandler(automationRepo)
+	dashboardHandler := handlers.NewDashboardHandler(dashboardRepo)
 
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
@@ -243,6 +255,7 @@ func main() {
 		protected.GET("/quotations", quotationHandler.List)
 		protected.POST("/quotations", quotationHandler.Create)
 		protected.GET("/quotations/:id", quotationHandler.Get)
+		protected.GET("/quotations/:id/pdf", quotationHandler.GeneratePDF)
 		protected.PATCH("/quotations/:id", quotationHandler.Update)
 		protected.POST("/quotations/:id/status", quotationHandler.ChangeStatus)
 		protected.DELETE("/quotations/:id", quotationHandler.Delete)
@@ -256,11 +269,44 @@ func main() {
 		protected.DELETE("/orders/:id", middleware.RequireRole("admin", "manager"), orderHandler.Delete)
 		protected.POST("/deals/:id/create-order", orderHandler.CreateFromDeal)
 
+		// Invoices Management
+		protected.GET("/invoices", invoiceHandler.List)
+		protected.POST("/invoices", invoiceHandler.Create)
+		protected.GET("/invoices/:id", invoiceHandler.Get)
+		protected.GET("/invoices/:id/pdf", invoiceHandler.GeneratePDF)
+		protected.PATCH("/invoices/:id", middleware.RequireRole("admin", "manager"), invoiceHandler.Update)
+		protected.POST("/invoices/:id/payments", invoiceHandler.RecordPayment)
+		protected.POST("/invoices/:id/payment", invoiceHandler.RecordPayment)
+		protected.POST("/invoices/:id/status", invoiceHandler.ChangeStatus)
+		protected.DELETE("/invoices/:id", middleware.RequireRole("admin", "manager"), invoiceHandler.Delete)
+		protected.POST("/invoices/from-order/:order_id", invoiceHandler.CreateFromOrder)
+		protected.POST("/orders/:id/create-invoice", invoiceHandler.CreateFromOrder)
+		protected.POST("/invoices/from-quotation/:quotation_id", invoiceHandler.CreateFromQuotation)
+		protected.POST("/quotations/:id/create-invoice", invoiceHandler.CreateFromQuotation)
+
+		// Payments Management
+		protected.GET("/payments", paymentHandler.List)
+		protected.GET("/payments/summary", paymentHandler.GetSummary)
+		protected.POST("/payments", paymentHandler.RecordPayment)
+		protected.GET("/payments/:id/receipt", paymentHandler.GetReceipt)
+		protected.DELETE("/payments/:id", middleware.RequireRole("admin", "manager"), paymentHandler.DeletePayment)
+
 		// Company Profile (Viewable by authenticated users; editable by Admin only)
 		protected.GET("/company", companyHandler.GetCompanyProfile)
 		protected.PUT("/company", middleware.RequireRole("admin"), companyHandler.UpdateCompanyProfile)
 		protected.POST("/company/logo", middleware.RequireRole("admin"), companyHandler.UploadCompanyLogo)
 		protected.DELETE("/company/logo", middleware.RequireRole("admin"), companyHandler.DeleteCompanyLogo)
+
+		// Dashboard & Reporting
+		protected.GET("/dashboard/metrics", dashboardHandler.GetMetrics)
+		protected.GET("/dashboard/sales-chart", dashboardHandler.GetSalesChart)
+		protected.GET("/dashboard/pipeline-distribution", dashboardHandler.GetPipelineDistribution)
+		protected.GET("/dashboard/activities", dashboardHandler.GetActivities)
+
+		// Automation & Reminders
+		protected.GET("/automation/reminders", automationHandler.ListReminders)
+		protected.POST("/automation/reminders/evaluate", automationHandler.EvaluateReminders)
+		protected.PATCH("/automation/reminders/:id/status", automationHandler.UpdateReminderStatus)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

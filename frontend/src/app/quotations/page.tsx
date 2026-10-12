@@ -40,8 +40,9 @@ import {
   Package,
   Receipt,
   ShieldCheck,
-  MapPin,
   Percent,
+  Download,
+  Loader2,
 } from "lucide-react";
 import {
   quotationsApi,
@@ -52,6 +53,7 @@ import {
   companyApi,
   CompanyProfile,
   getApiBaseUrl,
+  downloadPdfFile,
   authApi,
   getToken,
   getStoredUser,
@@ -117,6 +119,38 @@ function QuotationsContent() {
   // Print / PDF View Modal
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printQuotation, setPrintQuotation] = useState<Quotation | null>(null);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  useEffect(() => {
+    if (isPrintModalOpen && printQuotation) {
+      let active = true;
+      setPdfLoading(true);
+      quotationsApi.getPdfBlob(printQuotation.id)
+        .then((blob: Blob) => {
+          if (!active) return;
+          const url = URL.createObjectURL(blob);
+          setPdfBlobUrl(url);
+        })
+        .catch((err: any) => {
+          console.error("Failed to load quotation PDF:", err);
+          showToast("Failed to load quotation PDF: " + (err?.message || "Unknown error"), "error");
+        })
+        .finally(() => {
+          if (active) setPdfLoading(false);
+        });
+
+      return () => {
+        active = false;
+        if (pdfBlobUrl) {
+          URL.revokeObjectURL(pdfBlobUrl);
+        }
+      };
+    } else {
+      setPdfBlobUrl(null);
+    }
+  }, [isPrintModalOpen, printQuotation?.id]);
 
   // Toast Notification
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -829,9 +863,12 @@ function QuotationsContent() {
         activeTab={activeSidebarTab}
         onSelectTab={(tab) => {
           setActiveSidebarTab(tab);
-          if (tab === "leads") router.push("/leads");
+          if (tab === "dashboard") router.push("/dashboard");
+          else if (tab === "leads") router.push("/leads");
           else if (tab === "deals") router.push("/deals");
           else if (tab === "orders") router.push("/orders");
+          else if (tab === "invoices") router.push("/invoices");
+          else if (tab === "payments") router.push("/payments");
           else if (tab === "products") router.push("/products");
           else if (tab === "follow-ups") router.push("/follow-ups");
           else if (tab === "company") router.push("/company");
@@ -2774,485 +2811,214 @@ function QuotationsContent() {
         </div>
       )}
 
-      {/* PRINT / PDF VIEW MODAL */}
-      {isPrintModalOpen && printQuotation && (() => {
-        const printCurr = printQuotation.currency === "INR" || !printQuotation.currency ? "₹" : `${printQuotation.currency} `;
-        const compName = printQuotation.company_name || companyProfile?.company_name || "CRM Enterprise Solutions";
-        const compAddress = printQuotation.company_address || [
-          companyProfile?.address,
-          companyProfile?.city,
-          companyProfile?.state,
-          companyProfile?.pincode,
-        ].filter(Boolean).join(", ") || "101 Business Hub, Mumbai, Maharashtra 400001";
-        const compGstin = printQuotation.company_gstin || companyProfile?.gst_number || companyProfile?.gstin || "27AAPCU1234F1Z5";
-        const compPan = printQuotation.company_pan || companyProfile?.pan_number || companyProfile?.pan || "AAPCU1234F";
-        const compEmail = companyProfile?.email || "billing@crmenterprise.com";
-        const compPhone = companyProfile?.phone || "+91 98765 43210";
-        const isInterState = printQuotation.is_inter_state ?? (
-          (printQuotation.customer_state || printQuotation.customer?.state || "").trim().toLowerCase() !==
-          (printQuotation.company_state || companyProfile?.state || "Maharashtra").trim().toLowerCase()
-        );
-        const custState = printQuotation.customer_state || printQuotation.customer?.state || "Maharashtra";
-        const custGstin = printQuotation.customer_gstin || printQuotation.customer?.gstin || "Unregistered / Consumer";
-        const taxableTotal = printQuotation.taxable_amount ?? (printQuotation.subtotal - (printQuotation.discount_amount || 0));
-
-        return (
+      {/* PRINT / PDF VIEW MODAL (Maroto v2 Viewport) */}
+      {isPrintModalOpen && printQuotation && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 110,
+            backgroundColor: "rgba(15, 23, 42, 0.75)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+          }}
+        >
           <div
             style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 110,
-              backgroundColor: "rgba(15, 23, 42, 0.65)",
-              backdropFilter: "blur(6px)",
+              backgroundColor: "#1E293B",
+              borderRadius: "14px",
+              width: "100%",
+              maxWidth: "960px",
+              height: "92vh",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "20px",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+              border: "1px solid #334155",
             }}
           >
+            {/* Action Bar Header */}
             <div
               style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: "14px",
-                width: "100%",
-                maxWidth: "860px",
-                maxHeight: "94vh",
+                padding: "12px 20px",
+                backgroundColor: "#0F172A",
+                color: "#FFFFFF",
                 display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.3)",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderBottom: "1px solid #334155",
               }}
             >
-              {/* Action Bar */}
-              <div
-                style={{
-                  padding: "14px 24px",
-                  backgroundColor: "#0F172A",
-                  color: "#FFFFFF",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  borderBottom: "1px solid #1E293B",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: "#0F766E", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Receipt size={16} color="#FFFFFF" />
-                  </div>
-                  <div>
-                    <span style={{ fontWeight: 700, fontSize: "0.9375rem" }}>
-                      GST Tax Quotation: {printQuotation.quotation_number}
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    backgroundColor: "#0D9488",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Receipt size={18} color="#FFFFFF" />
+                </div>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.9375rem", color: "#F8FAFC" }}>
+                      Quotation #{printQuotation.quotation_number}
                     </span>
-                    <span style={{ marginLeft: "8px", fontSize: "0.72rem", backgroundColor: isInterState ? "#4C1D95" : "#064E3B", color: "#E0E7FF", padding: "2px 8px", borderRadius: "10px", fontWeight: 600 }}>
-                      {isInterState ? "Inter-State (IGST)" : "Intra-State (CGST + SGST)"}
-                    </span>
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "8px 16px",
-                      borderRadius: "8px",
-                      backgroundColor: "#0F766E",
-                      color: "#FFFFFF",
-                      fontSize: "0.8125rem",
-                      fontWeight: 600,
-                      border: "none",
-                      cursor: "pointer",
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                    }}
-                  >
-                    <Printer size={15} />
-                    <span>Print / PDF Document</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsPrintModalOpen(false)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#94A3B8",
-                      cursor: "pointer",
-                      padding: "6px",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Document Sheet */}
-              <div
-                id="printable-quotation"
-                style={{
-                  flex: 1,
-                  overflowY: "auto",
-                  padding: "36px 44px",
-                  backgroundColor: "#FFFFFF",
-                  fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-                  color: "#1E293B",
-                }}
-              >
-                {/* Header Section */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #0F766E", paddingBottom: "20px", marginBottom: "22px" }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: "14px" }}>
-                    {companyProfile?.has_logo || companyProfile?.logo_url ? (
-                      <img
-                        src={`${getApiBaseUrl()}/company/logo?t=${Date.now()}`}
-                        alt={compName}
-                        style={{
-                          width: "56px",
-                          height: "56px",
-                          objectFit: "contain",
-                          borderRadius: "10px",
-                          border: "1px solid #E2E8F0",
-                          backgroundColor: "#F8FAFC",
-                          padding: "2px",
-                        }}
-                        onError={(e) => {
-                          (e.currentTarget as HTMLElement).style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: "52px",
-                          height: "52px",
-                          borderRadius: "10px",
-                          backgroundColor: "#0F766E",
-                          color: "#FFFFFF",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 800,
-                          fontSize: "1.375rem",
-                        }}
-                      >
-                        {(compName[0] || "C").toUpperCase()}
-                      </div>
-                    )}
-                    <div>
-                      <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0F172A", letterSpacing: "-0.02em" }}>
-                        {compName}
-                      </div>
-                      <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px", maxWidth: "380px", lineHeight: 1.4 }}>
-                        {compAddress}
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "14px", marginTop: "5px", fontSize: "0.75rem", color: "#334155" }}>
-                        <span><strong>GSTIN:</strong> <span style={{ fontFamily: "monospace", color: "#0F766E", fontWeight: 700 }}>{compGstin}</span></span>
-                        <span><strong>PAN:</strong> <span style={{ fontFamily: "monospace", fontWeight: 700 }}>{compPan}</span></span>
-                      </div>
-                      <div style={{ fontSize: "0.72rem", color: "#64748B", marginTop: "2px" }}>
-                        {[compEmail, compPhone].filter(Boolean).join(" • ")}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ display: "inline-block", backgroundColor: "#0F766E", color: "#FFFFFF", fontWeight: 800, fontSize: "0.875rem", letterSpacing: "0.08em", padding: "4px 14px", borderRadius: "6px", textTransform: "uppercase" }}>
-                      TAX QUOTATION
-                    </div>
-                    <div style={{ fontSize: "1.125rem", fontWeight: 800, color: "#0F172A", marginTop: "6px" }}>
-                      #{printQuotation.quotation_number}
-                      {Boolean(printQuotation.version && printQuotation.version > 1) && (
-                        <span style={{ marginLeft: "6px", fontSize: "0.7rem", color: "#D97706", backgroundColor: "#FEF3C7", padding: "2px 6px", borderRadius: "4px" }}>
-                          Rev. v{printQuotation.version}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "4px" }}>
-                      <strong>Date:</strong> {new Date(printQuotation.created_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                    </div>
-                    {printQuotation.valid_until && (
-                      <div style={{ fontSize: "0.75rem", color: "#D97706", fontWeight: 600, marginTop: "2px" }}>
-                        <strong>Valid Until:</strong> {new Date(printQuotation.valid_until).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                      </div>
-                    )}
-                    <div style={{ fontSize: "0.72rem", color: isInterState ? "#6D28D9" : "#0F766E", fontWeight: 700, marginTop: "6px", backgroundColor: isInterState ? "#F5F3FF" : "#F0FDFA", border: `1px solid ${isInterState ? "#DDD6FE" : "#CCFBF1"}`, padding: "3px 8px", borderRadius: "4px", display: "inline-block" }}>
-                      Place of Supply: {custState}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bill To & Deal Reference Cards */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "24px" }}>
-                  <div style={{ backgroundColor: "#F8FAFC", padding: "14px 16px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-                    <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>
-                      Bill To (Buyer / Recipient):
-                    </div>
-                    <div style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#0F172A" }}>
-                      {printQuotation.customer?.name || "Valued Customer"}
-                    </div>
-                    {printQuotation.customer?.company && (
-                      <div style={{ fontSize: "0.8125rem", color: "#334155", fontWeight: 600, marginTop: "2px" }}>
-                        {printQuotation.customer.company}
-                      </div>
-                    )}
-                    <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "4px", lineHeight: 1.4 }}>
-                      {[printQuotation.customer?.address, printQuotation.customer?.city, custState, printQuotation.customer?.pincode].filter(Boolean).join(", ") || custState}
-                    </div>
-                    <div style={{ marginTop: "6px", fontSize: "0.75rem", color: "#0F172A", fontWeight: 600 }}>
-                      GSTIN: <span style={{ fontFamily: "monospace", color: custGstin === "Unregistered / Consumer" ? "#64748B" : "#0F766E", fontWeight: 700 }}>{custGstin}</span>
-                    </div>
-                    <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "2px" }}>
-                      State: <strong>{custState}</strong> (Place of Supply)
-                    </div>
-                    {(printQuotation.customer?.email || printQuotation.customer?.phone) && (
-                      <div style={{ fontSize: "0.72rem", color: "#64748B", marginTop: "4px" }}>
-                        {[printQuotation.customer?.phone, printQuotation.customer?.email].filter(Boolean).join(" • ")}
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ backgroundColor: "#F8FAFC", padding: "14px 16px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-                    <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>
-                      Project & Order Reference:
-                    </div>
-                    <div style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#0F172A" }}>
-                      {printQuotation.deal?.name || "Direct Quotation"}
-                    </div>
-                    {printQuotation.lead_number && (
-                      <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "4px" }}>
-                        Lead Reference: <strong>{printQuotation.lead_number}</strong>
-                      </div>
-                    )}
-                    <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "2px" }}>
-                      Currency: <strong>{printQuotation.currency || "INR"} ({printCurr.trim()})</strong>
-                    </div>
-                    <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "2px" }}>
-                      Supply Type: <strong>{isInterState ? "Inter-State (IGST 100%)" : "Intra-State (CGST 50% + SGST 50%)"}</strong>
-                    </div>
-                    {printQuotation.deal?.requirement && (
-                      <div style={{ fontSize: "0.72rem", color: "#64748B", marginTop: "4px", lineHeight: 1.35 }}>
-                        <strong>Scope:</strong> {printQuotation.deal.requirement}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Line Items Table with GST Columns */}
-                <div style={{ marginBottom: "22px" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78125rem" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "#0F766E", color: "#FFFFFF", textAlign: "left" }}>
-                        <th style={{ padding: "8px 10px", width: "30px", borderTopLeftRadius: "6px" }}>#</th>
-                        <th style={{ padding: "8px 10px" }}>Item & Description</th>
-                        <th style={{ padding: "8px 10px", textAlign: "center" }}>HSN/SAC</th>
-                        <th style={{ padding: "8px 10px", textAlign: "center" }}>Qty</th>
-                        <th style={{ padding: "8px 10px", textAlign: "right" }}>Rate</th>
-                        <th style={{ padding: "8px 10px", textAlign: "right" }}>Taxable</th>
-                        <th style={{ padding: "8px 10px", textAlign: "center" }}>GST %</th>
-                        <th style={{ padding: "8px 10px", textAlign: "right" }}>GST Amt</th>
-                        <th style={{ padding: "8px 10px", textAlign: "right", borderTopRightRadius: "6px" }}>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {printQuotation.items?.map((item, i) => {
-                        const itemTaxable = item.taxable_amount ?? ((item.quantity * item.unit_price) - (item.discount_amount || 0));
-                        const itemGstRate = item.gst_rate ?? (item.tax_percentage || 0);
-                        const itemGstAmt = item.gst_amount ?? (item.tax_amount || (itemTaxable * itemGstRate / 100));
-                        return (
-                          <tr key={item.id || i} style={{ borderBottom: "1px solid #E2E8F0" }}>
-                            <td style={{ padding: "8px 10px", color: "#64748B" }}>{i + 1}</td>
-                            <td style={{ padding: "8px 10px" }}>
-                              <div style={{ fontWeight: 700, color: "#0F172A" }}>{item.product_name}</div>
-                              {item.description && <div style={{ fontSize: "0.72rem", color: "#64748B" }}>{item.description}</div>}
-                              {item.sku && <div style={{ fontSize: "0.68rem", color: "#94A3B8" }}>SKU: {item.sku}</div>}
-                            </td>
-                            <td style={{ padding: "8px 10px", textAlign: "center", color: "#475569", fontFamily: "monospace" }}>
-                              {item.hsn_sac || "—"}
-                            </td>
-                            <td style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600 }}>{item.quantity}</td>
-                            <td style={{ padding: "8px 10px", textAlign: "right", color: "#475569" }}>
-                              {printCurr}{item.unit_price?.toFixed(2)}
-                            </td>
-                            <td style={{ padding: "8px 10px", textAlign: "right", color: "#0F172A", fontWeight: 600 }}>
-                              {printCurr}{itemTaxable.toFixed(2)}
-                            </td>
-                            <td style={{ padding: "8px 10px", textAlign: "center", color: "#475569" }}>
-                              {itemGstRate}%
-                            </td>
-                            <td style={{ padding: "8px 10px", textAlign: "right", color: "#0F766E", fontWeight: 600 }}>
-                              {printCurr}{itemGstAmt.toFixed(2)}
-                            </td>
-                            <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#0F172A" }}>
-                              {printCurr}{item.line_total?.toFixed(2)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* GST TAX BREAKDOWN MATRIX */}
-                <div style={{ marginBottom: "22px" }}>
-                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#0F766E", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>
-                    GST Tax Breakdown Summary ({isInterState ? "Inter-State Supply: IGST" : "Intra-State Supply: CGST + SGST"})
-                  </div>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.72rem", backgroundColor: "#F8FAFC", borderRadius: "6px", overflow: "hidden", border: "1px solid #E2E8F0" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "#F1F5F9", color: "#475569", textAlign: "left", borderBottom: "1px solid #CBD5E1" }}>
-                        <th style={{ padding: "6px 8px" }}>HSN/SAC</th>
-                        <th style={{ padding: "6px 8px", textAlign: "right" }}>Taxable Value</th>
-                        {!isInterState ? (
-                          <>
-                            <th style={{ padding: "6px 8px", textAlign: "right" }}>CGST Rate</th>
-                            <th style={{ padding: "6px 8px", textAlign: "right" }}>CGST Amt</th>
-                            <th style={{ padding: "6px 8px", textAlign: "right" }}>SGST Rate</th>
-                            <th style={{ padding: "6px 8px", textAlign: "right" }}>SGST Amt</th>
-                          </>
-                        ) : (
-                          <>
-                            <th style={{ padding: "6px 8px", textAlign: "right" }}>IGST Rate</th>
-                            <th style={{ padding: "6px 8px", textAlign: "right" }}>IGST Amt</th>
-                          </>
-                        )}
-                        <th style={{ padding: "6px 8px", textAlign: "right" }}>Total Tax Amt</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {printQuotation.items?.map((item, i) => {
-                        const itemTaxable = item.taxable_amount ?? ((item.quantity * item.unit_price) - (item.discount_amount || 0));
-                        const gstRate = item.gst_rate ?? (item.tax_percentage || 0);
-                        const halfRate = gstRate / 2;
-                        const cgstAmt = item.cgst_amount ?? (!isInterState ? itemTaxable * (halfRate / 100) : 0);
-                        const sgstAmt = item.sgst_amount ?? (!isInterState ? itemTaxable * (halfRate / 100) : 0);
-                        const igstAmt = item.igst_amount ?? (isInterState ? itemTaxable * (gstRate / 100) : 0);
-                        const totalTax = !isInterState ? (cgstAmt + sgstAmt) : igstAmt;
-
-                        return (
-                          <tr key={i} style={{ borderBottom: "1px solid #E2E8F0" }}>
-                            <td style={{ padding: "6px 8px", fontFamily: "monospace", color: "#334155" }}>
-                              {item.hsn_sac || "General"}
-                            </td>
-                            <td style={{ padding: "6px 8px", textAlign: "right", color: "#0F172A" }}>
-                              {printCurr}{itemTaxable.toFixed(2)}
-                            </td>
-                            {!isInterState ? (
-                              <>
-                                <td style={{ padding: "6px 8px", textAlign: "right", color: "#64748B" }}>{halfRate}%</td>
-                                <td style={{ padding: "6px 8px", textAlign: "right", color: "#0F172A" }}>{printCurr}{cgstAmt.toFixed(2)}</td>
-                                <td style={{ padding: "6px 8px", textAlign: "right", color: "#64748B" }}>{halfRate}%</td>
-                                <td style={{ padding: "6px 8px", textAlign: "right", color: "#0F172A" }}>{printCurr}{sgstAmt.toFixed(2)}</td>
-                              </>
-                            ) : (
-                              <>
-                                <td style={{ padding: "6px 8px", textAlign: "right", color: "#64748B" }}>{gstRate}%</td>
-                                <td style={{ padding: "6px 8px", textAlign: "right", color: "#0F172A" }}>{printCurr}{igstAmt.toFixed(2)}</td>
-                              </>
-                            )}
-                            <td style={{ padding: "6px 8px", textAlign: "right", fontWeight: 700, color: "#0F766E" }}>
-                              {printCurr}{totalTax.toFixed(2)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Bank Details & Totals Summary */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "24px", gap: "24px" }}>
-                  <div style={{ flex: 1, backgroundColor: "#F8FAFC", padding: "14px 16px", borderRadius: "8px", border: "1px solid #E2E8F0", fontSize: "0.75rem" }}>
-                    <div style={{ fontWeight: 700, color: "#475569", marginBottom: "4px" }}>Bank & Payment Details:</div>
-                    <div style={{ color: "#64748B", lineHeight: 1.5 }}>
-                      Beneficiary: <strong>{compName}</strong><br />
-                      Bank: HDFC Bank Ltd • Branch: Fort, Mumbai<br />
-                      IFSC: HDFC0000123 • A/C No: 50200012345678<br />
-                      Company PAN: <strong>{compPan}</strong>
-                    </div>
-                  </div>
-
-                  <div style={{ width: "320px", display: "flex", flexDirection: "column", gap: "5px", fontSize: "0.8125rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", color: "#64748B" }}>
-                      <span>Taxable Value:</span>
-                      <strong style={{ color: "#0F172A" }}>{printCurr}{taxableTotal.toFixed(2)}</strong>
-                    </div>
-                    {!isInterState ? (
-                      <>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "#64748B" }}>
-                          <span>CGST:</span>
-                          <strong style={{ color: "#0F172A" }}>+{printCurr}{(printQuotation.cgst_amount || 0).toFixed(2)}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "#64748B" }}>
-                          <span>SGST:</span>
-                          <strong style={{ color: "#0F172A" }}>+{printCurr}{(printQuotation.sgst_amount || 0).toFixed(2)}</strong>
-                        </div>
-                      </>
-                    ) : (
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748B" }}>
-                        <span>IGST:</span>
-                        <strong style={{ color: "#0F172A" }}>+{printCurr}{(printQuotation.igst_amount || 0).toFixed(2)}</strong>
-                      </div>
-                    )}
-                    <div style={{ display: "flex", justifyContent: "space-between", color: "#0F766E", fontWeight: 600 }}>
-                      <span>Total GST:</span>
-                      <strong>+{printCurr}{(printQuotation.total_gst_amount || printQuotation.tax_amount || 0).toFixed(2)}</strong>
-                    </div>
-                    {typeof printQuotation.round_off_amount === "number" && printQuotation.round_off_amount !== 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748B", fontSize: "0.75rem" }}>
-                        <span>Round Off:</span>
-                        <span>{printQuotation.round_off_amount > 0 ? `+${printCurr}` : `-${printCurr}`}{Math.abs(printQuotation.round_off_amount).toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div
+                    <span
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        borderTop: "2px solid #0F766E",
-                        paddingTop: "8px",
-                        marginTop: "4px",
-                        fontWeight: 800,
-                        fontSize: "1.125rem",
-                        color: "#0F172A",
+                        fontSize: "0.7rem",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        backgroundColor: printQuotation.is_inter_state ? "#4C1D95" : "#065F46",
+                        color: "#FFFFFF",
+                        fontWeight: 600,
                       }}
                     >
-                      <span>Grand Total:</span>
-                      <span style={{ color: "#0F766E" }}>
-                        {printCurr}{printQuotation.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Terms and Conditions */}
-                {printQuotation.terms_and_conditions && (
-                  <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: "14px", marginTop: "16px" }}>
-                    <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "4px" }}>
-                      Terms & Conditions
-                    </div>
-                    <div style={{ fontSize: "0.72rem", color: "#64748B", whiteSpace: "pre-line", lineHeight: 1.45 }}>
-                      {printQuotation.terms_and_conditions}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sign-off Boxes */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginTop: "28px", paddingTop: "16px", borderTop: "1px solid #E2E8F0" }}>
-                  <div>
-                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569" }}>Customer Acceptance:</div>
-                    <div style={{ fontSize: "0.7rem", color: "#94A3B8", marginTop: "2px" }}>Sign & date to confirm quote acceptance</div>
-                    <div style={{ height: "42px", borderBottom: "1px dashed #CBD5E1", marginTop: "14px" }}></div>
-                    <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: "4px" }}>Authorized Signature & Seal</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0F172A" }}>For {compName}</div>
-                    <div style={{ height: "42px", borderBottom: "1px dashed #CBD5E1", marginTop: "14px" }}></div>
-                    <div style={{ fontSize: "0.7rem", color: "#64748B", marginTop: "4px" }}>Authorized Signatory</div>
+                      {printQuotation.is_inter_state ? "Inter-State (IGST)" : "Intra-State (CGST + SGST)"}
+                    </span>
+                    <span style={{ fontSize: "0.7rem", backgroundColor: "#1E293B", color: "#94A3B8", padding: "2px 8px", borderRadius: "10px" }}>
+                      Maroto v2 Engine
+                    </span>
                   </div>
                 </div>
               </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                {/* Download PDF Button */}
+                <button
+                  type="button"
+                  id="btn-download-quotation-pdf"
+                  disabled={isDownloadingPdf}
+                  onClick={async () => {
+                    try {
+                      setIsDownloadingPdf(true);
+                      await downloadPdfFile(
+                        "/quotations/" + printQuotation.id + "/pdf?action=download",
+                        "Quotation-" + printQuotation.quotation_number + ".pdf"
+                      );
+                      showToast("Quotation PDF downloaded successfully!", "success");
+                    } catch (err: any) {
+                      showToast("Failed to download PDF: " + (err?.message || "Error"), "error");
+                    } finally {
+                      setIsDownloadingPdf(false);
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "7px 14px",
+                    borderRadius: "8px",
+                    backgroundColor: "#1E293B",
+                    color: "#F8FAFC",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    border: "1px solid #334155",
+                    cursor: isDownloadingPdf ? "not-allowed" : "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {isDownloadingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  <span>Download PDF</span>
+                </button>
+
+                {/* Print PDF Button */}
+                <button
+                  type="button"
+                  id="btn-execute-print-quotation"
+                  onClick={() => {
+                    const iframe = document.getElementById("quotation-pdf-frame") as HTMLIFrameElement | null;
+                    if (iframe && iframe.contentWindow) {
+                      iframe.contentWindow.focus();
+                      iframe.contentWindow.print();
+                    } else if (pdfBlobUrl) {
+                      const printWindow = window.open(pdfBlobUrl, "_blank");
+                      printWindow?.focus();
+                      printWindow?.print();
+                    }
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "7px 14px",
+                    borderRadius: "8px",
+                    backgroundColor: "#0D9488",
+                    color: "#FFFFFF",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                  }}
+                >
+                  <Printer size={14} />
+                  <span>Print Document</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-close-quotation-modal"
+                  onClick={() => setIsPrintModalOpen(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#94A3B8",
+                    cursor: "pointer",
+                    padding: "6px",
+                    borderRadius: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Document Body (Maroto v2 PDF Viewport) */}
+            <div
+              style={{
+                flex: 1,
+                position: "relative",
+                backgroundColor: "#334155",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {pdfLoading ? (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", color: "#F8FAFC" }}>
+                  <Loader2 size={36} className="animate-spin text-teal-400" />
+                  <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Rendering Professional A4 PDF via Maroto v2 Engine...</span>
+                </div>
+              ) : pdfBlobUrl ? (
+                <iframe
+                  id="quotation-pdf-frame"
+                  src={pdfBlobUrl}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                    backgroundColor: "#FFFFFF",
+                  }}
+                  title={"Quotation " + printQuotation.quotation_number}
+                />
+              ) : (
+                <div style={{ color: "#EF4444", fontSize: "0.875rem" }}>Failed to render document preview.</div>
+              )}
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
     </div>
   );
 }

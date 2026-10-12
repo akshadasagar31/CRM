@@ -816,6 +816,7 @@ type InvoiceItem struct {
 	InvoiceID          int       `json:"invoice_id"`
 	ProductID          *int      `json:"product_id"`
 	ProductName        string    `json:"product_name"`
+	Name               string    `json:"name"`
 	SKU                *string   `json:"sku"`
 	HSNSAC             *string   `json:"hsn_sac"`
 	Description        *string   `json:"description"`
@@ -833,6 +834,7 @@ type InvoiceItem struct {
 	IGSTRate           float64   `json:"igst_rate"`
 	IGSTAmount         float64   `json:"igst_amount"`
 	LineTotal          float64   `json:"line_total"`
+	TotalAmount        float64   `json:"total_amount"`
 	CreatedAt          time.Time `json:"created_at"`
 }
 
@@ -855,6 +857,7 @@ type Invoice struct {
 	ID                 int              `json:"id"`
 	InvoiceNumber      string           `json:"invoice_number"`
 	CustomerID         int              `json:"customer_id"`
+	CustomerName       string           `json:"customer_name,omitempty"`
 	Customer           *Customer        `json:"customer,omitempty"`
 	OrderID            *int             `json:"order_id"`
 	Order              *Order           `json:"order,omitempty"`
@@ -962,6 +965,7 @@ type InvoiceListResponse struct {
 	TotalInvoiced      float64   `json:"total_invoiced"`
 	TotalPaid          float64   `json:"total_paid"`
 	TotalBalance       float64   `json:"total_balance"`
+	TotalOutstanding   float64   `json:"total_outstanding"`
 	DraftCount         int       `json:"draft_count"`
 	IssuedCount        int       `json:"issued_count"`
 	UnpaidCount        int       `json:"unpaid_count"`
@@ -969,6 +973,146 @@ type InvoiceListResponse struct {
 	PaidCount          int       `json:"paid_count"`
 	OverdueCount       int       `json:"overdue_count"`
 	CancelledCount     int       `json:"cancelled_count"`
+}
+
+// PaymentLedgerItem represents an enriched payment item for the ledger table
+type PaymentLedgerItem struct {
+	ID                      int          `json:"id"`
+	InvoiceID               int          `json:"invoice_id"`
+	InvoiceNumber           string       `json:"invoice_number"`
+	CustomerID              int          `json:"customer_id"`
+	CustomerName            string       `json:"customer_name"`
+	OrderID                 *int         `json:"order_id,omitempty"`
+	OrderNumber             *string      `json:"order_number,omitempty"`
+	Amount                  float64      `json:"amount"`
+	PaymentDate             time.Time    `json:"payment_date"`
+	PaymentMethod           string       `json:"payment_method"`
+	ReferenceNumber         *string      `json:"reference_number"`
+	Notes                   *string      `json:"notes"`
+	RecordedByID            *int         `json:"recorded_by_id"`
+	Recorder                *UserSummary `json:"recorder,omitempty"`
+	InvoiceGrandTotal       float64      `json:"invoice_grand_total"`
+	InvoiceAmountPaid       float64      `json:"invoice_amount_paid"`
+	InvoiceRemainingBalance float64      `json:"invoice_remaining_balance"`
+	InvoiceStatus           string       `json:"invoice_status"`
+	InvoiceDueDate          *time.Time   `json:"invoice_due_date,omitempty"`
+	Currency                string       `json:"currency"`
+	CreatedAt               time.Time    `json:"created_at"`
+}
+
+// PaymentSummary represents financial aggregates for summary cards
+type PaymentSummary struct {
+	TotalInvoiced    float64 `json:"total_invoiced"`
+	TotalReceived    float64 `json:"total_received"`
+	TotalOutstanding float64 `json:"total_outstanding"`
+	TotalOverdue     float64 `json:"total_overdue"`
+	TotalPayments    int     `json:"total_payments"`
+	OverdueInvoices  int     `json:"overdue_invoices_count"`
+}
+
+// GlobalPaymentInput represents payload for recording a payment
+type GlobalPaymentInput struct {
+	InvoiceID       int     `json:"invoice_id" binding:"required"`
+	Amount          float64 `json:"amount" binding:"required,gt=0"`
+	PaymentMethod   string  `json:"payment_method" binding:"required"`
+	PaymentDate     *string `json:"payment_date"`
+	ReferenceNumber *string `json:"reference_number"`
+	Notes           *string `json:"notes"`
+}
+
+// PaymentListResponse represents the paginated payments list
+type PaymentListResponse struct {
+	Items   []PaymentLedgerItem `json:"items"`
+	Total   int                 `json:"total"`
+	Page    int                 `json:"page"`
+	Limit   int                 `json:"limit"`
+	Pages   int                 `json:"pages"`
+	Summary PaymentSummary      `json:"summary"`
+}
+
+// PaymentReceiptDetail represents the complete receipt details for printing
+type PaymentReceiptDetail struct {
+	Payment  PaymentLedgerItem `json:"payment"`
+	Invoice  *Invoice          `json:"invoice"`
+	Company  *CompanyProfile   `json:"company,omitempty"`
+	Customer *Customer         `json:"customer,omitempty"`
+}
+
+// ==========================================
+// Phase 7: Automation & Reporting Models
+// ==========================================
+
+// DashboardMetrics represents top-level live metrics
+type DashboardMetrics struct {
+	TotalDeals         int     `json:"total_deals"`
+	TotalPipelineValue float64 `json:"total_pipeline_value"`
+	WonDealsValue      float64 `json:"won_deals_value"`
+	WonDealsCount      int     `json:"won_deals_count"`
+	TotalInvoiced      float64 `json:"total_invoiced"`
+	TotalReceived      float64 `json:"total_received"`
+	OutstandingBalance float64 `json:"outstanding_balance"`
+	OverdueBalance     float64 `json:"overdue_balance"`
+	PendingFollowUps   int     `json:"pending_follow_ups"`
+	OverdueFollowUps   int     `json:"overdue_follow_ups"`
+	TotalCustomers     int     `json:"total_customers"`
+	TotalLeads         int     `json:"total_leads"`
+	ConversionRate     float64 `json:"conversion_rate"`
+}
+
+// SalesChartPoint represents monthly or periodic revenue and collections data
+type SalesChartPoint struct {
+	Period         string  `json:"period"`
+	InvoicedAmount float64 `json:"invoiced_amount"`
+	ReceivedAmount float64 `json:"received_amount"`
+	DealsWonAmount float64 `json:"deals_won_amount"`
+}
+
+// PipelineStageDistribution represents deals count and value per stage
+type PipelineStageDistribution struct {
+	StageID    int     `json:"stage_id"`
+	StageName  string  `json:"stage_name"`
+	Color      string  `json:"color"`
+	StageOrder int     `json:"stage_order"`
+	DealsCount int     `json:"deals_count"`
+	TotalValue float64 `json:"total_value"`
+}
+
+// DashboardActivity represents unified chronological activity item
+type DashboardActivity struct {
+	ID           int       `json:"id"`
+	Module       string    `json:"module"` // Payment, Invoice, Deal, Order, Lead, FollowUp
+	ActivityType string    `json:"activity_type"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description"`
+	EntityID     string    `json:"entity_id"`
+	EntityNumber string    `json:"entity_number"`
+	UserName     string    `json:"user_name"`
+	UserEmail    string    `json:"user_email"`
+	Timestamp    time.Time `json:"timestamp"`
+}
+
+// AutomatedReminder represents an alert record in the action center
+type AutomatedReminder struct {
+	ID           int        `json:"id"`
+	WorkspaceID  int        `json:"workspace_id"`
+	ReminderType string     `json:"reminder_type"` // invoice_overdue, follow_up_due
+	EntityType   string     `json:"entity_type"`   // invoice, follow_up
+	EntityID     string     `json:"entity_id"`
+	Title        string     `json:"title"`
+	Message      string     `json:"message"`
+	Severity     string     `json:"severity"`     // critical, warning, info
+	Status       string     `json:"status"`       // pending, snoozed, dismissed, resolved
+	DueAt        *time.Time `json:"due_at,omitempty"`
+	SnoozedUntil *time.Time `json:"snoozed_until,omitempty"`
+	ResolvedAt   *time.Time `json:"resolved_at,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+// ReminderStatusInput represents input for updating reminder status
+type ReminderStatusInput struct {
+	Status      string `json:"status" binding:"required"` // pending, snoozed, dismissed, resolved
+	SnoozeHours int    `json:"snooze_hours,omitempty"`
 }
 
 

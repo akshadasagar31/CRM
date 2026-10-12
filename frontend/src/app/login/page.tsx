@@ -52,7 +52,7 @@ export default function LoginPage() {
       const redirectUrl =
         typeof window !== "undefined" && new URLSearchParams(window.location.search).get("redirect")
           ? (new URLSearchParams(window.location.search).get("redirect") as string)
-          : "/leads";
+          : "/dashboard";
       setTimeout(() => {
         router.push(redirectUrl);
       }, 450);

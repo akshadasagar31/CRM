@@ -1752,6 +1752,20 @@ export const quotationsApi = {
       method: "DELETE",
     });
   },
+
+  getPdfBlob: async (id: number): Promise<Blob> => {
+    const token = getToken();
+    const base = getApiBaseUrl();
+    const res = await fetch(`${base}/quotations/${id}/pdf?action=inline`, {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to load quotation PDF (${res.status}): ${err}`);
+    }
+    return res.blob();
+  },
 };
 
 // -------------------------------------------------------------
@@ -2058,6 +2072,577 @@ export const ordersApi = {
     });
   },
 };
+
+// -------------------------------------------------------------
+// Invoices & Billing Management API
+// -------------------------------------------------------------
+
+export type InvoiceStatus =
+  | "Draft"
+  | "Issued/Sent"
+  | "Unpaid"
+  | "Partially Paid"
+  | "Paid"
+  | "Overdue"
+  | "Cancelled"
+  | "Refunded";
+
+export interface InvoiceItem {
+  id: number;
+  invoice_id: number;
+  product_id?: number | null;
+  name: string;
+  product_name?: string;
+  description?: string | null;
+  hsn_sac?: string | null;
+  quantity: number;
+  unit_price: number;
+  discount_pct: number;
+  gst_rate: number;
+  taxable_amount: number;
+  cgst_amount: number;
+  sgst_amount: number;
+  igst_amount: number;
+  total_amount: number;
+  line_total?: number;
+  created_at: string;
+}
+
+export interface InvoicePayment {
+  id: number;
+  invoice_id: number;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  reference_number?: string | null;
+  notes?: string | null;
+  recorded_by_id?: number | null;
+  recorded_by?: LeadUserSummary | null;
+  created_at: string;
+}
+
+export interface Invoice {
+  id: number;
+  invoice_number: string;
+  order_id?: number | null;
+  order?: { id: number; order_number: string; title: string } | null;
+  quotation_id?: number | null;
+  quotation?: { id: number; quotation_number: string; title: string } | null;
+  deal_id?: number | null;
+  deal?: { id: number; deal_number: string; name: string } | null;
+  customer_id: number;
+  customer?: Customer | null;
+  customer_name: string;
+  customer_email?: string | null;
+  customer_phone?: string | null;
+  customer_company?: string | null;
+  customer_address?: string | null;
+  customer_gstin?: string | null;
+  customer_state?: string | null;
+  is_inter_state?: boolean;
+  company_name?: string | null;
+  company_gstin?: string | null;
+  company_pan?: string | null;
+  company_address?: string | null;
+  company_state?: string | null;
+  place_of_supply?: string | null;
+  invoice_date: string;
+  due_date?: string | null;
+  status: InvoiceStatus | string;
+  subtotal: number;
+  discount_amount: number;
+  taxable_amount?: number;
+  cgst_amount: number;
+  sgst_amount: number;
+  igst_amount: number;
+  tax_amount: number;
+  total_tax?: number;
+  round_off: number;
+  round_off_amount?: number;
+  grand_total: number;
+  amount_paid: number;
+  remaining_balance: number;
+  payment_method?: string | null;
+  payment_notes?: string | null;
+  notes?: string | null;
+  terms_conditions?: string | null;
+  terms_and_conditions?: string | null;
+  currency: string;
+  workspace_id: number;
+  created_by_id?: number | null;
+  creator?: LeadUserSummary | null;
+  items?: InvoiceItem[];
+  payments?: InvoicePayment[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvoiceItemInput {
+  product_id?: number | null;
+  name: string;
+  description?: string | null;
+  hsn_sac?: string | null;
+  quantity: number;
+  unit_price: number;
+  discount_pct?: number;
+  gst_rate?: number;
+  taxable_amount?: number;
+  cgst_amount?: number;
+  sgst_amount?: number;
+  igst_amount?: number;
+  total_amount?: number;
+}
+
+export interface InvoiceCreateInput {
+  order_id?: number | null;
+  quotation_id?: number | null;
+  deal_id?: number | null;
+  customer_id: number;
+  customer_name: string;
+  customer_email?: string;
+  customer_phone?: string;
+  customer_company?: string;
+  customer_address?: string;
+  customer_gstin?: string;
+  place_of_supply?: string;
+  invoice_date: string;
+  due_date?: string;
+  status?: string;
+  discount_amount?: number;
+  notes?: string;
+  terms_conditions?: string;
+  currency?: string;
+  items: InvoiceItemInput[];
+}
+
+export interface InvoiceUpdateInput {
+  customer_name?: string;
+  customer_email?: string;
+  customer_phone?: string;
+  customer_company?: string;
+  customer_address?: string;
+  customer_gstin?: string;
+  place_of_supply?: string;
+  invoice_date?: string;
+  due_date?: string;
+  status?: string;
+  discount_amount?: number;
+  notes?: string;
+  terms_conditions?: string;
+  currency?: string;
+  items?: InvoiceItemInput[];
+}
+
+export interface InvoicePaymentInput {
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  reference_number?: string;
+  notes?: string;
+}
+
+export interface InvoiceListResponse {
+  items: Invoice[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+  total_invoiced: number;
+  total_paid: number;
+  total_outstanding: number;
+  total_overdue: number;
+  draft_count: number;
+  unpaid_count: number;
+  partially_paid_count: number;
+  paid_count: number;
+  overdue_count: number;
+}
+
+export const invoicesApi = {
+  list: async (params?: {
+    status?: string;
+    customer_id?: number;
+    order_id?: number;
+    search?: string;
+    page?: number;
+    limit?: number;
+    sort_by?: string;
+    sort_dir?: string;
+  }): Promise<InvoiceListResponse> => {
+    const sp = new URLSearchParams();
+    if (params) {
+      if (params.status && params.status !== "all") sp.append("status", params.status);
+      if (params.customer_id) sp.append("customer_id", String(params.customer_id));
+      if (params.order_id) sp.append("order_id", String(params.order_id));
+      if (params.search) sp.append("search", params.search);
+      if (params.page) sp.append("page", String(params.page));
+      if (params.limit) sp.append("limit", String(params.limit));
+      if (params.sort_by) sp.append("sort_by", params.sort_by);
+      if (params.sort_dir) sp.append("sort_dir", params.sort_dir);
+    }
+    const q = sp.toString() ? `?${sp.toString()}` : "";
+    return request<InvoiceListResponse>(`/invoices${q}`);
+  },
+
+  get: async (id: number): Promise<Invoice> => {
+    return request<Invoice>(`/invoices/${id}`);
+  },
+
+  create: async (data: InvoiceCreateInput): Promise<Invoice> => {
+    return request<Invoice>("/invoices", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  createFromOrder: async (orderId: number): Promise<Invoice> => {
+    return request<Invoice>(`/orders/${orderId}/create-invoice`, {
+      method: "POST",
+    });
+  },
+
+  createFromQuotation: async (quotationId: number): Promise<Invoice> => {
+    return request<Invoice>(`/quotations/${quotationId}/create-invoice`, {
+      method: "POST",
+    });
+  },
+
+  update: async (id: number, data: InvoiceUpdateInput): Promise<Invoice> => {
+    return request<Invoice>(`/invoices/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  recordPayment: async (id: number, data: InvoicePaymentInput): Promise<Invoice> => {
+    return request<Invoice>(`/invoices/${id}/payments`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  changeStatus: async (id: number, status: string): Promise<Invoice> => {
+    return request<Invoice>(`/invoices/${id}/status`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  delete: async (id: number): Promise<{ message: string }> => {
+    return request<{ message: string }>(`/invoices/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  getPdfBlob: async (id: number): Promise<Blob> => {
+    const token = getToken();
+    const base = getApiBaseUrl();
+    const res = await fetch(`${base}/invoices/${id}/pdf?action=inline`, {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to load invoice PDF (${res.status}): ${err}`);
+    }
+    return res.blob();
+  },
+};
+
+// ==========================================
+// Payments Types & API Client
+// ==========================================
+
+export interface PaymentLedgerItem {
+  id: number;
+  invoice_id: number;
+  invoice_number: string;
+  customer_id: number;
+  customer_name: string;
+  order_id?: number;
+  order_number?: string;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  reference_number?: string;
+  notes?: string;
+  recorded_by_id?: number;
+  recorder?: LeadUserSummary;
+  invoice_grand_total: number;
+  invoice_amount_paid: number;
+  invoice_remaining_balance: number;
+  invoice_status: string;
+  invoice_due_date?: string;
+  currency: string;
+  created_at: string;
+}
+
+export interface PaymentSummary {
+  total_invoiced: number;
+  total_received: number;
+  total_outstanding: number;
+  total_overdue: number;
+  total_payments: number;
+  overdue_invoices_count: number;
+}
+
+export interface GlobalPaymentInput {
+  invoice_id: number;
+  amount: number;
+  payment_method: string;
+  payment_date?: string;
+  reference_number?: string;
+  notes?: string;
+}
+
+export interface PaymentListResponse {
+  items: PaymentLedgerItem[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+  summary: PaymentSummary;
+}
+
+export interface PaymentReceiptDetail {
+  payment: PaymentLedgerItem;
+  invoice?: Invoice;
+  company?: CompanyProfile;
+  customer?: Customer;
+}
+
+export const paymentsApi = {
+  list: async (params?: {
+    search?: string;
+    method?: string;
+    start_date?: string;
+    end_date?: string;
+    customer_id?: number;
+    invoice_id?: number;
+    page?: number;
+    limit?: number;
+  }): Promise<PaymentListResponse> => {
+    const sp = new URLSearchParams();
+    if (params) {
+      if (params.search) sp.append("search", params.search);
+      if (params.method && params.method !== "all") sp.append("method", params.method);
+      if (params.start_date) sp.append("start_date", params.start_date);
+      if (params.end_date) sp.append("end_date", params.end_date);
+      if (params.customer_id) sp.append("customer_id", String(params.customer_id));
+      if (params.invoice_id) sp.append("invoice_id", String(params.invoice_id));
+      if (params.page) sp.append("page", String(params.page));
+      if (params.limit) sp.append("limit", String(params.limit));
+    }
+    const q = sp.toString() ? `?${sp.toString()}` : "";
+    return request<PaymentListResponse>(`/payments${q}`);
+  },
+
+  getSummary: async (params?: {
+    start_date?: string;
+    end_date?: string;
+    customer_id?: number;
+  }): Promise<PaymentSummary> => {
+    const sp = new URLSearchParams();
+    if (params) {
+      if (params.start_date) sp.append("start_date", params.start_date);
+      if (params.end_date) sp.append("end_date", params.end_date);
+      if (params.customer_id) sp.append("customer_id", String(params.customer_id));
+    }
+    const q = sp.toString() ? `?${sp.toString()}` : "";
+    return request<PaymentSummary>(`/payments/summary${q}`);
+  },
+
+  recordPayment: async (data: GlobalPaymentInput): Promise<PaymentLedgerItem> => {
+    return request<PaymentLedgerItem>("/payments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  deletePayment: async (id: number): Promise<{ message: string }> => {
+    return request<{ message: string }>(`/payments/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  getReceipt: async (id: number): Promise<PaymentReceiptDetail> => {
+    return request<PaymentReceiptDetail>(`/payments/${id}/receipt`);
+  },
+};
+
+// ==========================================
+// Phase 7: Dashboard & Automation Types & Client
+// ==========================================
+
+export interface DashboardMetrics {
+  total_deals: number;
+  total_pipeline_value: number;
+  won_deals_value: number;
+  won_deals_count: number;
+  total_invoiced: number;
+  total_received: number;
+  outstanding_balance: number;
+  overdue_balance: number;
+  pending_follow_ups: number;
+  overdue_follow_ups: number;
+  total_customers: number;
+  total_leads: number;
+  conversion_rate: number;
+}
+
+export interface SalesChartPoint {
+  period: string;
+  invoiced_amount: number;
+  received_amount: number;
+  deals_won_amount: number;
+}
+
+export interface PipelineStageDistribution {
+  stage_id: number;
+  stage_name: string;
+  color: string;
+  stage_order: number;
+  deals_count: number;
+  total_value: number;
+}
+
+export interface DashboardActivity {
+  id: number;
+  module: string;
+  activity_type: string;
+  title: string;
+  description: string;
+  entity_id: string;
+  entity_number: string;
+  user_name: string;
+  user_email: string;
+  timestamp: string;
+}
+
+export interface AutomatedReminder {
+  id: number;
+  workspace_id: number;
+  reminder_type: string; // invoice_overdue, follow_up_due
+  entity_type: string;   // invoice, follow_up
+  entity_id: string;
+  title: string;
+  message: string;
+  severity: "critical" | "warning" | "info";
+  status: "pending" | "snoozed" | "dismissed" | "resolved";
+  due_at?: string;
+  snoozed_until?: string;
+  resolved_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const dashboardApi = {
+  getMetrics: async (timeframe?: string): Promise<DashboardMetrics> => {
+    const q = timeframe ? `?timeframe=${encodeURIComponent(timeframe)}` : "";
+    return request<DashboardMetrics>(`/dashboard/metrics${q}`);
+  },
+
+  getSalesChart: async (timeframe?: string): Promise<SalesChartPoint[]> => {
+    const q = timeframe ? `?timeframe=${encodeURIComponent(timeframe)}` : "";
+    return request<SalesChartPoint[]>(`/dashboard/sales-chart${q}`);
+  },
+
+  getPipelineDistribution: async (): Promise<PipelineStageDistribution[]> => {
+    return request<PipelineStageDistribution[]>("/dashboard/pipeline-distribution");
+  },
+
+  getActivities: async (limit: number = 15): Promise<DashboardActivity[]> => {
+    return request<DashboardActivity[]>(`/dashboard/activities?limit=${limit}`);
+  },
+};
+
+export const automationApi = {
+  listReminders: async (status: string = "active", limit: number = 50): Promise<AutomatedReminder[]> => {
+    return request<AutomatedReminder[]>(`/automation/reminders?status=${encodeURIComponent(status)}&limit=${limit}`);
+  },
+
+  evaluateReminders: async (): Promise<{ message: string; reminders_synced_or_found: number }> => {
+    return request<{ message: string; reminders_synced_or_found: number }>("/automation/reminders/evaluate", {
+      method: "POST",
+    });
+  },
+
+  updateStatus: async (
+    id: number,
+    status: "pending" | "snoozed" | "dismissed" | "resolved",
+    snoozeHours?: number
+  ): Promise<{ message: string }> => {
+    return request<{ message: string }>(`/automation/reminders/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status, snooze_hours: snoozeHours }),
+    });
+  },
+};
+
+// -------------------------------------------------------------
+// PDF Download & Print Helpers
+// -------------------------------------------------------------
+
+export async function downloadPdfFile(endpointOrUrl: string, filename: string): Promise<void> {
+  const token = getToken();
+  const base = getApiBaseUrl();
+  const url = endpointOrUrl.startsWith("http")
+    ? endpointOrUrl
+    : `${base}${endpointOrUrl.startsWith("/") ? "" : "/"}${endpointOrUrl}`;
+
+  const res = await fetch(url, {
+    method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Failed to download PDF (${res.status}): ${errorText}`);
+  }
+
+  const blob = await res.blob();
+  const downloadUrl = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(downloadUrl);
+}
+
+export function printPdfBlob(blob: Blob): void {
+  const blobUrl = window.URL.createObjectURL(blob);
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  iframe.src = blobUrl;
+  document.body.appendChild(iframe);
+
+  iframe.onload = () => {
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (e) {
+        console.error("Iframe print error:", e);
+        window.open(blobUrl, "_blank")?.print();
+      } finally {
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            document.body.removeChild(iframe);
+          }
+          window.URL.revokeObjectURL(blobUrl);
+        }, 60000);
+      }
+    }, 500);
+  };
+}
+
 
 
 

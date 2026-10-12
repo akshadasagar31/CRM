@@ -140,7 +140,7 @@ export default function LandingPage() {
           <div>
             {isAuthenticated ? (
               <Link
-                href="/leads"
+                href="/dashboard"
                 className="btn btn-primary interactive-cta"
                 id="btn-header-leads"
                 style={{
@@ -310,7 +310,7 @@ export default function LandingPage() {
 
             <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
               <Link
-                href={isAuthenticated ? "/leads" : "/login"}
+                href={isAuthenticated ? "/dashboard" : "/login"}
                 className="btn btn-primary interactive-cta"
                 id="btn-hero-cta"
                 style={{
