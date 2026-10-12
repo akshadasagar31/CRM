@@ -15,9 +15,10 @@ import (
 )
 
 type QuotationRepository struct {
-	db       *database.DB
-	dealRepo *DealRepository
-	pipeRepo *PipelineRepository
+	db        *database.DB
+	dealRepo  *DealRepository
+	pipeRepo  *PipelineRepository
+	orderRepo *OrderRepository
 }
 
 func NewQuotationRepository(db *database.DB, dealRepo *DealRepository, pipeRepo *PipelineRepository) *QuotationRepository {
@@ -26,6 +27,10 @@ func NewQuotationRepository(db *database.DB, dealRepo *DealRepository, pipeRepo 
 		dealRepo: dealRepo,
 		pipeRepo: pipeRepo,
 	}
+}
+
+func (r *QuotationRepository) SetOrderRepo(orderRepo *OrderRepository) {
+	r.orderRepo = orderRepo
 }
 
 type QuotationFilter struct {
@@ -360,7 +365,11 @@ func (r *QuotationRepository) Create(ctx context.Context, input models.Quotation
 		`, *leadNumber, createdByID, leadDesc)
 	}
 
-	return r.GetByID(ctx, qID, workspaceID)
+	createdQ, err := r.GetByID(ctx, qID, workspaceID)
+	if err == nil && createdQ != nil && strings.EqualFold(createdQ.Status, "accepted") && r.orderRepo != nil {
+		_, _ = r.orderRepo.CreateFromAcceptedQuotation(ctx, qID, createdByID, workspaceID)
+	}
+	return createdQ, err
 }
 
 func (r *QuotationRepository) GetByID(ctx context.Context, id int, workspaceID int) (*models.Quotation, error) {
@@ -933,6 +942,10 @@ func (r *QuotationRepository) Update(ctx context.Context, id int, input models.Q
 		r.syncDealStageFromQuotationStatus(ctx, dealID, status, totalAmount, updatedByID, workspaceID)
 	}
 
+	if strings.EqualFold(status, "accepted") && r.orderRepo != nil {
+		_, _ = r.orderRepo.CreateFromAcceptedQuotation(ctx, id, updatedByID, workspaceID)
+	}
+
 	return r.GetByID(ctx, id, workspaceID)
 }
 
@@ -955,6 +968,10 @@ func (r *QuotationRepository) ChangeStatus(ctx context.Context, id int, newStatu
 	}
 
 	r.syncDealStageFromQuotationStatus(ctx, current.DealID, cleanStatus, current.TotalAmount, updatedByID, workspaceID)
+
+	if strings.EqualFold(cleanStatus, "accepted") && r.orderRepo != nil {
+		_, _ = r.orderRepo.CreateFromAcceptedQuotation(ctx, id, updatedByID, workspaceID)
+	}
 
 	return r.GetByID(ctx, id, workspaceID)
 }

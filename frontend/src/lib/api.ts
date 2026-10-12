@@ -1926,6 +1926,7 @@ export interface Order {
   deal?: Deal | null;
   quotation_id?: number | null;
   quotation?: Quotation | null;
+  lead_number?: string | null;
   stage: OrderStage | string;
   payment_status: OrderPaymentStatus | string;
   invoice_status: OrderInvoiceStatus | string;
@@ -2129,7 +2130,8 @@ export interface Invoice {
   quotation_id?: number | null;
   quotation?: { id: number; quotation_number: string; title: string } | null;
   deal_id?: number | null;
-  deal?: { id: number; deal_number: string; name: string } | null;
+  deal?: { id: number; deal_number: string; name: string; lead_number?: string | null } | null;
+  lead_number?: string | null;
   customer_id: number;
   customer?: Customer | null;
   customer_name: string;
@@ -2361,6 +2363,11 @@ export interface PaymentLedgerItem {
   customer_name: string;
   order_id?: number;
   order_number?: string;
+  deal_id?: number;
+  deal_number?: string;
+  quotation_id?: number;
+  quotation_number?: string;
+  lead_number?: string;
   amount: number;
   payment_date: string;
   payment_method: string;

@@ -147,11 +147,18 @@ func (r *PaymentRepository) List(ctx context.Context, filter PaymentFilter, work
 			i.status,
 			i.due_date,
 			i.currency,
-			ip.created_at
+			ip.created_at,
+			d.id,
+			d.deal_number,
+			q.id,
+			q.quotation_number,
+			COALESCE(q.lead_number, d.lead_number) AS lead_number
 		FROM invoice_payments ip
 		JOIN invoices i ON ip.invoice_id = i.id
 		JOIN customers c ON i.customer_id = c.id
 		LEFT JOIN orders o ON i.order_id = o.id
+		LEFT JOIN deals d ON i.deal_id = d.id
+		LEFT JOIN quotations q ON i.quotation_id = q.id
 		LEFT JOIN users u ON ip.recorded_by_id = u.id
 		WHERE %s
 		ORDER BY ip.payment_date DESC, ip.id DESC
@@ -170,6 +177,8 @@ func (r *PaymentRepository) List(ctx context.Context, filter PaymentFilter, work
 		var item models.PaymentLedgerItem
 		var uID *int
 		var uName, uEmail, uRole *string
+		var dID, qID *int
+		var dNum, qNum, leadNum *string
 
 		err := rows.Scan(
 			&item.ID,
@@ -196,10 +205,21 @@ func (r *PaymentRepository) List(ctx context.Context, filter PaymentFilter, work
 			&item.InvoiceDueDate,
 			&item.Currency,
 			&item.CreatedAt,
+			&dID,
+			&dNum,
+			&qID,
+			&qNum,
+			&leadNum,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan payment: %w", err)
 		}
+
+		item.DealID = dID
+		item.DealNumber = dNum
+		item.QuotationID = qID
+		item.QuotationNumber = qNum
+		item.LeadNumber = leadNum
 
 		if uID != nil && uName != nil && uEmail != nil {
 			role := "sales_rep"
@@ -563,11 +583,18 @@ func (r *PaymentRepository) Get(ctx context.Context, paymentID int, workspaceID 
 			i.status,
 			i.due_date,
 			i.currency,
-			ip.created_at
+			ip.created_at,
+			d.id,
+			d.deal_number,
+			q.id,
+			q.quotation_number,
+			COALESCE(q.lead_number, d.lead_number) AS lead_number
 		FROM invoice_payments ip
 		JOIN invoices i ON ip.invoice_id = i.id
 		JOIN customers c ON i.customer_id = c.id
 		LEFT JOIN orders o ON i.order_id = o.id
+		LEFT JOIN deals d ON i.deal_id = d.id
+		LEFT JOIN quotations q ON i.quotation_id = q.id
 		LEFT JOIN users u ON ip.recorded_by_id = u.id
 		WHERE ip.id = $1 AND i.workspace_id = $2
 	`
@@ -575,6 +602,8 @@ func (r *PaymentRepository) Get(ctx context.Context, paymentID int, workspaceID 
 	var item models.PaymentLedgerItem
 	var uID *int
 	var uName, uEmail, uRole *string
+	var dID, qID *int
+	var dNum, qNum, leadNum *string
 
 	err := r.db.Pool.QueryRow(ctx, query, paymentID, workspaceID).Scan(
 		&item.ID,
@@ -601,6 +630,11 @@ func (r *PaymentRepository) Get(ctx context.Context, paymentID int, workspaceID 
 		&item.InvoiceDueDate,
 		&item.Currency,
 		&item.CreatedAt,
+		&dID,
+		&dNum,
+		&qID,
+		&qNum,
+		&leadNum,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -608,6 +642,12 @@ func (r *PaymentRepository) Get(ctx context.Context, paymentID int, workspaceID 
 		}
 		return nil, fmt.Errorf("failed to get payment: %w", err)
 	}
+
+	item.DealID = dID
+	item.DealNumber = dNum
+	item.QuotationID = qID
+	item.QuotationNumber = qNum
+	item.LeadNumber = leadNum
 
 	if uID != nil && uName != nil && uEmail != nil {
 		role := "sales_rep"

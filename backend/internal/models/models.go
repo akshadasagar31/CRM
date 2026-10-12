@@ -695,6 +695,8 @@ type Order struct {
 	Deal          *Deal           `json:"deal,omitempty"`
 	QuotationID   *int            `json:"quotation_id,omitempty"`
 	Quotation     *Quotation      `json:"quotation,omitempty"`
+	LeadNumber    *string         `json:"lead_number,omitempty"`
+	Lead          *Lead           `json:"lead,omitempty"`
 	Stage         string          `json:"stage"` // Not Started, Planning, In Progress, Client Review, Revision/Changes, Delivered, Completed
 	PaymentStatus string          `json:"payment_status"` // Unpaid, Partially Paid, Paid
 	InvoiceStatus string          `json:"invoice_status"` // Not Invoiced, Invoiced
@@ -865,6 +867,8 @@ type Invoice struct {
 	Quotation          *Quotation       `json:"quotation,omitempty"`
 	DealID             *int             `json:"deal_id"`
 	Deal               *Deal            `json:"deal,omitempty"`
+	LeadNumber         *string          `json:"lead_number,omitempty"`
+	Lead               *Lead            `json:"lead,omitempty"`
 	Status             string           `json:"status"` // Draft, Issued/Sent, Unpaid, Partially Paid, Paid, Overdue, Cancelled, Refunded
 	InvoiceDate        time.Time        `json:"invoice_date"`
 	DueDate            *time.Time       `json:"due_date"`
@@ -984,6 +988,11 @@ type PaymentLedgerItem struct {
 	CustomerName            string       `json:"customer_name"`
 	OrderID                 *int         `json:"order_id,omitempty"`
 	OrderNumber             *string      `json:"order_number,omitempty"`
+	DealID                  *int         `json:"deal_id,omitempty"`
+	DealNumber              *string      `json:"deal_number,omitempty"`
+	QuotationID             *int         `json:"quotation_id,omitempty"`
+	QuotationNumber         *string      `json:"quotation_number,omitempty"`
+	LeadNumber              *string      `json:"lead_number,omitempty"`
 	Amount                  float64      `json:"amount"`
 	PaymentDate             time.Time    `json:"payment_date"`
 	PaymentMethod           string       `json:"payment_method"`

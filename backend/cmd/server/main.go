@@ -55,6 +55,7 @@ func main() {
 	quotationRepo := repository.NewQuotationRepository(db, dealRepo, pipeRepo)
 	orderRepo := repository.NewOrderRepository(db, customerRepo, dealRepo, quotationRepo)
 	dealRepo.SetOrderRepo(orderRepo)
+	quotationRepo.SetOrderRepo(orderRepo)
 	companyRepo := repository.NewCompanyRepository(db)
 	invoiceRepo := repository.NewInvoiceRepository(db, customerRepo, orderRepo, quotationRepo, dealRepo, companyRepo)
 	paymentRepo := repository.NewPaymentRepository(db, invoiceRepo, orderRepo, companyRepo, customerRepo)

@@ -791,9 +791,34 @@ export default function OrdersPage() {
                           </div>
                         </td>
 
-                        {/* Linked Deal / Quote */}
+                        {/* Linked Deal / Quote / Lead */}
                         <td style={{ padding: "14px 16px" }}>
                           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                            {(ord.lead_number || ord.deal?.lead_number || ord.quotation?.lead_number) && (
+                              <span
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/leads?search=${encodeURIComponent(ord.lead_number || ord.deal?.lead_number || ord.quotation?.lead_number || "")}`);
+                                }}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 600,
+                                  color: "#0D9488",
+                                  backgroundColor: "#F0FDFA",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  width: "fit-content",
+                                  cursor: "pointer",
+                                }}
+                                title="Originating Lead"
+                              >
+                                <UserIcon size={10} />
+                                {ord.lead_number || ord.deal?.lead_number || ord.quotation?.lead_number}
+                              </span>
+                            )}
                             {ord.deal && (
                               <span
                                 onClick={(e) => {
@@ -811,7 +836,9 @@ export default function OrdersPage() {
                                   padding: "2px 6px",
                                   borderRadius: "4px",
                                   width: "fit-content",
+                                  cursor: "pointer",
                                 }}
+                                title="Linked Deal"
                               >
                                 <Briefcase size={10} />
                                 {ord.deal.deal_number}
@@ -834,13 +861,15 @@ export default function OrdersPage() {
                                   padding: "2px 6px",
                                   borderRadius: "4px",
                                   width: "fit-content",
+                                  cursor: "pointer",
                                 }}
+                                title="Accepted Quotation"
                               >
                                 <FileText size={10} />
                                 {ord.quotation.quotation_number}
                               </span>
                             )}
-                            {!ord.deal && !ord.quotation && (
+                            {!ord.deal && !ord.quotation && !(ord.lead_number || ord.deal?.lead_number || ord.quotation?.lead_number) && (
                               <span style={{ fontSize: "0.75rem", color: "#94A3B8" }}>—</span>
                             )}
                           </div>
@@ -1241,6 +1270,78 @@ export default function OrdersPage() {
                   <div>
                     <span style={{ color: "#64748B" }}>Owner: </span>
                     <strong style={{ color: "#0F172A" }}>{selectedOrder.owner?.name || "Unassigned"}</strong>
+                  </div>
+                </div>
+
+                {/* Sales Origin & Lineage Card */}
+                <div
+                  style={{
+                    margin: "12px 24px",
+                    padding: "12px 16px",
+                    backgroundColor: "#F8FAFC",
+                    borderRadius: "8px",
+                    border: "1px solid #E2E8F0",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Layers size={14} color="#0D9488" />
+                      Sales Origin & Lineage
+                    </span>
+                    <span style={{ fontSize: "0.6875rem", color: "#64748B" }}>Full Relationship Tracking</span>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px", fontSize: "0.75rem" }}>
+                    {/* Originating Lead */}
+                    <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                      <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Originating Lead</div>
+                      {selectedOrder.lead_number || selectedOrder.deal?.lead_number || selectedOrder.quotation?.lead_number ? (
+                        <div
+                          onClick={() => router.push(`/leads?search=${encodeURIComponent(selectedOrder.lead_number || selectedOrder.deal?.lead_number || selectedOrder.quotation?.lead_number || "")}`)}
+                          style={{ fontWeight: 700, color: "#0D9488", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                        >
+                          <UserIcon size={12} />
+                          {selectedOrder.lead_number || selectedOrder.deal?.lead_number || selectedOrder.quotation?.lead_number}
+                        </div>
+                      ) : (
+                        <div style={{ color: "#94A3B8" }}>—</div>
+                      )}
+                    </div>
+
+                    {/* Linked Deal */}
+                    <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                      <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Linked Deal</div>
+                      {selectedOrder.deal ? (
+                        <div
+                          onClick={() => router.push("/deals")}
+                          style={{ fontWeight: 700, color: "#0284C7", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                        >
+                          <Briefcase size={12} />
+                          {selectedOrder.deal.deal_number}
+                        </div>
+                      ) : (
+                        <div style={{ color: "#94A3B8" }}>—</div>
+                      )}
+                    </div>
+
+                    {/* Accepted Quotation */}
+                    <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                      <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Accepted Quotation</div>
+                      {selectedOrder.quotation ? (
+                        <div
+                          onClick={() => router.push("/quotations")}
+                          style={{ fontWeight: 700, color: "#7C3AED", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                        >
+                          <FileText size={12} />
+                          {selectedOrder.quotation.quotation_number}
+                        </div>
+                      ) : (
+                        <div style={{ color: "#94A3B8" }}>—</div>
+                      )}
+                    </div>
                   </div>
                 </div>
 

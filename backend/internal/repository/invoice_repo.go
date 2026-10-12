@@ -202,8 +202,8 @@ func (r *InvoiceRepository) List(ctx context.Context, filter InvoiceListFilter, 
 			c.id, c.name, c.email, c.phone, c.company,
 			u.id, u.name, u.email,
 			o.id, o.order_number, o.title,
-			q.id, q.quotation_number, q.title,
-			d.id, d.deal_number, d.name
+			q.id, q.quotation_number, q.title, q.lead_number,
+			d.id, d.deal_number, d.name, d.lead_number
 		FROM invoices i
 		LEFT JOIN customers c ON i.customer_id = c.id
 		LEFT JOIN users u ON i.created_by_id = u.id
@@ -230,6 +230,7 @@ func (r *InvoiceRepository) List(ctx context.Context, filter InvoiceListFilter, 
 			cName, cEmail, cPhone, cCompany                 *string
 			uName, uEmail                                   *string
 			oNum, oTitle, qNum, qTitle, dNum, dName         *string
+			qLeadNum, dLeadNum                              *string
 		)
 
 		err := rows.Scan(
@@ -244,8 +245,8 @@ func (r *InvoiceRepository) List(ctx context.Context, filter InvoiceListFilter, 
 			&cID, &cName, &cEmail, &cPhone, &cCompany,
 			&uID, &uName, &uEmail,
 			&oID, &oNum, &oTitle,
-			&qID, &qNum, &qTitle,
-			&dID, &dNum, &dName,
+			&qID, &qNum, &qTitle, &qLeadNum,
+			&dID, &dNum, &dName, &dLeadNum,
 		)
 		if err != nil {
 			return nil, err
@@ -282,6 +283,7 @@ func (r *InvoiceRepository) List(ctx context.Context, filter InvoiceListFilter, 
 				ID:              *qID,
 				QuotationNumber: *qNum,
 				Title:           *qTitle,
+				LeadNumber:      qLeadNum,
 			}
 		}
 		if dID != nil && dNum != nil {
@@ -289,7 +291,13 @@ func (r *InvoiceRepository) List(ctx context.Context, filter InvoiceListFilter, 
 				ID:         *dID,
 				DealNumber: *dNum,
 				Name:       *dName,
+				LeadNumber: dLeadNum,
 			}
+		}
+		if dLeadNum != nil && *dLeadNum != "" {
+			inv.LeadNumber = dLeadNum
+		} else if qLeadNum != nil && *qLeadNum != "" {
+			inv.LeadNumber = qLeadNum
 		}
 
 		items = append(items, inv)
@@ -334,8 +342,8 @@ func (r *InvoiceRepository) Get(ctx context.Context, id int) (*models.Invoice, e
 			c.id, c.name, c.email, c.phone, c.company, c.address, c.city, c.state, c.pincode, c.gstin,
 			u.id, u.name, u.email,
 			o.id, o.order_number, o.title,
-			q.id, q.quotation_number, q.title,
-			d.id, d.deal_number, d.name
+			q.id, q.quotation_number, q.title, q.lead_number,
+			d.id, d.deal_number, d.name, d.lead_number
 		FROM invoices i
 		LEFT JOIN customers c ON i.customer_id = c.id
 		LEFT JOIN users u ON i.created_by_id = u.id
@@ -350,6 +358,7 @@ func (r *InvoiceRepository) Get(ctx context.Context, id int) (*models.Invoice, e
 		cName, cEmail, cPhone, cCompany, cAddr, cCity, cState, cPin, cGst *string
 		uName, uEmail                                   *string
 		oNum, oTitle, qNum, qTitle, dNum, dName         *string
+		qLeadNum, dLeadNum                              *string
 	)
 
 	err := r.db.Pool.QueryRow(ctx, query, id).Scan(
@@ -364,8 +373,8 @@ func (r *InvoiceRepository) Get(ctx context.Context, id int) (*models.Invoice, e
 		&cID, &cName, &cEmail, &cPhone, &cCompany, &cAddr, &cCity, &cState, &cPin, &cGst,
 		&uID, &uName, &uEmail,
 		&oID, &oNum, &oTitle,
-		&qID, &qNum, &qTitle,
-		&dID, &dNum, &dName,
+		&qID, &qNum, &qTitle, &qLeadNum,
+		&dID, &dNum, &dName, &dLeadNum,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -410,6 +419,7 @@ func (r *InvoiceRepository) Get(ctx context.Context, id int) (*models.Invoice, e
 			ID:              *qID,
 			QuotationNumber: *qNum,
 			Title:           *qTitle,
+			LeadNumber:      qLeadNum,
 		}
 	}
 	if dID != nil && dNum != nil {
@@ -417,7 +427,13 @@ func (r *InvoiceRepository) Get(ctx context.Context, id int) (*models.Invoice, e
 			ID:         *dID,
 			DealNumber: *dNum,
 			Name:       *dName,
+			LeadNumber: dLeadNum,
 		}
+	}
+	if dLeadNum != nil && *dLeadNum != "" {
+		inv.LeadNumber = dLeadNum
+	} else if qLeadNum != nil && *qLeadNum != "" {
+		inv.LeadNumber = qLeadNum
 	}
 
 	// Load Items

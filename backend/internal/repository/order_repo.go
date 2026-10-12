@@ -206,8 +206,8 @@ func (r *OrderRepository) GetByID(ctx context.Context, id int, workspaceID int) 
 		       o.start_date::text, o.delivery_date::text, o.notes, o.owner_id, o.workspace_id,
 		       o.created_by_id, o.created_at, o.updated_at,
 		       c.id, c.name, c.email, c.phone, c.company,
-		       d.id, d.deal_number, d.name,
-		       q.id, q.quotation_number, q.title, q.status,
+		       d.id, d.deal_number, d.name, d.lead_number,
+		       q.id, q.quotation_number, q.title, q.status, q.lead_number,
 		       u.id, u.name, u.email,
 		       cu.id, cu.name, cu.email
 		FROM orders o
@@ -224,9 +224,9 @@ func (r *OrderRepository) GetByID(ctx context.Context, id int, workspaceID int) 
 	var cName string
 	var cEmail, cPhone, cCompany *string
 	var dID *int
-	var dNum, dName *string
+	var dNum, dName, dLeadNum *string
 	var qID *int
-	var qNum, qTitle, qStatus *string
+	var qNum, qTitle, qStatus, qLeadNum *string
 	var uID *int
 	var uName, uEmail *string
 	var cuID *int
@@ -238,8 +238,8 @@ func (r *OrderRepository) GetByID(ctx context.Context, id int, workspaceID int) 
 		&o.StartDate, &o.DeliveryDate, &o.Notes, &o.OwnerID, &o.WorkspaceID,
 		&o.CreatedByID, &o.CreatedAt, &o.UpdatedAt,
 		&cID, &cName, &cEmail, &cPhone, &cCompany,
-		&dID, &dNum, &dName,
-		&qID, &qNum, &qTitle, &qStatus,
+		&dID, &dNum, &dName, &dLeadNum,
+		&qID, &qNum, &qTitle, &qStatus, &qLeadNum,
 		&uID, &uName, &uEmail,
 		&cuID, &cuName, &cuEmail,
 	)
@@ -263,6 +263,7 @@ func (r *OrderRepository) GetByID(ctx context.Context, id int, workspaceID int) 
 			ID:         *dID,
 			DealNumber: *dNum,
 			Name:       *dName,
+			LeadNumber: dLeadNum,
 		}
 	}
 
@@ -272,7 +273,14 @@ func (r *OrderRepository) GetByID(ctx context.Context, id int, workspaceID int) 
 			QuotationNumber: *qNum,
 			Title:           *qTitle,
 			Status:          *qStatus,
+			LeadNumber:      qLeadNum,
 		}
+	}
+
+	if dLeadNum != nil && *dLeadNum != "" {
+		o.LeadNumber = dLeadNum
+	} else if qLeadNum != nil && *qLeadNum != "" {
+		o.LeadNumber = qLeadNum
 	}
 
 	if uID != nil && uName != nil && uEmail != nil {
@@ -468,8 +476,8 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter, workspac
 		       o.start_date::text, o.delivery_date::text, o.notes, o.owner_id, o.workspace_id,
 		       o.created_by_id, o.created_at, o.updated_at,
 		       c.id, c.name, c.email, c.phone, c.company,
-		       d.id, d.deal_number, d.name,
-		       q.id, q.quotation_number, q.title, q.status,
+		       d.id, d.deal_number, d.name, d.lead_number,
+		       q.id, q.quotation_number, q.title, q.status, q.lead_number,
 		       u.id, u.name, u.email
 		FROM orders o
 		JOIN customers c ON o.customer_id = c.id
@@ -493,9 +501,9 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter, workspac
 		var cName string
 		var cEmail, cPhone, cCompany *string
 		var dID *int
-		var dNum, dName *string
+		var dNum, dName, dLeadNum *string
 		var qID *int
-		var qNum, qTitle, qStatus *string
+		var qNum, qTitle, qStatus, qLeadNum *string
 		var uID *int
 		var uName, uEmail *string
 
@@ -505,8 +513,8 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter, workspac
 			&o.StartDate, &o.DeliveryDate, &o.Notes, &o.OwnerID, &o.WorkspaceID,
 			&o.CreatedByID, &o.CreatedAt, &o.UpdatedAt,
 			&cID, &cName, &cEmail, &cPhone, &cCompany,
-			&dID, &dNum, &dName,
-			&qID, &qNum, &qTitle, &qStatus,
+			&dID, &dNum, &dName, &dLeadNum,
+			&qID, &qNum, &qTitle, &qStatus, &qLeadNum,
 			&uID, &uName, &uEmail,
 		); err == nil {
 			o.Customer = &models.Customer{
@@ -517,10 +525,26 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter, workspac
 				Company: cCompany,
 			}
 			if dID != nil && dNum != nil && dName != nil {
-				o.Deal = &models.Deal{ID: *dID, DealNumber: *dNum, Name: *dName}
+				o.Deal = &models.Deal{
+					ID:         *dID,
+					DealNumber: *dNum,
+					Name:       *dName,
+					LeadNumber: dLeadNum,
+				}
 			}
 			if qID != nil && qNum != nil {
-				o.Quotation = &models.Quotation{ID: *qID, QuotationNumber: *qNum, Title: *qTitle, Status: *qStatus}
+				o.Quotation = &models.Quotation{
+					ID:              *qID,
+					QuotationNumber: *qNum,
+					Title:           *qTitle,
+					Status:          *qStatus,
+					LeadNumber:      qLeadNum,
+				}
+			}
+			if dLeadNum != nil && *dLeadNum != "" {
+				o.LeadNumber = dLeadNum
+			} else if qLeadNum != nil && *qLeadNum != "" {
+				o.LeadNumber = qLeadNum
 			}
 			if uID != nil && uName != nil && uEmail != nil {
 				o.Owner = &models.UserSummary{ID: *uID, Name: *uName, Email: *uEmail}
@@ -812,6 +836,122 @@ func (r *OrderRepository) CreateFromWonDeal(ctx context.Context, dealID int, cur
 
 	// Record activity on deal
 	_ = r.dealRepo.CreateActivity(ctx, dealID, currentUserID, "order_created", "Order Generated", fmt.Sprintf("Order %s was created for delivery", createdOrder.OrderNumber))
+
+	return createdOrder, nil
+}
+
+// CreateFromAcceptedQuotation automatically creates one linked Order when a Quotation is accepted
+func (r *OrderRepository) CreateFromAcceptedQuotation(ctx context.Context, quotationID int, currentUserID *int, workspaceID int) (*models.Order, error) {
+	// 1. Check if Order already exists for this quotation (Idempotent / duplicate prevention)
+	var existingID int
+	err := r.db.Pool.QueryRow(ctx, "SELECT id FROM orders WHERE quotation_id = $1 AND workspace_id = $2 LIMIT 1", quotationID, workspaceID).Scan(&existingID)
+	if err == nil && existingID > 0 {
+		return r.GetByID(ctx, existingID, workspaceID)
+	}
+
+	// 2. Fetch Quotation details
+	quot, err := r.quotationRepo.GetByID(ctx, quotationID, workspaceID)
+	if err != nil || quot == nil {
+		return nil, fmt.Errorf("failed to fetch quotation %d: %w", quotationID, err)
+	}
+
+	// 3. Set Title directly to Quotation's Title
+	title := strings.TrimSpace(quot.Title)
+	if title == "" {
+		title = fmt.Sprintf("Order - Quotation %s", quot.QuotationNumber)
+	}
+
+	custID := quot.CustomerID
+	dealID := quot.DealID
+	currency := quot.Currency
+	if currency == "" {
+		currency = "INR"
+	}
+	totalAmount := quot.TotalAmount
+	stage := "Not Started"
+	paymentStatus := "Unpaid"
+	invoiceStatus := "Not Invoiced"
+
+	var itemsInput []models.OrderItemInput
+	for _, qi := range quot.Items {
+		pID := qi.ProductID
+		taxable := qi.TaxableAmount
+		taxAmt := qi.GSTAmount
+		total := qi.LineTotal
+		gstR := qi.GSTRate
+		name := qi.ProductName
+		if strings.TrimSpace(name) == "" && qi.Description != nil {
+			name = *qi.Description
+		}
+		if strings.TrimSpace(name) == "" {
+			name = "Item"
+		}
+		itemsInput = append(itemsInput, models.OrderItemInput{
+			ProductID:     pID,
+			Name:          name,
+			Description:   qi.Description,
+			Quantity:      qi.Quantity,
+			UnitPrice:     qi.UnitPrice,
+			GSTRate:       &gstR,
+			TaxableAmount: &taxable,
+			TaxAmount:     &taxAmt,
+			TotalAmount:   &total,
+		})
+	}
+
+	if len(itemsInput) == 0 {
+		unitPrice := totalAmount
+		taxable := totalAmount
+		zero := 0.00
+		itemsInput = append(itemsInput, models.OrderItemInput{
+			Name:          title,
+			Quantity:      1.00,
+			UnitPrice:     unitPrice,
+			GSTRate:       &zero,
+			TaxableAmount: &taxable,
+			TaxAmount:     &zero,
+			TotalAmount:   &totalAmount,
+		})
+	}
+
+	todayStr := time.Now().Format("2006-01-02")
+	notes := ""
+	if quot.Notes != nil {
+		notes = *quot.Notes
+	}
+
+	createInput := models.OrderCreateInput{
+		Title:         title,
+		CustomerID:    custID,
+		DealID:        &dealID,
+		QuotationID:   &quotationID,
+		Stage:         &stage,
+		PaymentStatus: &paymentStatus,
+		InvoiceStatus: &invoiceStatus,
+		TotalAmount:   &totalAmount,
+		Currency:      &currency,
+		StartDate:     &todayStr,
+		Notes:         &notes,
+		OwnerID:       quot.CreatedByID,
+		Items:         itemsInput,
+	}
+
+	createdOrder, err := r.Create(ctx, createInput, currentUserID, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to auto-create order for accepted quotation: %w", err)
+	}
+
+	// Record activity on Order, Deal, and Lead
+	actDesc := fmt.Sprintf("Order %s automatically created from accepted Quotation %s for %s %.2f", createdOrder.OrderNumber, quot.QuotationNumber, currency, totalAmount)
+	_ = r.CreateActivity(ctx, createdOrder.ID, currentUserID, "order_created", "Order Created from Quotation", actDesc)
+	_ = r.dealRepo.CreateActivity(ctx, dealID, currentUserID, "order_created", "Order Generated", fmt.Sprintf("Order %s created from accepted Quotation %s", createdOrder.OrderNumber, quot.QuotationNumber))
+
+	if quot.LeadNumber != nil && *quot.LeadNumber != "" {
+		_, _ = r.db.Pool.Exec(ctx, `
+			INSERT INTO lead_activities (lead_number, user_id, activity_type, title, description, created_at)
+			VALUES ($1, $2, 'order_created', 'Order Created', $3, NOW())
+		`, *quot.LeadNumber, currentUserID, fmt.Sprintf("Order %s created from accepted Quotation %s", createdOrder.OrderNumber, quot.QuotationNumber))
+	}
 
 	return createdOrder, nil
 }
