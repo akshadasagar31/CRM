@@ -16,12 +16,14 @@ import (
 
 var ValidOrderStages = []string{
 	"Not Started",
+	"Confirmed",
 	"Planning",
 	"In Progress",
 	"Client Review",
 	"Revision/Changes",
 	"Delivered",
 	"Completed",
+	"Cancelled",
 }
 
 func IsValidOrderStage(stage string) bool {
@@ -42,6 +44,21 @@ func NormalizeOrderStage(stage string) string {
 		}
 	}
 	return "Not Started"
+}
+
+func isUnconfirmedStage(stage string) bool {
+	norm := strings.ToLower(strings.TrimSpace(stage))
+	return norm == "not started" || norm == "cancelled"
+}
+
+func isReservedStage(stage string) bool {
+	norm := strings.ToLower(strings.TrimSpace(stage))
+	return norm == "confirmed" || norm == "planning" || norm == "in progress" || norm == "client review" || norm == "revision/changes"
+}
+
+func isDispatchedStage(stage string) bool {
+	norm := strings.ToLower(strings.TrimSpace(stage))
+	return norm == "delivered" || norm == "completed"
 }
 
 type OrderRepository struct {
@@ -193,6 +210,18 @@ func (r *OrderRepository) Create(ctx context.Context, input models.OrderCreateIn
 		`, orderID, it.ProductID, name, it.Description, qty, price, gstRate, taxable, tax, itemTotal)
 	}
 
+	if isReservedStage(stage) || isDispatchedStage(stage) {
+		tx, err := r.db.Pool.Begin(ctx)
+		if err == nil {
+			if invErr := r.syncInventoryForStage(ctx, tx, orderID, "Not Started", stage, createdByID, workspaceID); invErr != nil {
+				_ = tx.Rollback(ctx)
+				_, _ = r.db.Pool.Exec(ctx, "DELETE FROM orders WHERE id = $1", orderID)
+				return nil, invErr
+			}
+			_ = tx.Commit(ctx)
+		}
+	}
+
 	// Record initial activity
 	_ = r.CreateActivity(ctx, orderID, createdByID, "order_created", "Order Created", fmt.Sprintf("Order %s was created in stage %s with total %s %.2f", orderNum, stage, currency, totalAmount))
 
@@ -202,7 +231,8 @@ func (r *OrderRepository) Create(ctx context.Context, input models.OrderCreateIn
 func (r *OrderRepository) GetByID(ctx context.Context, id int, workspaceID int) (*models.Order, error) {
 	query := `
 		SELECT o.id, o.order_number, o.title, o.customer_id, o.deal_id, o.quotation_id,
-		       o.stage, o.payment_status, o.invoice_status, o.total_amount, o.currency,
+		       o.stage, o.payment_status, o.invoice_status, COALESCE(o.inventory_status, 'unreserved'),
+		       o.total_amount, o.currency,
 		       o.start_date::text, o.delivery_date::text, o.notes, o.owner_id, o.workspace_id,
 		       o.created_by_id, o.created_at, o.updated_at,
 		       c.id, c.name, c.email, c.phone, c.company,
@@ -234,7 +264,7 @@ func (r *OrderRepository) GetByID(ctx context.Context, id int, workspaceID int) 
 
 	err := r.db.Pool.QueryRow(ctx, query, id, workspaceID).Scan(
 		&o.ID, &o.OrderNumber, &o.Title, &o.CustomerID, &o.DealID, &o.QuotationID,
-		&o.Stage, &o.PaymentStatus, &o.InvoiceStatus, &o.TotalAmount, &o.Currency,
+		&o.Stage, &o.PaymentStatus, &o.InvoiceStatus, &o.InventoryStatus, &o.TotalAmount, &o.Currency,
 		&o.StartDate, &o.DeliveryDate, &o.Notes, &o.OwnerID, &o.WorkspaceID,
 		&o.CreatedByID, &o.CreatedAt, &o.UpdatedAt,
 		&cID, &cName, &cEmail, &cPhone, &cCompany,
@@ -472,7 +502,8 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter, workspac
 
 	selectQuery := `
 		SELECT o.id, o.order_number, o.title, o.customer_id, o.deal_id, o.quotation_id,
-		       o.stage, o.payment_status, o.invoice_status, o.total_amount, o.currency,
+		       o.stage, o.payment_status, o.invoice_status, COALESCE(o.inventory_status, 'unreserved'),
+		       o.total_amount, o.currency,
 		       o.start_date::text, o.delivery_date::text, o.notes, o.owner_id, o.workspace_id,
 		       o.created_by_id, o.created_at, o.updated_at,
 		       c.id, c.name, c.email, c.phone, c.company,
@@ -509,7 +540,7 @@ func (r *OrderRepository) List(ctx context.Context, filter OrderFilter, workspac
 
 		if err := rows.Scan(
 			&o.ID, &o.OrderNumber, &o.Title, &o.CustomerID, &o.DealID, &o.QuotationID,
-			&o.Stage, &o.PaymentStatus, &o.InvoiceStatus, &o.TotalAmount, &o.Currency,
+			&o.Stage, &o.PaymentStatus, &o.InvoiceStatus, &o.InventoryStatus, &o.TotalAmount, &o.Currency,
 			&o.StartDate, &o.DeliveryDate, &o.Notes, &o.OwnerID, &o.WorkspaceID,
 			&o.CreatedByID, &o.CreatedAt, &o.UpdatedAt,
 			&cID, &cName, &cEmail, &cPhone, &cCompany,
@@ -636,7 +667,19 @@ func (r *OrderRepository) Update(ctx context.Context, id int, input models.Order
 		newOwnerID = input.OwnerID
 	}
 
-	_, err = r.db.Pool.Exec(ctx, `
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	if stageChanged {
+		if err := r.syncInventoryForStage(ctx, tx, id, current.Stage, newStage, currentUserID, workspaceID); err != nil {
+			return nil, err
+		}
+	}
+
+	_, err = tx.Exec(ctx, `
 		UPDATE orders
 		SET title = $1, stage = $2, payment_status = $3, invoice_status = $4,
 		    total_amount = $5, currency = $6, start_date = $7, delivery_date = $8,
@@ -646,6 +689,10 @@ func (r *OrderRepository) Update(ctx context.Context, id int, input models.Order
 		newTotal, newCurrency, newStartDate, newDeliveryDate,
 		newNotes, newOwnerID, id, workspaceID)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -673,12 +720,26 @@ func (r *OrderRepository) ChangeStage(ctx context.Context, id int, newStage stri
 		return current, nil
 	}
 
-	_, err = r.db.Pool.Exec(ctx, `
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := r.syncInventoryForStage(ctx, tx, id, current.Stage, normalized, currentUserID, workspaceID); err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(ctx, `
 		UPDATE orders
 		SET stage = $1, updated_at = NOW()
 		WHERE id = $2 AND workspace_id = $3
 	`, normalized, id, workspaceID)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
@@ -691,15 +752,225 @@ func (r *OrderRepository) ChangeStage(ctx context.Context, id int, newStage stri
 	return r.GetByID(ctx, id, workspaceID)
 }
 
+func (r *OrderRepository) syncInventoryForStage(ctx context.Context, tx pgx.Tx, orderID int, oldStage, newStage string, userID *int, workspaceID int) error {
+	var orderNum, currentInvStatus string
+	err := tx.QueryRow(ctx, "SELECT order_number, COALESCE(inventory_status, 'unreserved') FROM orders WHERE id = $1 FOR UPDATE", orderID).Scan(&orderNum, &currentInvStatus)
+	if err != nil {
+		return err
+	}
+
+	type orderItemStock struct {
+		productID int
+		name      string
+		quantity  float64
+	}
+
+	rows, err := tx.Query(ctx, "SELECT product_id, name, quantity FROM order_items WHERE order_id = $1 AND product_id IS NOT NULL AND quantity > 0", orderID)
+	if err != nil {
+		return err
+	}
+	var items []orderItemStock
+	for rows.Next() {
+		var it orderItemStock
+		if err := rows.Scan(&it.productID, &it.name, &it.quantity); err == nil && it.productID > 0 && it.quantity > 0 {
+			items = append(items, it)
+		}
+	}
+	rows.Close()
+
+	if len(items) == 0 {
+		return nil
+	}
+
+	if isReservedStage(newStage) {
+		if currentInvStatus == "unreserved" {
+			// Validate availability across all order items
+			var insufficientErrors []string
+			for _, it := range items {
+				var pName string
+				var currStock, resStock float64
+				err := tx.QueryRow(ctx, `
+					SELECT name, COALESCE(current_stock, 0), COALESCE(reserved_stock, 0)
+					FROM products
+					WHERE id = $1 AND workspace_id = $2
+					FOR UPDATE
+				`, it.productID, workspaceID).Scan(&pName, &currStock, &resStock)
+				if err != nil {
+					return fmt.Errorf("failed to check product %d stock: %w", it.productID, err)
+				}
+				avail := currStock - resStock
+				if avail < it.quantity {
+					insufficientErrors = append(insufficientErrors, fmt.Sprintf("'%s' (required: %.2f, available: %.2f)", pName, it.quantity, avail))
+				}
+			}
+			if len(insufficientErrors) > 0 {
+				return fmt.Errorf("cannot confirm order: insufficient available stock for: %s", strings.Join(insufficientErrors, ", "))
+			}
+
+			// Reserve stock
+			for _, it := range items {
+				var prevStock, prevRes float64
+				_ = tx.QueryRow(ctx, "SELECT COALESCE(current_stock, 0), COALESCE(reserved_stock, 0) FROM products WHERE id = $1", it.productID).Scan(&prevStock, &prevRes)
+				newRes := prevRes + it.quantity
+				_, err := tx.Exec(ctx, "UPDATE products SET reserved_stock = reserved_stock + $1, updated_at = NOW() WHERE id = $2", it.quantity, it.productID)
+				if err != nil {
+					return err
+				}
+				note := fmt.Sprintf("Stock reserved for order %s (%s)", orderNum, newStage)
+				_, _ = tx.Exec(ctx, `
+					INSERT INTO stock_movements (
+						product_id, movement_type, quantity, reference_type, reference_id,
+						previous_stock, new_stock, previous_reserved, new_reserved, notes,
+						condition, workspace_id, created_by_id, created_at
+					) VALUES ($1, 'reserve', $2, 'order', $3, $4, $4, $5, $6, $7, 'good', $8, $9, NOW())
+				`, it.productID, it.quantity, orderNum, prevStock, prevRes, newRes, note, workspaceID, userID)
+			}
+			_, err = tx.Exec(ctx, "UPDATE orders SET inventory_status = 'reserved' WHERE id = $1", orderID)
+			return err
+		} else if currentInvStatus == "deducted" {
+			// Order was rolled back from Delivered to Reserved
+			for _, it := range items {
+				var prevStock, prevRes float64
+				_ = tx.QueryRow(ctx, "SELECT COALESCE(current_stock, 0), COALESCE(reserved_stock, 0) FROM products WHERE id = $1 FOR UPDATE", it.productID).Scan(&prevStock, &prevRes)
+				newStock := prevStock + it.quantity
+				newRes := prevRes + it.quantity
+				_, _ = tx.Exec(ctx, "UPDATE products SET current_stock = current_stock + $1, reserved_stock = reserved_stock + $1, sold_quantity = GREATEST(sold_quantity - $1, 0), updated_at = NOW() WHERE id = $2", it.quantity, it.productID)
+				note := fmt.Sprintf("Stock reservation restored for order %s (rolled back to %s)", orderNum, newStage)
+				_, _ = tx.Exec(ctx, `
+					INSERT INTO stock_movements (
+						product_id, movement_type, quantity, reference_type, reference_id,
+						previous_stock, new_stock, previous_reserved, new_reserved, notes,
+						condition, workspace_id, created_by_id, created_at
+					) VALUES ($1, 'stock_in', $2, 'order', $3, $4, $5, $6, $7, $8, 'good', $9, $10, NOW())
+				`, it.productID, it.quantity, orderNum, prevStock, newStock, prevRes, newRes, note, workspaceID, userID)
+			}
+			_, err = tx.Exec(ctx, "UPDATE orders SET inventory_status = 'reserved' WHERE id = $1", orderID)
+			return err
+		}
+	} else if isDispatchedStage(newStage) {
+		if currentInvStatus == "reserved" {
+			// Deduct physical stock, release reservation, increment sold_quantity
+			for _, it := range items {
+				var prevStock, prevRes float64
+				_ = tx.QueryRow(ctx, "SELECT COALESCE(current_stock, 0), COALESCE(reserved_stock, 0) FROM products WHERE id = $1 FOR UPDATE", it.productID).Scan(&prevStock, &prevRes)
+				newStock := prevStock - it.quantity
+				if newStock < 0 {
+					newStock = 0
+				}
+				newRes := prevRes - it.quantity
+				if newRes < 0 {
+					newRes = 0
+				}
+				_, _ = tx.Exec(ctx, "UPDATE products SET current_stock = GREATEST(current_stock - $1, 0), reserved_stock = GREATEST(reserved_stock - $1, 0), sold_quantity = sold_quantity + $1, updated_at = NOW() WHERE id = $2", it.quantity, it.productID)
+				note := fmt.Sprintf("Stock dispatched for order %s (%s)", orderNum, newStage)
+				_, _ = tx.Exec(ctx, `
+					INSERT INTO stock_movements (
+						product_id, movement_type, quantity, reference_type, reference_id,
+						previous_stock, new_stock, previous_reserved, new_reserved, notes,
+						condition, workspace_id, created_by_id, created_at
+					) VALUES ($1, 'dispatch', $2, 'order', $3, $4, $5, $6, $7, $8, 'good', $9, $10, NOW())
+				`, it.productID, it.quantity, orderNum, prevStock, newStock, prevRes, newRes, note, workspaceID, userID)
+			}
+			_, err = tx.Exec(ctx, "UPDATE orders SET inventory_status = 'deducted' WHERE id = $1", orderID)
+			return err
+		} else if currentInvStatus == "unreserved" {
+			// Direct jump to Dispatched without prior reservation
+			var insufficientErrors []string
+			for _, it := range items {
+				var pName string
+				var currStock, resStock float64
+				_ = tx.QueryRow(ctx, "SELECT name, COALESCE(current_stock, 0), COALESCE(reserved_stock, 0) FROM products WHERE id = $1 AND workspace_id = $2 FOR UPDATE", it.productID, workspaceID).Scan(&pName, &currStock, &resStock)
+				avail := currStock - resStock
+				if avail < it.quantity {
+					insufficientErrors = append(insufficientErrors, fmt.Sprintf("'%s' (required: %.2f, available: %.2f)", pName, it.quantity, avail))
+				}
+			}
+			if len(insufficientErrors) > 0 {
+				return fmt.Errorf("cannot fulfill order: insufficient available stock for: %s", strings.Join(insufficientErrors, ", "))
+			}
+			for _, it := range items {
+				var prevStock, prevRes float64
+				_ = tx.QueryRow(ctx, "SELECT COALESCE(current_stock, 0), COALESCE(reserved_stock, 0) FROM products WHERE id = $1", it.productID).Scan(&prevStock, &prevRes)
+				newStock := prevStock - it.quantity
+				if newStock < 0 {
+					newStock = 0
+				}
+				_, _ = tx.Exec(ctx, "UPDATE products SET current_stock = GREATEST(current_stock - $1, 0), sold_quantity = sold_quantity + $1, updated_at = NOW() WHERE id = $2", it.quantity, it.productID)
+				note := fmt.Sprintf("Stock directly dispatched for order %s (%s)", orderNum, newStage)
+				_, _ = tx.Exec(ctx, `
+					INSERT INTO stock_movements (
+						product_id, movement_type, quantity, reference_type, reference_id,
+						previous_stock, new_stock, previous_reserved, new_reserved, notes,
+						condition, workspace_id, created_by_id, created_at
+					) VALUES ($1, 'dispatch', $2, 'order', $3, $4, $5, $6, $6, $7, 'good', $8, $9, NOW())
+				`, it.productID, it.quantity, orderNum, prevStock, newStock, prevRes, note, workspaceID, userID)
+			}
+			_, err = tx.Exec(ctx, "UPDATE orders SET inventory_status = 'deducted' WHERE id = $1", orderID)
+			return err
+		}
+	} else if isUnconfirmedStage(newStage) {
+		if currentInvStatus == "reserved" {
+			// Release reservation
+			for _, it := range items {
+				var prevStock, prevRes float64
+				_ = tx.QueryRow(ctx, "SELECT COALESCE(current_stock, 0), COALESCE(reserved_stock, 0) FROM products WHERE id = $1 FOR UPDATE", it.productID).Scan(&prevStock, &prevRes)
+				newRes := prevRes - it.quantity
+				if newRes < 0 {
+					newRes = 0
+				}
+				_, _ = tx.Exec(ctx, "UPDATE products SET reserved_stock = GREATEST(reserved_stock - $1, 0), updated_at = NOW() WHERE id = $2", it.quantity, it.productID)
+				note := fmt.Sprintf("Stock reservation released for order %s (%s)", orderNum, newStage)
+				_, _ = tx.Exec(ctx, `
+					INSERT INTO stock_movements (
+						product_id, movement_type, quantity, reference_type, reference_id,
+						previous_stock, new_stock, previous_reserved, new_reserved, notes,
+						condition, workspace_id, created_by_id, created_at
+					) VALUES ($1, 'release_reservation', $2, 'order', $3, $4, $4, $5, $6, $7, 'good', $8, $9, NOW())
+				`, it.productID, it.quantity, orderNum, prevStock, prevRes, newRes, note, workspaceID, userID)
+			}
+			_, err = tx.Exec(ctx, "UPDATE orders SET inventory_status = 'unreserved' WHERE id = $1", orderID)
+			return err
+		} else if currentInvStatus == "deducted" {
+			// Restore physical stock
+			for _, it := range items {
+				var prevStock, prevRes float64
+				_ = tx.QueryRow(ctx, "SELECT COALESCE(current_stock, 0), COALESCE(reserved_stock, 0) FROM products WHERE id = $1 FOR UPDATE", it.productID).Scan(&prevStock, &prevRes)
+				newStock := prevStock + it.quantity
+				_, _ = tx.Exec(ctx, "UPDATE products SET current_stock = current_stock + $1, sold_quantity = GREATEST(sold_quantity - $1, 0), updated_at = NOW() WHERE id = $2", it.quantity, it.productID)
+				note := fmt.Sprintf("Stock returned to inventory from cancelled order %s", orderNum)
+				_, _ = tx.Exec(ctx, `
+					INSERT INTO stock_movements (
+						product_id, movement_type, quantity, reference_type, reference_id,
+						previous_stock, new_stock, previous_reserved, new_reserved, notes,
+						condition, workspace_id, created_by_id, created_at
+					) VALUES ($1, 'stock_in', $2, 'order', $3, $4, $5, $6, $6, $7, 'good', $8, $9, NOW())
+				`, it.productID, it.quantity, orderNum, prevStock, newStock, prevRes, note, workspaceID, userID)
+			}
+			_, err = tx.Exec(ctx, "UPDATE orders SET inventory_status = 'unreserved' WHERE id = $1", orderID)
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (r *OrderRepository) Delete(ctx context.Context, id int, workspaceID int) error {
-	tag, err := r.db.Pool.Exec(ctx, "DELETE FROM orders WHERE id = $1 AND workspace_id = $2", id, workspaceID)
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_ = r.syncInventoryForStage(ctx, tx, id, "", "Cancelled", nil, workspaceID)
+
+	tag, err := tx.Exec(ctx, "DELETE FROM orders WHERE id = $1 AND workspace_id = $2", id, workspaceID)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
 		return errors.New("order not found")
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 func (r *OrderRepository) CreateActivity(ctx context.Context, orderID int, userID *int, actType, title, description string) error {

@@ -6,11 +6,14 @@ import Sidebar, { SidebarTab } from "@/components/Sidebar";
 import {
   paymentsApi,
   invoicesApi,
+  ordersApi,
   companyApi,
   authApi,
+  downloadPdfFile,
   PaymentLedgerItem,
   PaymentSummary,
   Invoice,
+  Order,
   CompanyProfile,
   User,
 } from "@/lib/api";
@@ -41,6 +44,8 @@ import {
   Check,
   AlertTriangle,
   Wallet,
+  Eye,
+  Loader2,
 } from "lucide-react";
 
 // Format Currency INR
@@ -150,6 +155,11 @@ export default function PaymentsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const pageSize = 20;
 
+  type PaymentViewTab = "ledger" | "outstanding_invoices" | "awaiting_invoice";
+  const [viewTab, setViewTab] = useState<PaymentViewTab>("ledger");
+  const [awaitingOrders, setAwaitingOrders] = useState<Order[]>([]);
+  const [isLoadingAwaitingOrders, setIsLoadingAwaitingOrders] = useState(false);
+
   // Filters State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedMethod, setSelectedMethod] = useState("all");
@@ -173,6 +183,53 @@ export default function PaymentsPage() {
   // Receipt Modal State
   const [selectedReceiptPayment, setSelectedReceiptPayment] = useState<PaymentLedgerItem | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [isPdfLoading, setIsPdfLoading] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  useEffect(() => {
+    if (isReceiptModalOpen && selectedReceiptPayment) {
+      let active = true;
+      setIsPdfLoading(true);
+      paymentsApi
+        .getPdfBlob(selectedReceiptPayment.id)
+        .then((blob) => {
+          if (!active) return;
+          const url = URL.createObjectURL(blob);
+          setPdfBlobUrl(url);
+        })
+        .catch((err) => {
+          console.error("Failed to load payment receipt PDF:", err);
+          showToast("Failed to load payment receipt PDF: " + (err?.message || "Error"), "error");
+        })
+        .finally(() => {
+          if (active) setIsPdfLoading(false);
+        });
+
+      return () => {
+        active = false;
+        if (pdfBlobUrl) {
+          URL.revokeObjectURL(pdfBlobUrl);
+        }
+      };
+    } else {
+      setPdfBlobUrl(null);
+    }
+  }, [isReceiptModalOpen, selectedReceiptPayment?.id]);
+
+  // Payment Details Drawer State
+  const [selectedPaymentForDrawer, setSelectedPaymentForDrawer] = useState<PaymentLedgerItem | null>(null);
+  const [isDetailsDrawerOpen, setIsDetailsDrawerOpen] = useState(false);
+
+  const handleOpenPaymentDrawer = (p: PaymentLedgerItem) => {
+    setSelectedPaymentForDrawer(p);
+    setIsDetailsDrawerOpen(true);
+  };
+
+  const handleClosePaymentDrawer = () => {
+    setIsDetailsDrawerOpen(false);
+    setSelectedPaymentForDrawer(null);
+  };
 
   // Void / Delete Payment State
   const [paymentToVoid, setPaymentToVoid] = useState<PaymentLedgerItem | null>(null);
@@ -257,15 +314,10 @@ export default function PaymentsPage() {
     }
   }, [searchQuery, selectedMethod, activeDateRange, currentPage]);
 
-  useEffect(() => {
-    loadPayments();
-  }, [loadPayments]);
-
   // Fetch Invoices Eligible for Payment
-  const loadOutstandingInvoices = async () => {
+  const loadOutstandingInvoices = useCallback(async () => {
     setIsLoadingInvoices(true);
     try {
-      // Fetch invoices that are Issued/Sent, Unpaid, Partially Paid, or Overdue
       const res = await invoicesApi.list({ limit: 100 });
       const eligible = (res.items || []).filter(
         (inv) =>
@@ -281,11 +333,46 @@ export default function PaymentsPage() {
     } finally {
       setIsLoadingInvoices(false);
     }
-  };
+  }, []);
+
+  // Fetch Unbilled Orders (Awaiting Invoice)
+  const loadAwaitingOrders = useCallback(async () => {
+    setIsLoadingAwaitingOrders(true);
+    try {
+      const res = await ordersApi.list({ invoice_status: "Not Invoiced", limit: 100 });
+      setAwaitingOrders(res.items || []);
+    } catch (err) {
+      console.error("Error loading awaiting orders", err);
+    } finally {
+      setIsLoadingAwaitingOrders(false);
+    }
+  }, []);
+
+  const loadAllData = useCallback(() => {
+    loadPayments();
+    loadOutstandingInvoices();
+    loadAwaitingOrders();
+  }, [loadPayments, loadOutstandingInvoices, loadAwaitingOrders]);
+
+  useEffect(() => {
+    loadAllData();
+  }, [loadAllData]);
 
   const handleOpenRecordModal = () => {
     setSelectedInvoiceId("");
     setPaymentAmount("");
+    setPaymentMethod("Bank Transfer (NEFT/RTGS/IMPS)");
+    setPaymentDate(new Date().toISOString().split("T")[0]);
+    setReferenceNumber("");
+    setPaymentNotes("");
+    setRecordError(null);
+    setIsRecordModalOpen(true);
+    loadOutstandingInvoices();
+  };
+
+  const handleOpenRecordModalWithInvoice = (inv: Invoice) => {
+    setSelectedInvoiceId(inv.id);
+    setPaymentAmount(inv.remaining_balance);
     setPaymentMethod("Bank Transfer (NEFT/RTGS/IMPS)");
     setPaymentDate(new Date().toISOString().split("T")[0]);
     setReferenceNumber("");
@@ -345,7 +432,7 @@ export default function PaymentsPage() {
 
       showToast("Payment recorded successfully!");
       setIsRecordModalOpen(false);
-      loadPayments();
+      loadAllData();
     } catch (err: any) {
       setRecordError(err.message || "Failed to record payment. Please try again.");
     } finally {
@@ -362,7 +449,7 @@ export default function PaymentsPage() {
       showToast("Payment voided and balance recalculated successfully.");
       setIsVoidModalOpen(false);
       setPaymentToVoid(null);
-      loadPayments();
+      loadAllData();
     } catch (err: any) {
       showToast(err.message || "Failed to void payment", "error");
     } finally {
@@ -463,7 +550,8 @@ export default function PaymentsPage() {
           else if (tab === "invoices") router.push("/invoices");
           else if (tab === "payments") {
             // Already on payments
-          } else if (tab === "products") router.push("/products");
+          } else if (tab === "inventory") router.push("/inventory");
+          else if (tab === "products") router.push("/products");
           else if (tab === "follow-ups") router.push("/follow-ups");
           else if (tab === "company") router.push("/company");
           else if (tab === "api-keys") router.push("/leads?tab=api-keys");
@@ -704,7 +792,118 @@ export default function PaymentsPage() {
             </div>
           </div>
 
-          {/* 2. Filters & Search Bar */}
+          {/* View Tab Switcher */}
+          <div style={{ display: "flex", gap: "12px", borderBottom: "1px solid #E2E8F0", paddingBottom: "12px" }}>
+            <button
+              onClick={() => setViewTab("ledger")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: viewTab === "ledger" ? "1px solid #0D9488" : "1px solid #E2E8F0",
+                backgroundColor: viewTab === "ledger" ? "#F0FDFA" : "#FFFFFF",
+                color: viewTab === "ledger" ? "#0F766E" : "#64748B",
+                boxShadow: viewTab === "ledger" ? "0 1px 2px rgba(13, 148, 136, 0.1)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Receipt size={16} />
+              <span>Payments Ledger</span>
+              <span
+                style={{
+                  backgroundColor: viewTab === "ledger" ? "#0D9488" : "#E2E8F0",
+                  color: viewTab === "ledger" ? "#FFFFFF" : "#475569",
+                  padding: "1px 6px",
+                  borderRadius: "10px",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                }}
+              >
+                {totalPayments}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setViewTab("outstanding_invoices")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: viewTab === "outstanding_invoices" ? "1px solid #D97706" : "1px solid #E2E8F0",
+                backgroundColor: viewTab === "outstanding_invoices" ? "#FFFBEB" : "#FFFFFF",
+                color: viewTab === "outstanding_invoices" ? "#B45309" : "#64748B",
+                boxShadow: viewTab === "outstanding_invoices" ? "0 1px 2px rgba(217, 119, 6, 0.1)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Clock size={16} />
+              <span>Outstanding Invoices</span>
+              {outstandingInvoices.length > 0 && (
+                <span
+                  style={{
+                    backgroundColor: viewTab === "outstanding_invoices" ? "#D97706" : "#FEF3C7",
+                    color: viewTab === "outstanding_invoices" ? "#FFFFFF" : "#92400E",
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  {outstandingInvoices.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              onClick={() => setViewTab("awaiting_invoice")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: viewTab === "awaiting_invoice" ? "1px solid #7C3AED" : "1px solid #E2E8F0",
+                backgroundColor: viewTab === "awaiting_invoice" ? "#F5F3FF" : "#FFFFFF",
+                color: viewTab === "awaiting_invoice" ? "#6D28D9" : "#64748B",
+                boxShadow: viewTab === "awaiting_invoice" ? "0 1px 2px rgba(124, 58, 237, 0.1)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Layers size={16} />
+              <span>Awaiting Invoice</span>
+              {awaitingOrders.length > 0 && (
+                <span
+                  style={{
+                    backgroundColor: viewTab === "awaiting_invoice" ? "#7C3AED" : "#EDE9FE",
+                    color: viewTab === "awaiting_invoice" ? "#FFFFFF" : "#5B21B6",
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  {awaitingOrders.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {viewTab === "ledger" && (
+            <>
+              {/* 2. Filters & Search Bar */}
           <div
             style={{
               backgroundColor: "#FFFFFF",
@@ -877,31 +1076,25 @@ export default function PaymentsPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.875rem" }}>
                 <thead>
                   <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
-                    <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                       Payment Date
                     </th>
-                    <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Receipt / Payment ID
+                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                      Receipt / ID
                     </th>
-                    <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Reference # (UTR / Cheque)
-                    </th>
-                    <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                       Invoice #
                     </th>
-                    <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                       Customer
                     </th>
-                    <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                       Method
                     </th>
-                    <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>
+                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "right" }}>
                       Amount Paid
                     </th>
-                    <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                      Recorded By
-                    </th>
-                    <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>
+                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "center" }}>
                       Actions
                     </th>
                   </tr>
@@ -909,7 +1102,7 @@ export default function PaymentsPage() {
                 <tbody>
                   {isLoading ? (
                     <tr>
-                      <td colSpan={9} style={{ padding: "3rem", textAlign: "center", color: "#94A3B8" }}>
+                      <td colSpan={7} style={{ padding: "3rem", textAlign: "center", color: "#94A3B8" }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
                           <RefreshCw size={24} className="spin-animation" style={{ color: "#0D9488" }} />
                           <span>Loading payments ledger...</span>
@@ -918,7 +1111,7 @@ export default function PaymentsPage() {
                     </tr>
                   ) : payments.length === 0 ? (
                     <tr>
-                      <td colSpan={9} style={{ padding: "4rem 2rem", textAlign: "center", color: "#64748B" }}>
+                      <td colSpan={7} style={{ padding: "4rem 2rem", textAlign: "center", color: "#64748B" }}>
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
                           <div style={{ width: "56px", height: "56px", borderRadius: "50%", backgroundColor: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", color: "#94A3B8" }}>
                             <Wallet size={28} />
@@ -968,13 +1161,15 @@ export default function PaymentsPage() {
                           key={p.id}
                           style={{
                             borderBottom: "1px solid #F1F5F9",
+                            cursor: "pointer",
                             transition: "background-color 0.15s ease",
                           }}
+                          onClick={() => handleOpenPaymentDrawer(p)}
                           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
                           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                         >
                           {/* Payment Date */}
-                          <td style={{ padding: "14px 16px", color: "#1E293B", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "12px 16px", color: "#1E293B", whiteSpace: "nowrap" }}>
                             <div style={{ fontWeight: 600 }}>{formattedDate}</div>
                             <div style={{ fontSize: "0.75rem", color: "#94A3B8" }}>
                               {new Date(p.payment_date).toLocaleTimeString("en-IN", {
@@ -985,12 +1180,12 @@ export default function PaymentsPage() {
                           </td>
 
                           {/* Receipt ID */}
-                          <td style={{ padding: "14px 16px", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
                             <span
                               style={{
                                 fontFamily: "monospace",
                                 fontSize: "0.8125rem",
-                                fontWeight: 600,
+                                fontWeight: 700,
                                 color: "#0369A1",
                                 backgroundColor: "#F0F9FF",
                                 padding: "3px 8px",
@@ -1002,43 +1197,8 @@ export default function PaymentsPage() {
                             </span>
                           </td>
 
-                          {/* Reference Number */}
-                          <td style={{ padding: "14px 16px" }}>
-                            {p.reference_number ? (
-                              <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                                <span
-                                  style={{
-                                    fontFamily: "monospace",
-                                    fontSize: "0.8125rem",
-                                    color: "#334155",
-                                    backgroundColor: "#F1F5F9",
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                  }}
-                                >
-                                  {p.reference_number}
-                                </span>
-                                <button
-                                  onClick={() => handleCopyRef(p.reference_number!)}
-                                  title="Copy reference number"
-                                  style={{
-                                    background: "none",
-                                    border: "none",
-                                    cursor: "pointer",
-                                    padding: "2px",
-                                    color: copiedRefId === p.reference_number ? "#059669" : "#94A3B8",
-                                  }}
-                                >
-                                  {copiedRefId === p.reference_number ? <Check size={14} /> : <Copy size={14} />}
-                                </button>
-                              </div>
-                            ) : (
-                              <span style={{ color: "#94A3B8", fontSize: "0.75rem" }}>—</span>
-                            )}
-                          </td>
-
                           {/* Linked Invoice */}
-                          <td style={{ padding: "14px 16px", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => router.push(`/invoices?search=${encodeURIComponent(p.invoice_number)}`)}
                               style={{
@@ -1064,17 +1224,20 @@ export default function PaymentsPage() {
                           </td>
 
                           {/* Customer */}
-                          <td style={{ padding: "14px 16px" }}>
+                          <td style={{ padding: "12px 16px" }}>
                             <div style={{ fontWeight: 600, color: "#1E293B" }}>{p.customer_name}</div>
-                            {p.order_number && (
-                              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                                Order: {p.order_number}
-                              </div>
-                            )}
+                            <div style={{ fontSize: "0.75rem", color: "#64748B", display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
+                              {p.reference_number && (
+                                <span style={{ fontFamily: "monospace", color: "#475569" }}>Ref: {p.reference_number}</span>
+                              )}
+                              {p.recorded_by && (
+                                <span style={{ color: "#94A3B8" }}>• By {p.recorded_by}</span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Method Badge */}
-                          <td style={{ padding: "14px 16px", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
                             <span
                               style={{
                                 display: "inline-block",
@@ -1092,40 +1255,36 @@ export default function PaymentsPage() {
                           </td>
 
                           {/* Amount Paid */}
-                          <td style={{ padding: "14px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
-                            <span style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A" }}>
+                          <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <span style={{ fontSize: "1rem", fontWeight: 800, color: "#0F766E" }}>
                               {formatINR(p.amount)}
                             </span>
                           </td>
 
-                          {/* Recorded By */}
-                          <td style={{ padding: "14px 16px", whiteSpace: "nowrap" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <div
+                          {/* Actions */}
+                          <td style={{ padding: "12px 16px", textAlign: "center", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                              <button
+                                onClick={() => handleOpenPaymentDrawer(p)}
+                                title="View Payment Details"
                                 style={{
-                                  width: "24px",
-                                  height: "24px",
-                                  borderRadius: "50%",
-                                  backgroundColor: "#E2E8F0",
-                                  color: "#475569",
+                                  padding: "6px 10px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #CBD5E1",
+                                  backgroundColor: "#F8FAFC",
+                                  color: "#334155",
+                                  cursor: "pointer",
                                   display: "flex",
                                   alignItems: "center",
-                                  justifyContent: "center",
-                                  fontSize: "0.6875rem",
-                                  fontWeight: 700,
+                                  gap: "4px",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
                                 }}
                               >
-                                {p.recorder?.name ? p.recorder.name.charAt(0).toUpperCase() : "U"}
-                              </div>
-                              <span style={{ fontSize: "0.8125rem", color: "#334155", fontWeight: 500 }}>
-                                {p.recorder?.name || "User"}
-                              </span>
-                            </div>
-                          </td>
+                                <Eye size={13} />
+                                <span>Details</span>
+                              </button>
 
-                          {/* Actions */}
-                          <td style={{ padding: "14px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                               {/* Print / View Receipt */}
                               <button
                                 onClick={() => {
@@ -1237,6 +1396,626 @@ export default function PaymentsPage() {
               </div>
             )}
           </div>
+        </>
+      )}
+
+          {/* ========================================================= */}
+          {/* TAB 2: OUTSTANDING INVOICES                               */}
+          {/* ========================================================= */}
+          {viewTab === "outstanding_invoices" && (
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "12px",
+                border: "1px solid #E2E8F0",
+                overflow: "hidden",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  padding: "1rem 1.25rem",
+                  borderBottom: "1px solid #F1F5F9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div>
+                  <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                    Invoices with Outstanding Balance
+                  </h2>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "0.8125rem", color: "#64748B" }}>
+                    Active issued invoices pending full or partial payment collection
+                  </p>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span
+                    style={{
+                      backgroundColor: "#FEF3C7",
+                      color: "#92400E",
+                      padding: "4px 10px",
+                      borderRadius: "12px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    Total Pending: {formatINR(summary.total_outstanding)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.875rem" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                        Invoice # & Due Date
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                        Customer
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                        Sales Lineage
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", textAlign: "right" }}>
+                        Total & Outstanding
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", textAlign: "center" }}>
+                        Status
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", textAlign: "center" }}>
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoadingInvoices ? (
+                      <tr>
+                        <td colSpan={6} style={{ padding: "3rem", textAlign: "center", color: "#94A3B8" }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                            <RefreshCw size={24} className="spin-animation" style={{ color: "#0D9488" }} />
+                            <span>Loading outstanding invoices...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : outstandingInvoices.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} style={{ padding: "4rem 2rem", textAlign: "center", color: "#64748B" }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                            <CheckCircle2 size={36} style={{ color: "#059669" }} />
+                            <div style={{ fontWeight: 600, fontSize: "1rem", color: "#1E293B" }}>
+                              All Invoices Settled
+                            </div>
+                            <div style={{ fontSize: "0.875rem", color: "#64748B" }}>
+                              There are currently no active invoices with pending balances.
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      outstandingInvoices.map((inv) => (
+                        <tr
+                          key={inv.id}
+                          style={{
+                            borderBottom: "1px solid #F1F5F9",
+                            transition: "background-color 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                        >
+                          {/* Invoice # & Due Date */}
+                          <td style={{ padding: "14px 16px", whiteSpace: "nowrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/invoices?search=${encodeURIComponent(inv.invoice_number)}`)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                padding: 0,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                color: "#2563EB",
+                                fontWeight: 600,
+                                fontSize: "0.875rem",
+                                textDecoration: "underline",
+                              }}
+                            >
+                              <span>{inv.invoice_number}</span>
+                              <ExternalLink size={12} />
+                            </button>
+                            <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "3px" }}>
+                              Due: {inv.due_date ? new Date(inv.due_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                            </div>
+                          </td>
+
+                          {/* Customer */}
+                          <td style={{ padding: "14px 16px" }}>
+                            <div style={{ fontWeight: 600, color: "#1E293B" }}>{inv.customer_name}</div>
+                            {inv.customer_email && (
+                              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>{inv.customer_email}</div>
+                            )}
+                          </td>
+
+                          {/* Lineage */}
+                          <td style={{ padding: "14px 16px" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {inv.lead_number && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/leads?search=${encodeURIComponent(inv.lead_number!)}`);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "2px",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 600,
+                                    backgroundColor: "#EFF6FF",
+                                    color: "#1D4ED8",
+                                    border: "1px solid #DBEAFE",
+                                    cursor: "pointer",
+                                  }}
+                                  title={`Origin Lead: ${inv.lead_number}`}
+                                >
+                                  <span>Lead: {inv.lead_number}</span>
+                                </button>
+                              )}
+                              {inv.deal?.deal_number && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/deals?search=${encodeURIComponent(inv.deal!.deal_number)}`);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "2px",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 600,
+                                    backgroundColor: "#F0FDF4",
+                                    color: "#15803D",
+                                    border: "1px solid #DCFCE7",
+                                    cursor: "pointer",
+                                  }}
+                                  title={`Origin Deal: ${inv.deal.deal_number}`}
+                                >
+                                  <span>Deal: {inv.deal.deal_number}</span>
+                                </button>
+                              )}
+                              {inv.quotation?.quotation_number && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/quotations?search=${encodeURIComponent(inv.quotation!.quotation_number)}`);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "2px",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 600,
+                                    backgroundColor: "#FEF3C7",
+                                    color: "#92400E",
+                                    border: "1px solid #FDE68A",
+                                    cursor: "pointer",
+                                  }}
+                                  title={`Origin Quotation: ${inv.quotation.quotation_number}`}
+                                >
+                                  <span>Quote: {inv.quotation.quotation_number}</span>
+                                </button>
+                              )}
+                              {inv.order?.order_number && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/orders?search=${encodeURIComponent(inv.order!.order_number)}`);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "2px",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 600,
+                                    backgroundColor: "#F3E8FF",
+                                    color: "#7E22CE",
+                                    border: "1px solid #E9D5FF",
+                                    cursor: "pointer",
+                                  }}
+                                  title={`Origin Order: ${inv.order.order_number}`}
+                                >
+                                  <span>Order: {inv.order.order_number}</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Total & Outstanding */}
+                          <td style={{ padding: "14px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <div style={{ fontWeight: 600, color: "#1E293B" }}>
+                              {formatINR(inv.grand_total)}
+                            </div>
+                            <div style={{ fontSize: "0.75rem", marginTop: "2px" }}>
+                              <span style={{ fontWeight: 700, color: "#D97706" }}>
+                                Due: {formatINR(inv.remaining_balance)}
+                              </span>
+                              {inv.amount_paid > 0 && (
+                                <span style={{ color: "#059669", marginLeft: "4px" }}>
+                                  (Paid: {formatINR(inv.amount_paid)})
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Status */}
+                          <td style={{ padding: "14px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "3px 10px",
+                                borderRadius: "12px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                backgroundColor: inv.status === "Overdue" ? "#FEE2E2" : "#FEF3C7",
+                                color: inv.status === "Overdue" ? "#DC2626" : "#B45309",
+                                border: `1px solid ${inv.status === "Overdue" ? "#FECACA" : "#FDE68A"}`,
+                              }}
+                            >
+                              {inv.status}
+                            </span>
+                          </td>
+
+                          {/* Action */}
+                          <td style={{ padding: "14px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRecordModalWithInvoice(inv)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                border: "none",
+                                backgroundColor: "#0D9488",
+                                color: "#FFFFFF",
+                                fontSize: "0.8125rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                boxShadow: "0 1px 3px rgba(13, 148, 136, 0.2)",
+                              }}
+                            >
+                              <Plus size={14} />
+                              <span>Record Payment</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================= */}
+          {/* TAB 3: AWAITING INVOICE (UNBILLED ORDERS)                 */}
+          {/* ========================================================= */}
+          {viewTab === "awaiting_invoice" && (
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                borderRadius: "12px",
+                border: "1px solid #E2E8F0",
+                overflow: "hidden",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              {/* Header */}
+              <div
+                style={{
+                  padding: "1rem 1.25rem",
+                  borderBottom: "1px solid #F1F5F9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div>
+                  <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                    Orders Awaiting Invoice
+                  </h2>
+                  <p style={{ margin: "2px 0 0 0", fontSize: "0.8125rem", color: "#64748B" }}>
+                    Accepted orders automatically created from quotations that have not yet been billed
+                  </p>
+                </div>
+                <span
+                  style={{
+                    backgroundColor: "#F5F3FF",
+                    color: "#6D28D9",
+                    padding: "4px 10px",
+                    borderRadius: "12px",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  {awaitingOrders.length} Unbilled Orders
+                </span>
+              </div>
+
+              {/* Table */}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.875rem" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                        Order #
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                        Title / Customer
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase" }}>
+                        Sales Origin & Lineage
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", textAlign: "right" }}>
+                        Order Amount
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", textAlign: "center" }}>
+                        Stage
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", textAlign: "center" }}>
+                        Billing Status
+                      </th>
+                      <th style={{ padding: "12px 16px", fontWeight: 600, color: "#475569", fontSize: "0.75rem", textTransform: "uppercase", textAlign: "center" }}>
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoadingAwaitingOrders ? (
+                      <tr>
+                        <td colSpan={7} style={{ padding: "3rem", textAlign: "center", color: "#94A3B8" }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                            <RefreshCw size={24} className="spin-animation" style={{ color: "#7C3AED" }} />
+                            <span>Loading unbilled orders...</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : awaitingOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} style={{ padding: "4rem 2rem", textAlign: "center", color: "#64748B" }}>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                            <CheckCircle2 size={36} style={{ color: "#059669" }} />
+                            <div style={{ fontWeight: 600, fontSize: "1rem", color: "#1E293B" }}>
+                              No Orders Awaiting Invoice
+                            </div>
+                            <div style={{ fontSize: "0.875rem", color: "#64748B" }}>
+                              All accepted orders have had invoices generated.
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      awaitingOrders.map((ord) => (
+                        <tr
+                          key={ord.id}
+                          style={{
+                            borderBottom: "1px solid #F1F5F9",
+                            transition: "background-color 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                        >
+                          {/* Order # */}
+                          <td style={{ padding: "14px 16px", whiteSpace: "nowrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => router.push(`/orders?search=${encodeURIComponent(ord.order_number)}`)}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                padding: 0,
+                                cursor: "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                color: "#2563EB",
+                                fontWeight: 600,
+                                fontSize: "0.875rem",
+                                textDecoration: "underline",
+                              }}
+                            >
+                              <span>{ord.order_number}</span>
+                              <ExternalLink size={12} />
+                            </button>
+                          </td>
+
+                          {/* Title / Customer */}
+                          <td style={{ padding: "14px 16px" }}>
+                            <div style={{ fontWeight: 600, color: "#1E293B" }}>{ord.title}</div>
+                            <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                              Customer: {ord.customer?.name || ord.customer?.company || "—"}
+                            </div>
+                          </td>
+
+                          {/* Lineage */}
+                          <td style={{ padding: "14px 16px" }}>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {ord.lead_number && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/leads?search=${encodeURIComponent(ord.lead_number!)}`);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "2px",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 600,
+                                    backgroundColor: "#EFF6FF",
+                                    color: "#1D4ED8",
+                                    border: "1px solid #DBEAFE",
+                                    cursor: "pointer",
+                                  }}
+                                  title={`Origin Lead: ${ord.lead_number}`}
+                                >
+                                  <span>Lead: {ord.lead_number}</span>
+                                </button>
+                              )}
+                              {ord.deal?.deal_number && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/deals?search=${encodeURIComponent(ord.deal!.deal_number)}`);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "2px",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 600,
+                                    backgroundColor: "#F0FDF4",
+                                    color: "#15803D",
+                                    border: "1px solid #DCFCE7",
+                                    cursor: "pointer",
+                                  }}
+                                  title={`Origin Deal: ${ord.deal.deal_number}`}
+                                >
+                                  <span>Deal: {ord.deal.deal_number}</span>
+                                </button>
+                              )}
+                              {ord.quotation?.quotation_number && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    router.push(`/quotations?search=${encodeURIComponent(ord.quotation!.quotation_number)}`);
+                                  }}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "2px",
+                                    padding: "1px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 600,
+                                    backgroundColor: "#FEF3C7",
+                                    color: "#92400E",
+                                    border: "1px solid #FDE68A",
+                                    cursor: "pointer",
+                                  }}
+                                  title={`Origin Quotation: ${ord.quotation.quotation_number}`}
+                                >
+                                  <span>Quote: {ord.quotation.quotation_number}</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Order Amount */}
+                          <td style={{ padding: "14px 16px", textAlign: "right", whiteSpace: "nowrap", fontWeight: 700, color: "#1E293B" }}>
+                            {formatINR(ord.total_amount)}
+                          </td>
+
+                          {/* Stage */}
+                          <td style={{ padding: "14px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "3px 10px",
+                                borderRadius: "12px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                backgroundColor: "#F1F5F9",
+                                color: "#475569",
+                                border: "1px solid #CBD5E1",
+                              }}
+                            >
+                              {ord.stage}
+                            </span>
+                          </td>
+
+                          {/* Billing Status Badge: Awaiting Invoice */}
+                          <td style={{ padding: "14px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                padding: "4px 10px",
+                                borderRadius: "12px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                backgroundColor: "#F5F3FF",
+                                color: "#6D28D9",
+                                border: "1px solid #DDD6FE",
+                              }}
+                            >
+                              <Clock size={12} />
+                              <span>Awaiting Invoice</span>
+                            </span>
+                          </td>
+
+                          {/* Action */}
+                          <td style={{ padding: "14px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => router.push("/invoices")}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                border: "none",
+                                backgroundColor: "#0D9488",
+                                color: "#FFFFFF",
+                                fontSize: "0.8125rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                boxShadow: "0 1px 3px rgba(13, 148, 136, 0.2)",
+                              }}
+                            >
+                              <Plus size={14} />
+                              <span>Create Invoice</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1635,7 +2414,7 @@ export default function PaymentsPage() {
             inset: 0,
             backgroundColor: "rgba(15, 23, 42, 0.65)",
             backdropFilter: "blur(4px)",
-            zIndex: 1000,
+            zIndex: 10000,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1647,19 +2426,20 @@ export default function PaymentsPage() {
               backgroundColor: "#FFFFFF",
               borderRadius: "16px",
               width: "100%",
-              maxWidth: "680px",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.3)",
+              maxWidth: "880px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
               display: "flex",
               flexDirection: "column",
-              maxHeight: "92vh",
+              height: "90vh",
+              maxHeight: "900px",
               overflow: "hidden",
             }}
           >
-            {/* Modal Header with Print Button */}
+            {/* Modal Header with Print & Download Buttons */}
             <div
               className="no-print"
               style={{
-                padding: "1rem 1.5rem",
+                padding: "0.875rem 1.5rem",
                 borderBottom: "1px solid #E2E8F0",
                 display: "flex",
                 alignItems: "center",
@@ -1670,12 +2450,58 @@ export default function PaymentsPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <Receipt size={20} style={{ color: "#0D9488" }} />
                 <span style={{ fontWeight: 700, fontSize: "1rem", color: "#0F172A" }}>
-                  Payment Receipt Voucher
+                  Payment Receipt Voucher (PAY-{String(selectedReceiptPayment.id).padStart(5, "0")})
                 </span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <button
-                  onClick={() => window.print()}
+                  id="btn-download-receipt-pdf"
+                  onClick={async () => {
+                    if (!selectedReceiptPayment) return;
+                    setIsDownloadingPdf(true);
+                    try {
+                      await downloadPdfFile(
+                        `/payments/${selectedReceiptPayment.id}/pdf?action=download`,
+                        `Payment-Receipt-PAY-${String(selectedReceiptPayment.id).padStart(5, "0")}.pdf`
+                      );
+                    } catch (err: any) {
+                      alert("Failed to download PDF: " + (err?.message || "Unknown error"));
+                    } finally {
+                      setIsDownloadingPdf(false);
+                    }
+                  }}
+                  disabled={isDownloadingPdf || isPdfLoading}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "7px 14px",
+                    borderRadius: "6px",
+                    backgroundColor: "#FFFFFF",
+                    color: "#0F172A",
+                    border: "1px solid #CBD5E1",
+                    fontWeight: 600,
+                    fontSize: "0.8125rem",
+                    cursor: (isDownloadingPdf || isPdfLoading) ? "not-allowed" : "pointer",
+                    opacity: (isDownloadingPdf || isPdfLoading) ? 0.7 : 1,
+                  }}
+                >
+                  {isDownloadingPdf ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                  <span>Download PDF</span>
+                </button>
+                <button
+                  id="btn-print-receipt-pdf"
+                  onClick={() => {
+                    const iframe = document.getElementById("payment-receipt-pdf-frame") as HTMLIFrameElement;
+                    if (iframe && iframe.contentWindow) {
+                      iframe.contentWindow.focus();
+                      iframe.contentWindow.print();
+                    } else if (pdfBlobUrl) {
+                      const printWin = window.open(pdfBlobUrl, "_blank");
+                      printWin?.print();
+                    }
+                  }}
+                  disabled={isPdfLoading || !pdfBlobUrl}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1687,13 +2513,15 @@ export default function PaymentsPage() {
                     border: "none",
                     fontWeight: 600,
                     fontSize: "0.8125rem",
-                    cursor: "pointer",
+                    cursor: (isPdfLoading || !pdfBlobUrl) ? "not-allowed" : "pointer",
+                    opacity: (isPdfLoading || !pdfBlobUrl) ? 0.7 : 1,
                   }}
                 >
                   <Printer size={14} />
-                  <span>Print Receipt</span>
+                  <span>Print Document</span>
                 </button>
                 <button
+                  id="btn-close-receipt-modal"
                   onClick={() => setIsReceiptModalOpen(false)}
                   style={{
                     background: "none",
@@ -1708,202 +2536,63 @@ export default function PaymentsPage() {
               </div>
             </div>
 
-            {/* Printable Receipt Body */}
+            {/* Maroto PDF Viewer Body */}
             <div
-              id="printable-receipt"
               style={{
-                padding: "2rem",
-                overflowY: "auto",
+                flex: 1,
                 display: "flex",
                 flexDirection: "column",
-                gap: "1.5rem",
-                color: "#1E293B",
-                backgroundColor: "#FFFFFF",
+                position: "relative",
+                backgroundColor: "#525659",
+                overflow: "hidden",
               }}
             >
-              {/* Receipt Header & Company Details */}
-              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "2px solid #0D9488", paddingBottom: "1.25rem" }}>
-                <div>
-                  <h2 style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0F172A", margin: 0 }}>
-                    {companyProfile?.company_name || "BizCopilot Technologies Pvt. Ltd."}
-                  </h2>
-                  <div style={{ fontSize: "0.8125rem", color: "#64748B", marginTop: "4px" }}>
-                    {companyProfile?.address || "Level 4, TechHub Towers, Cyber City, Pune, MH"}
-                  </div>
-                  {companyProfile?.gst_number && (
-                    <div style={{ fontSize: "0.8125rem", color: "#475569", fontWeight: 600, marginTop: "2px" }}>
-                      GSTIN: {companyProfile.gst_number}
-                    </div>
-                  )}
-                  {companyProfile?.email && (
-                    <div style={{ fontSize: "0.8125rem", color: "#64748B" }}>
-                      Email: {companyProfile.email}
-                    </div>
-                  )}
+              {isPdfLoading ? (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "12px",
+                    backgroundColor: "#F8FAFC",
+                  }}
+                >
+                  <Loader2 size={36} className="animate-spin" style={{ color: "#0D9488" }} />
+                  <p style={{ margin: 0, fontSize: "0.875rem", color: "#64748B", fontWeight: 500 }}>
+                    Generating Payment Receipt PDF via Maroto...
+                  </p>
                 </div>
-
-                <div style={{ textAlign: "right" }}>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      backgroundColor: "#F0FDFA",
-                      color: "#0F766E",
-                      border: "1px solid #99F6E4",
-                      padding: "4px 12px",
-                      borderRadius: "6px",
-                      fontSize: "0.8125rem",
-                      fontWeight: 700,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    Payment Receipt
-                  </span>
-                  <div style={{ marginTop: "8px", fontSize: "0.875rem", fontWeight: 700, color: "#0F172A" }}>
-                    Voucher #: PAY-{String(selectedReceiptPayment.id).padStart(5, "0")}
-                  </div>
-                  <div style={{ fontSize: "0.8125rem", color: "#64748B", marginTop: "2px" }}>
-                    Date: {new Date(selectedReceiptPayment.payment_date).toLocaleDateString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </div>
+              ) : pdfBlobUrl ? (
+                <iframe
+                  id="payment-receipt-pdf-frame"
+                  src={pdfBlobUrl}
+                  title="Payment Receipt PDF Preview"
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                    backgroundColor: "#525659",
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "12px",
+                    backgroundColor: "#F8FAFC",
+                  }}
+                >
+                  <p style={{ margin: 0, fontSize: "0.875rem", color: "#EF4444", fontWeight: 500 }}>
+                    Failed to load receipt PDF.
+                  </p>
                 </div>
-              </div>
-
-              {/* Customer & Invoice Link Info */}
-              <div
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  borderRadius: "10px",
-                  padding: "1rem 1.25rem",
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                  border: "1px solid #E2E8F0",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "0.6875rem", textTransform: "uppercase", fontWeight: 700, color: "#64748B" }}>
-                    Received From
-                  </div>
-                  <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A", marginTop: "4px" }}>
-                    {selectedReceiptPayment.customer_name}
-                  </div>
-                  <div style={{ fontSize: "0.8125rem", color: "#64748B", marginTop: "2px" }}>
-                    Customer ID: #{selectedReceiptPayment.customer_id}
-                  </div>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: "0.6875rem", textTransform: "uppercase", fontWeight: 700, color: "#64748B" }}>
-                    Against Invoice Details
-                  </div>
-                  <div style={{ fontSize: "1rem", fontWeight: 700, color: "#2563EB", marginTop: "4px" }}>
-                    {selectedReceiptPayment.invoice_number}
-                  </div>
-                  <div style={{ fontSize: "0.8125rem", color: "#64748B", marginTop: "2px" }}>
-                    Total Invoice Amount: {formatINR(selectedReceiptPayment.invoice_grand_total)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment Details Table */}
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
-                <tbody>
-                  <tr style={{ borderBottom: "1px solid #E2E8F0" }}>
-                    <td style={{ padding: "10px 0", color: "#64748B", fontWeight: 500 }}>Payment Method</td>
-                    <td style={{ padding: "10px 0", fontWeight: 700, textAlign: "right", color: "#0F172A" }}>
-                      {selectedReceiptPayment.payment_method}
-                    </td>
-                  </tr>
-                  {selectedReceiptPayment.reference_number && (
-                    <tr style={{ borderBottom: "1px solid #E2E8F0" }}>
-                      <td style={{ padding: "10px 0", color: "#64748B", fontWeight: 500 }}>Reference / UTR / Cheque #</td>
-                      <td style={{ padding: "10px 0", fontWeight: 600, textAlign: "right", fontFamily: "monospace", color: "#0F172A" }}>
-                        {selectedReceiptPayment.reference_number}
-                      </td>
-                    </tr>
-                  )}
-                  {selectedReceiptPayment.notes && (
-                    <tr style={{ borderBottom: "1px solid #E2E8F0" }}>
-                      <td style={{ padding: "10px 0", color: "#64748B", fontWeight: 500 }}>Remarks / Notes</td>
-                      <td style={{ padding: "10px 0", textAlign: "right", color: "#475569" }}>
-                        {selectedReceiptPayment.notes}
-                      </td>
-                    </tr>
-                  )}
-                  <tr style={{ borderBottom: "1px solid #E2E8F0" }}>
-                    <td style={{ padding: "10px 0", color: "#64748B", fontWeight: 500 }}>Recorded By</td>
-                    <td style={{ padding: "10px 0", textAlign: "right", color: "#0F172A", fontWeight: 600 }}>
-                      {selectedReceiptPayment.recorder?.name || "System Admin"}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Amount Highlight Box */}
-              <div
-                style={{
-                  backgroundColor: "#F0FDF4",
-                  border: "1px solid #BBF7D0",
-                  borderRadius: "12px",
-                  padding: "1.25rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700, color: "#166534" }}>
-                    Amount Received
-                  </div>
-                  <div style={{ fontSize: "0.8125rem", color: "#15803D", marginTop: "2px", fontStyle: "italic" }}>
-                    {numberToWordsINR(selectedReceiptPayment.amount)}
-                  </div>
-                </div>
-                <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#15803D" }}>
-                  {formatINR(selectedReceiptPayment.amount)}
-                </div>
-              </div>
-
-              {/* Invoice Status Snapshot */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                  fontSize: "0.8125rem",
-                  color: "#64748B",
-                  paddingTop: "0.5rem",
-                }}
-              >
-                <div>
-                  Updated Invoice Status:{" "}
-                  <strong style={{ color: "#0F172A" }}>{selectedReceiptPayment.invoice_status}</strong>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  Remaining Balance Outstanding:{" "}
-                  <strong style={{ color: selectedReceiptPayment.invoice_remaining_balance > 0 ? "#D97706" : "#059669" }}>
-                    {formatINR(selectedReceiptPayment.invoice_remaining_balance)}
-                  </strong>
-                </div>
-              </div>
-
-              {/* Signatures / Stamp Footer */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "2.5rem", paddingTop: "1.5rem", borderTop: "1px dashed #CBD5E1" }}>
-                <div style={{ fontSize: "0.75rem", color: "#94A3B8" }}>
-                  This is a computer-generated receipt voucher.<br />
-                  Generated via BizCopilot Universal CRM.
-                </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ width: "160px", borderBottom: "1px solid #94A3B8", marginBottom: "6px" }} />
-                  <span style={{ fontSize: "0.75rem", color: "#475569", fontWeight: 600 }}>
-                    Authorized Signatory
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -2011,6 +2700,409 @@ export default function PaymentsPage() {
                 ) : (
                   <span>Yes, Void Payment</span>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ========================================================================= */}
+      {/* PAYMENT DETAILS SLIDE-OVER DRAWER                                         */}
+      {/* ========================================================================= */}
+      {isDetailsDrawerOpen && selectedPaymentForDrawer && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9000,
+            display: "flex",
+            justifyContent: "flex-end",
+            backgroundColor: "rgba(15, 23, 42, 0.4)",
+            backdropFilter: "blur(2px)",
+          }}
+          onClick={handleClosePaymentDrawer}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "540px",
+              backgroundColor: "#FFFFFF",
+              height: "100%",
+              boxShadow: "-10px 0 30px rgba(0,0,0,0.15)",
+              display: "flex",
+              flexDirection: "column",
+              borderLeft: "1px solid #E2E8F0",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Drawer Header */}
+            <div
+              style={{
+                padding: "20px 24px",
+                borderBottom: "1px solid #E2E8F0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "#CCFBF1",
+                    color: "#0F766E",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Receipt size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 800, color: "#0F172A" }}>
+                    PAY-{String(selectedPaymentForDrawer.id).padStart(5, "0")}
+                  </h3>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
+                    Payment Details & Complete Sales Lineage
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={handleClosePaymentDrawer}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#94A3B8",
+                  cursor: "pointer",
+                  padding: "6px",
+                  borderRadius: "6px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Drawer Scrollable Content */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              {/* Highlight Amount Card */}
+              <div
+                style={{
+                  backgroundColor: "#F0FDFA",
+                  borderRadius: "12px",
+                  border: "1px solid #99F6E4",
+                  padding: "20px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0D9488", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Total Amount Received
+                  </div>
+                  <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0F766E", marginTop: "4px" }}>
+                    {formatINR(selectedPaymentForDrawer.amount)}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "4px" }}>
+                    Paid on {new Date(selectedPaymentForDrawer.payment_date).toLocaleDateString("en-IN", {
+                      day: "2-digit",
+                      month: "long",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </div>
+                </div>
+                <span
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: "999px",
+                    fontSize: "0.8125rem",
+                    fontWeight: 700,
+                    backgroundColor: "#CCFBF1",
+                    color: "#0F766E",
+                    border: "1px solid #5EEAD4",
+                  }}
+                >
+                  {selectedPaymentForDrawer.payment_method}
+                </span>
+              </div>
+
+              {/* Transaction & Reference Details */}
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
+                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "12px" }}>
+                  Transaction Reference & Recording
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Reference / UTR / Cheque</div>
+                    <div style={{ fontSize: "0.875rem", fontWeight: 700, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      {selectedPaymentForDrawer.reference_number ? (
+                        <>
+                          <span style={{ fontFamily: "monospace" }}>{selectedPaymentForDrawer.reference_number}</span>
+                          <button
+                            onClick={() => handleCopyRef(selectedPaymentForDrawer.reference_number!)}
+                            title="Copy"
+                            style={{ background: "none", border: "none", cursor: "pointer", color: "#0D9488", padding: "2px" }}
+                          >
+                            <Copy size={13} />
+                          </button>
+                        </>
+                      ) : (
+                        <span style={{ color: "#94A3B8" }}>— None provided —</span>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Recorded By</div>
+                    <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <UserIcon size={14} color="#64748B" />
+                      <span>{selectedPaymentForDrawer.recorder?.name || selectedPaymentForDrawer.recorded_by || "System Admin"}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Customer Information */}
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
+                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "8px" }}>
+                  Customer
+                </div>
+                <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A" }}>
+                  {selectedPaymentForDrawer.customer_name}
+                </div>
+              </div>
+
+              {/* Complete Sales Lineage Tracking */}
+              <div style={{ backgroundColor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
+                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "12px" }}>
+                  Connected Sales Lineage
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {/* Linked Invoice */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                    <div>
+                      <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>LINKED INVOICE</div>
+                      <div style={{ fontWeight: 700, color: "#2563EB", fontSize: "0.875rem" }}>
+                        {selectedPaymentForDrawer.invoice_number}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => router.push(`/invoices?search=${encodeURIComponent(selectedPaymentForDrawer.invoice_number)}`)}
+                      style={{
+                        padding: "5px 10px",
+                        backgroundColor: "#EFF6FF",
+                        border: "1px solid #BFDBFE",
+                        borderRadius: "6px",
+                        color: "#1D4ED8",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                      }}
+                    >
+                      <span>View Invoice</span>
+                      <ExternalLink size={12} />
+                    </button>
+                  </div>
+
+                  {/* Linked Order */}
+                  {selectedPaymentForDrawer.order_number && (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                      <div>
+                        <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>LINKED ORDER</div>
+                        <div style={{ fontWeight: 700, color: "#7E22CE", fontSize: "0.875rem" }}>
+                          {selectedPaymentForDrawer.order_number}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => router.push(`/orders?search=${encodeURIComponent(selectedPaymentForDrawer.order_number!)}`)}
+                        style={{
+                          padding: "5px 10px",
+                          backgroundColor: "#FAF5FF",
+                          border: "1px solid #E9D5FF",
+                          borderRadius: "6px",
+                          color: "#7E22CE",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <span>View Order</span>
+                        <ExternalLink size={12} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Origin Quotation */}
+                  {selectedPaymentForDrawer.quotation_number && (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                      <div>
+                        <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>ACCEPTED QUOTATION</div>
+                        <div style={{ fontWeight: 700, color: "#92400E", fontSize: "0.875rem" }}>
+                          {selectedPaymentForDrawer.quotation_number}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => router.push(`/quotations?search=${encodeURIComponent(selectedPaymentForDrawer.quotation_number!)}`)}
+                        style={{
+                          padding: "5px 10px",
+                          backgroundColor: "#FEF3C7",
+                          border: "1px solid #FDE68A",
+                          borderRadius: "6px",
+                          color: "#92400E",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <span>View Quote</span>
+                        <ExternalLink size={12} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Origin Deal */}
+                  {selectedPaymentForDrawer.deal_number && (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                      <div>
+                        <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>ORIGIN DEAL</div>
+                        <div style={{ fontWeight: 700, color: "#15803D", fontSize: "0.875rem" }}>
+                          {selectedPaymentForDrawer.deal_number}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => router.push(`/deals?search=${encodeURIComponent(selectedPaymentForDrawer.deal_number!)}`)}
+                        style={{
+                          padding: "5px 10px",
+                          backgroundColor: "#F0FDF4",
+                          border: "1px solid #DCFCE7",
+                          borderRadius: "6px",
+                          color: "#15803D",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <span>View Deal</span>
+                        <ExternalLink size={12} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Origin Lead */}
+                  {selectedPaymentForDrawer.lead_number && (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                      <div>
+                        <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>ORIGIN LEAD</div>
+                        <div style={{ fontWeight: 700, color: "#1D4ED8", fontSize: "0.875rem" }}>
+                          #{selectedPaymentForDrawer.lead_number}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => router.push(`/leads?search=${encodeURIComponent(selectedPaymentForDrawer.lead_number!)}`)}
+                        style={{
+                          padding: "5px 10px",
+                          backgroundColor: "#EFF6FF",
+                          border: "1px solid #DBEAFE",
+                          borderRadius: "6px",
+                          color: "#1D4ED8",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                      >
+                        <span>View Lead</span>
+                        <ExternalLink size={12} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment Notes */}
+              {selectedPaymentForDrawer.notes && (
+                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
+                  <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "6px" }}>
+                    Payment Remarks / Notes
+                  </div>
+                  <div style={{ fontSize: "0.875rem", color: "#334155", lineHeight: 1.5 }}>
+                    {selectedPaymentForDrawer.notes}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Drawer Footer Actions */}
+            <div
+              style={{
+                padding: "16px 24px",
+                borderTop: "1px solid #E2E8F0",
+                backgroundColor: "#F8FAFC",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={handleClosePaymentDrawer}
+                style={{
+                  padding: "9px 18px",
+                  borderRadius: "8px",
+                  border: "1px solid #CBD5E1",
+                  backgroundColor: "#FFFFFF",
+                  color: "#475569",
+                  fontWeight: 600,
+                  fontSize: "0.875rem",
+                  cursor: "pointer",
+                }}
+              >
+                Close Drawer
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedReceiptPayment(selectedPaymentForDrawer);
+                  setIsReceiptModalOpen(true);
+                }}
+                style={{
+                  padding: "9px 18px",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: "#0D9488",
+                  color: "#FFFFFF",
+                  fontWeight: 700,
+                  fontSize: "0.875rem",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  boxShadow: "0 2px 6px rgba(13, 148, 136, 0.25)",
+                }}
+              >
+                <Printer size={15} />
+                <span>Print Payment Receipt</span>
               </button>
             </div>
           </div>

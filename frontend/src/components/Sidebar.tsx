@@ -19,10 +19,11 @@ import {
   Receipt,
   CreditCard,
   LayoutDashboard,
+  Boxes,
 } from "lucide-react";
 import { User } from "@/lib/api";
 
-export type SidebarTab = "dashboard" | "leads" | "deals" | "quotations" | "orders" | "invoices" | "payments" | "products" | "follow-ups" | "company" | "api-keys" | "api-docs" | "profile";
+export type SidebarTab = "dashboard" | "leads" | "deals" | "quotations" | "orders" | "invoices" | "payments" | "inventory" | "products" | "follow-ups" | "company" | "api-keys" | "api-docs" | "profile";
 
 interface SidebarProps {
   activeTab: SidebarTab;
@@ -34,6 +35,7 @@ interface SidebarProps {
   ordersCount?: number;
   invoicesCount?: number;
   paymentsCount?: number;
+  inventoryCount?: number;
   remindersCount?: number;
   productsCount?: number;
   followUpsCount?: number;
@@ -54,6 +56,7 @@ export default function Sidebar({
   ordersCount,
   invoicesCount,
   paymentsCount,
+  inventoryCount,
   remindersCount,
   productsCount,
   followUpsCount,
@@ -112,6 +115,13 @@ export default function Sidebar({
       icon: CreditCard,
       domId: "sidebar-nav-payments",
       badge: paymentsCount !== undefined ? paymentsCount : null,
+    },
+    {
+      id: "inventory" as SidebarTab,
+      label: "Inventory",
+      icon: Boxes,
+      domId: "sidebar-nav-inventory",
+      badge: inventoryCount !== undefined ? inventoryCount : null,
     },
     {
       id: "products" as SidebarTab,

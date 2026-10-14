@@ -645,8 +645,8 @@ export const leadsApi = {
       if (params.include_deleted) query.append("include_deleted", "true");
       if (params.sort_by) query.append("sort_by", params.sort_by);
       if (params.sort_order) query.append("sort_order", params.sort_order);
-      if (params.page) query.append("page", String(params.page));
-      if (params.limit) query.append("limit", String(params.limit));
+      if (params.page !== undefined && params.page > 0) query.append("page", String(params.page));
+      if (params.limit !== undefined) query.append("limit", String(params.limit));
     }
     const queryString = query.toString() ? `?${query.toString()}` : "";
     return request<LeadListResponse>(`/leads${queryString}`);
@@ -1458,6 +1458,11 @@ export interface Product {
   tax_rate: number;
   hsn_sac?: string | null;
   status: "active" | "inactive";
+  current_stock?: number;
+  reserved_stock?: number;
+  available_stock?: number;
+  sold_quantity?: number;
+  low_stock_threshold?: number;
   workspace_id: number;
   created_by_id?: number | null;
   creator?: LeadUserSummary | null;
@@ -1477,6 +1482,8 @@ export interface ProductCreateInput {
   tax_rate?: number;
   hsn_sac?: string;
   status?: "active" | "inactive";
+  initial_stock?: number;
+  low_stock_threshold?: number;
 }
 
 export interface ProductUpdateInput {
@@ -1490,6 +1497,7 @@ export interface ProductUpdateInput {
   tax_rate?: number;
   hsn_sac?: string;
   status?: "active" | "inactive";
+  low_stock_threshold?: number;
 }
 
 export interface ProductListResponse {
@@ -1518,8 +1526,8 @@ export const productsApi = {
     if (params?.status && params.status !== "all") sp.append("status", params.status);
     if (params?.sort_by) sp.append("sort_by", params.sort_by);
     if (params?.sort_order) sp.append("sort_order", params.sort_order);
-    if (params?.page) sp.append("page", params.page.toString());
-    if (params?.limit) sp.append("limit", params.limit.toString());
+    if (params?.page !== undefined && params.page > 0) sp.append("page", params.page.toString());
+    if (params?.limit !== undefined) sp.append("limit", params.limit.toString());
     const q = sp.toString() ? `?${sp.toString()}` : "";
     return request<ProductListResponse>(`/products${q}`);
   },
@@ -1867,12 +1875,14 @@ export const companyApi = {
 
 export type OrderStage =
   | "Not Started"
+  | "Confirmed"
   | "Planning"
   | "In Progress"
   | "Client Review"
   | "Revision/Changes"
   | "Delivered"
-  | "Completed";
+  | "Completed"
+  | "Cancelled";
 
 export type OrderPaymentStatus = "Unpaid" | "Partially Paid" | "Paid";
 export type OrderInvoiceStatus = "Not Invoiced" | "Invoiced";
@@ -1930,6 +1940,7 @@ export interface Order {
   stage: OrderStage | string;
   payment_status: OrderPaymentStatus | string;
   invoice_status: OrderInvoiceStatus | string;
+  inventory_status?: "unreserved" | "reserved" | "deducted";
   total_amount: number;
   currency: string;
   start_date?: string | null;
@@ -2375,6 +2386,7 @@ export interface PaymentLedgerItem {
   notes?: string;
   recorded_by_id?: number;
   recorder?: LeadUserSummary;
+  recorded_by?: string;
   invoice_grand_total: number;
   invoice_amount_paid: number;
   invoice_remaining_balance: number;
@@ -2474,6 +2486,20 @@ export const paymentsApi = {
 
   getReceipt: async (id: number): Promise<PaymentReceiptDetail> => {
     return request<PaymentReceiptDetail>(`/payments/${id}/receipt`);
+  },
+
+  getPdfBlob: async (id: number): Promise<Blob> => {
+    const token = getToken();
+    const base = getApiBaseUrl();
+    const res = await fetch(`${base}/payments/${id}/pdf?action=inline`, {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Failed to load payment receipt PDF (${res.status}): ${err}`);
+    }
+    return res.blob();
   },
 };
 
@@ -2649,6 +2675,120 @@ export function printPdfBlob(blob: Blob): void {
     }, 500);
   };
 }
+
+// ==========================================
+// INVENTORY MANAGEMENT API & INTERFACES
+// ==========================================
+
+export interface InventoryStats {
+  total_products: number;
+  total_units: number;
+  total_reserved: number;
+  total_available: number;
+  low_stock_count: number;
+  out_of_stock_count: number;
+}
+
+export interface StockMovement {
+  id: number;
+  product_id: number;
+  product?: {
+    id: number;
+    name: string;
+    sku: string;
+    category: string;
+    unit: string;
+  } | null;
+  movement_type: "stock_in" | "reserve" | "release_reservation" | "dispatch" | "return" | "adjustment";
+  quantity: number;
+  reference_type?: string | null;
+  reference_id?: string | null;
+  previous_stock: number;
+  new_stock: number;
+  previous_reserved: number;
+  new_reserved: number;
+  notes?: string | null;
+  condition: "good" | "damaged" | "scrap";
+  workspace_id: number;
+  created_by_id?: number | null;
+  creator?: { id: number; name: string; email: string } | null;
+  created_at: string;
+}
+
+export interface StockMovementListResponse {
+  items: StockMovement[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
+export interface StockInInput {
+  product_id: number;
+  quantity: number;
+  notes?: string;
+}
+
+export interface StockAdjustmentInput {
+  product_id: number;
+  adjustment_type: "set" | "delta";
+  quantity: number;
+  reason: string;
+  notes?: string;
+}
+
+export interface StockReturnInput {
+  product_id: number;
+  order_id?: number;
+  quantity: number;
+  restock: boolean;
+  condition?: "good" | "damaged" | "scrap";
+  reason: string;
+  notes?: string;
+}
+
+export const inventoryApi = {
+  getStats: async (): Promise<InventoryStats> => {
+    return request<InventoryStats>("/inventory/stats");
+  },
+  listMovements: async (params?: {
+    product_id?: number;
+    movement_type?: string;
+    reference_type?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<StockMovementListResponse> => {
+    const sp = new URLSearchParams();
+    if (params?.product_id) sp.append("product_id", params.product_id.toString());
+    if (params?.movement_type && params.movement_type !== "all") sp.append("movement_type", params.movement_type);
+    if (params?.reference_type && params.reference_type !== "all") sp.append("reference_type", params.reference_type);
+    if (params?.page) sp.append("page", params.page.toString());
+    if (params?.limit) sp.append("limit", params.limit.toString());
+    const q = sp.toString() ? `?${sp.toString()}` : "";
+    return request<StockMovementListResponse>(`/inventory/movements${q}`);
+  },
+  getAlerts: async (): Promise<Product[]> => {
+    return request<Product[]>("/inventory/alerts");
+  },
+  stockIn: async (data: StockInInput): Promise<StockMovement> => {
+    return request<StockMovement>("/inventory/stock-in", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  adjust: async (data: StockAdjustmentInput): Promise<StockMovement> => {
+    return request<StockMovement>("/inventory/adjust", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  returnStock: async (data: StockReturnInput): Promise<StockMovement> => {
+    return request<StockMovement>("/inventory/return", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+};
 
 
 

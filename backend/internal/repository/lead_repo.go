@@ -473,7 +473,7 @@ func (r *LeadRepository) List(ctx context.Context, f ListFilter) (*models.LeadLi
 	if f.Page <= 0 {
 		f.Page = 1
 	}
-	if f.Limit <= 0 || f.Limit > 200 {
+	if f.Limit > 200 {
 		f.Limit = 20
 	}
 
@@ -564,7 +564,15 @@ func (r *LeadRepository) List(ctx context.Context, f ListFilter) (*models.LeadLi
 		sortOrder = "ASC"
 	}
 
-	offset := (f.Page - 1) * f.Limit
+	var limitClause string
+	if f.Limit > 0 {
+		offset := (f.Page - 1) * f.Limit
+		if offset < 0 {
+			offset = 0
+		}
+		limitClause = fmt.Sprintf("LIMIT %d OFFSET %d", f.Limit, offset)
+	}
+
 	selectQuery := fmt.Sprintf(`
 		SELECT number, name, email, phone, requirement, source, city, status,
 		       owner_id, score, lost_reason, tags, follow_up_date, follow_up_type,
@@ -573,8 +581,8 @@ func (r *LeadRepository) List(ctx context.Context, f ListFilter) (*models.LeadLi
 		FROM leads
 		WHERE %s
 		ORDER BY %s %s
-		LIMIT %d OFFSET %d
-	`, whereSQL, sortField, sortOrder, f.Limit, offset)
+		%s
+	`, whereSQL, sortField, sortOrder, limitClause)
 
 	rows, err := r.db.Pool.Query(ctx, selectQuery, args...)
 	if err != nil {
@@ -621,13 +629,22 @@ func (r *LeadRepository) List(ctx context.Context, f ListFilter) (*models.LeadLi
 	viewCounts["overdue"] = cOverdue
 	viewCounts["trash"] = cTrash
 
-	pages := (total + f.Limit - 1) / f.Limit
+	pages := 1
+	effectiveLimit := f.Limit
+	if f.Limit > 0 {
+		pages = (total + f.Limit - 1) / f.Limit
+		if pages < 1 {
+			pages = 1
+		}
+	} else {
+		effectiveLimit = total
+	}
 
 	return &models.LeadListResponse{
 		Items:      items,
 		Total:      total,
 		Page:       f.Page,
-		Limit:      f.Limit,
+		Limit:      effectiveLimit,
 		Pages:      pages,
 		ViewCounts: viewCounts,
 	}, nil

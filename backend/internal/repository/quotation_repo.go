@@ -332,7 +332,7 @@ func (r *QuotationRepository) Create(ctx context.Context, input models.Quotation
 	// 5. Automatically advance Deal pipeline stage to "Quotation Preparation" if in early stage
 	if deal.Stage != nil {
 		curStageName := strings.ToLower(strings.TrimSpace(deal.Stage.Name))
-		if curStageName == "new opportunity" || curStageName == "requirement discussion" || curStageName == "lead in" || curStageName == "contact made" {
+		if curStageName == "new opportunity" || curStageName == "requirement discussion" || curStageName == "lead in" || curStageName == "contact made" || curStageName == "discovery" {
 			// Find "Quotation Preparation" stage in this pipeline
 			var prepStageID int
 			err := r.db.Pool.QueryRow(ctx, `

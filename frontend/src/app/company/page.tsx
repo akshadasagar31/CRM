@@ -280,6 +280,7 @@ export default function CompanyPage() {
         onSelectTab={(tab) => {
           setActiveSidebarTab(tab);
           if (tab === "leads") router.push("/leads");
+          else if (tab === "inventory") router.push("/inventory");
           else if (tab === "deals") router.push("/deals");
           else if (tab === "quotations") router.push("/quotations");
           else if (tab === "orders") router.push("/orders");

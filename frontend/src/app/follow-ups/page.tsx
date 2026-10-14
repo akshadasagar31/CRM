@@ -1775,6 +1775,7 @@ export default function FollowUpsPage({
         activeTab="follow-ups"
         onSelectTab={(tab) => {
           if (tab === "leads") router.push("/leads");
+          else if (tab === "inventory") router.push("/inventory");
           else if (tab === "deals") router.push("/deals");
           else if (tab === "products") router.push("/products");
           else if (tab === "quotations") router.push("/quotations");

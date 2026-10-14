@@ -954,4 +954,192 @@ input, select, textarea {
   cursor: not-allowed;
 }
 
+/* ============================================================= */
+/* Landing Page Enterprise Overview & Interactive Components      */
+/* ============================================================= */
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 159, 154, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(0, 159, 154, 0);
+  }
+}
+
+.pulse-active-ring {
+  animation: pulseGlow 2.5s infinite;
+}
+
+.workflow-node-btn {
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+}
+
+.workflow-node-btn:hover {
+  transform: translateY(-2px);
+}
+
+.bento-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(11, 23, 48, 0.04);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.bento-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px -8px rgba(11, 23, 48, 0.1), 0 0 0 1px rgba(0, 159, 154, 0.2);
+}
+
+.category-filter-btn {
+  padding: 0.45rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  background-color: #FFFFFF;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.category-filter-btn:hover {
+  border-color: var(--primary-teal);
+  color: var(--text-primary);
+}
+
+.category-filter-btn.active {
+  background: var(--primary-teal);
+  border-color: var(--primary-teal);
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 159, 154, 0.3);
+}
+
+.architecture-card {
+  background: #FFFFFF;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 1.75rem;
+  box-shadow: 0 4px 12px rgba(11, 23, 48, 0.04);
+  transition: all 0.22s ease;
+  position: relative;
+}
+
+.architecture-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px -6px rgba(11, 23, 48, 0.09);
+  border-color: #CBD5E1;
+}
+
+.dev-console-tab {
+  padding: 0.65rem 1.15rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.18s ease;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.dev-console-tab:hover {
+  color: var(--text-primary);
+}
+
+.dev-console-tab.active {
+  color: var(--primary-teal);
+  border-bottom-color: var(--primary-teal);
+}
+
+/* ============================================================= */
+/* Modern CRM Dashboard Animations & Skeletons                   */
+/* ============================================================= */
+
+@keyframes skeletonPulse {
+  0% {
+    background-color: #F1F5F9;
+  }
+  50% {
+    background-color: #E2E8F0;
+  }
+  100% {
+    background-color: #F1F5F9;
+  }
+}
+
+.skeleton-shimmer {
+  animation: skeletonPulse 1.8s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.dashboard-kpi-card {
+  background-color: #FFFFFF;
+  border-radius: 12px;
+  border: 1px solid #E2E8F0;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.dashboard-kpi-card:hover {
+  transform: translateY(-2.5px);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+  border-color: #CBD5E1;
+}
+
+.dashboard-kpi-card:hover .kpi-icon-box {
+  transform: scale(1.06);
+}
+
+.kpi-icon-box {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dashboard-row-hover {
+  transition: background-color 0.18s ease;
+}
+
+.dashboard-row-hover:hover {
+  background-color: #F8FAFC !important;
+}
+
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.chart-bar-rect {
+  transition: height 0.65s cubic-bezier(0.16, 1, 0.3, 1), y 0.65s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, filter 0.2s ease;
+}
+
+.chart-bar-rect:hover {
+  filter: brightness(1.08);
+}
+
+.progress-bar-fill {
+  transition: width 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+
+
 

@@ -711,6 +711,21 @@ func (r *InvoiceRepository) Create(ctx context.Context, input models.InvoiceCrea
 		isInterState,
 	)
 
+	orderID := input.OrderID
+	quotationID := input.QuotationID
+	dealID := input.DealID
+
+	if orderID != nil && *orderID > 0 {
+		var oDealID, oQuotID *int
+		_ = r.db.Pool.QueryRow(ctx, "SELECT deal_id, quotation_id FROM orders WHERE id = $1", *orderID).Scan(&oDealID, &oQuotID)
+		if dealID == nil && oDealID != nil {
+			dealID = oDealID
+		}
+		if quotationID == nil && oQuotID != nil {
+			quotationID = oQuotID
+		}
+	}
+
 	tx, err := r.db.Pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -741,7 +756,7 @@ func (r *InvoiceRepository) Create(ctx context.Context, input models.InvoiceCrea
 	`
 
 	err = tx.QueryRow(ctx, insertQuery,
-		invNum, input.CustomerID, input.OrderID, input.QuotationID, input.DealID,
+		invNum, input.CustomerID, orderID, quotationID, dealID,
 		status, invDate, dueDate, currency, subtotal, discPct,
 		discAmt, taxable, cgst, sgst, igst,
 		totalTax, roundOff, grandTotal,

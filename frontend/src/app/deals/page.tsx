@@ -38,6 +38,8 @@ import {
   ChevronUp,
   ChevronDown,
   Power,
+  LayoutGrid,
+  Table as TableIcon,
 } from "lucide-react";
 import {
   dealsApi,
@@ -98,6 +100,23 @@ export default function DealsPage({
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // View Mode: Kanban vs Table
+  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedView = localStorage.getItem("crm_deals_view_mode") as "kanban" | "table" | null;
+      if (savedView === "kanban" || savedView === "table") setViewMode(savedView);
+    }
+  }, []);
+
+  const handleToggleViewMode = (mode: "kanban" | "table") => {
+    setViewMode(mode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("crm_deals_view_mode", mode);
+    }
+  };
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState("");
@@ -608,10 +627,10 @@ export default function DealsPage({
     setDrawerLostReason(deal.lost_reason || "");
   };
 
-  // Open Detail Drawer (starts in View Mode)
-  const handleOpenDrawer = async (deal: Deal) => {
+  // Open Detail Drawer (View Mode or Edit Mode)
+  const handleOpenDrawer = async (deal: Deal, startInEditMode = false) => {
     setSelectedDeal(deal);
-    setIsEditMode(false);
+    setIsEditMode(startInEditMode);
     populateDrawerForm(deal);
     setLinkedLead(null);
     setDealNotes([]);
@@ -902,6 +921,7 @@ export default function DealsPage({
           onSelectTab={(tab) => {
             setActiveSidebarTab(tab);
             if (tab === "leads") router.push("/leads");
+            else if (tab === "inventory") router.push("/inventory");
             else if (tab === "quotations") router.push("/quotations");
             else if (tab === "orders") router.push("/orders");
             else if (tab === "invoices") router.push("/invoices");
@@ -1095,6 +1115,64 @@ export default function DealsPage({
               <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""} color={isRefreshing ? "#2563EB" : "#475569"} />
             </button>
 
+            {/* View Mode Toggle: Kanban vs Table */}
+            <div
+              style={{
+                display: "inline-flex",
+                backgroundColor: "#F1F5F9",
+                borderRadius: "8px",
+                padding: "3px",
+                border: "1px solid #E2E8F0",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => handleToggleViewMode("kanban")}
+                title="Kanban Board View"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "none",
+                  backgroundColor: viewMode === "kanban" ? "#FFFFFF" : "transparent",
+                  color: viewMode === "kanban" ? "#0F172A" : "#64748B",
+                  fontWeight: viewMode === "kanban" ? 700 : 500,
+                  fontSize: "0.8125rem",
+                  cursor: "pointer",
+                  boxShadow: viewMode === "kanban" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <LayoutGrid size={15} color={viewMode === "kanban" ? "#009F9A" : "#64748B"} />
+                <span>Kanban</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleToggleViewMode("table")}
+                title="Responsive Table View"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "6px 12px",
+                  borderRadius: "6px",
+                  border: "none",
+                  backgroundColor: viewMode === "table" ? "#FFFFFF" : "transparent",
+                  color: viewMode === "table" ? "#0F172A" : "#64748B",
+                  fontWeight: viewMode === "table" ? 700 : 500,
+                  fontSize: "0.8125rem",
+                  cursor: "pointer",
+                  boxShadow: viewMode === "table" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                <TableIcon size={15} color={viewMode === "table" ? "#009F9A" : "#64748B"} />
+                <span>Table</span>
+              </button>
+            </div>
+
             {/* Customize Stages Button */}
             <button
               onClick={handleOpenCustomizeStages}
@@ -1144,16 +1222,188 @@ export default function DealsPage({
           </div>
         </header>
 
-        {/* 9-Stage Kanban Board Container */}
-        <main
-          style={{
-            flex: 1,
-            overflowX: "auto",
-            overflowY: "hidden",
-            padding: "20px 24px",
-            backgroundColor: "#F1F5F9",
-          }}
-        >
+        {/* View Switcher: Table View vs 9-Stage Kanban Board */}
+        {viewMode === "table" ? (
+          <main
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "20px 24px",
+              backgroundColor: "#F8FAFC",
+            }}
+          >
+            {isLoading ? (
+              <div style={{ height: "400px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", color: "#64748B" }}>
+                <RefreshCw size={32} color="#009F9A" className="animate-spin" />
+                <p style={{ fontSize: "0.875rem", fontWeight: 600 }}>Loading deals ledger...</p>
+              </div>
+            ) : filteredDeals.length === 0 ? (
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", padding: "3rem", textAlign: "center", color: "#64748B" }}>
+                <Briefcase size={40} style={{ color: "#CBD5E1", margin: "0 auto 12px" }} />
+                <div style={{ fontSize: "1rem", fontWeight: 700, color: "#1E293B" }}>No deals found</div>
+                <div style={{ fontSize: "0.875rem", marginTop: "4px" }}>Try clearing search criteria or add a new deal.</div>
+              </div>
+            ) : (
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.875rem" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+                      <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>Deal Name & #</th>
+                      <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>Customer & Company</th>
+                      <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "right" }}>Deal Value</th>
+                      <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "center" }}>Pipeline Stage</th>
+                      <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>Owner</th>
+                      <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>Close Date</th>
+                      <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "center" }}>Priority</th>
+                      <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredDeals.map((deal) => {
+                      const stage = stages.find((s) => s.id === deal.stage_id);
+                      return (
+                        <tr
+                          key={deal.id}
+                          style={{ borderBottom: "1px solid #F1F5F9", cursor: "pointer", transition: "background-color 0.1s ease" }}
+                          onClick={() => handleOpenDrawer(deal, false)}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#FFFFFF")}
+                        >
+                          <td style={{ padding: "12px 16px" }}>
+                            <div style={{ fontWeight: 700, color: "#0F172A" }}>{deal.name}</div>
+                            <div style={{ fontSize: "0.75rem", color: "#64748B", display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
+                              <span style={{ fontFamily: "monospace", fontWeight: 600 }}>#{deal.deal_number || deal.id}</span>
+                              {deal.lead_number && (
+                                <span style={{ backgroundColor: "#F1F5F9", padding: "1px 5px", borderRadius: "3px", fontSize: "0.6875rem" }}>
+                                  Lead #{deal.lead_number}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: "12px 16px" }}>
+                            <div style={{ fontWeight: 600, color: "#334155" }}>{deal.customer?.name || "—"}</div>
+                            {deal.customer?.company && (
+                              <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "1px" }}>{deal.customer.company}</div>
+                            )}
+                          </td>
+                          <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <div style={{ fontWeight: 800, color: "#0F766E", fontSize: "0.9375rem" }}>
+                              {formatCurrency(deal.value, deal.currency)}
+                            </div>
+                            {stage && stage.probability > 0 && (
+                              <div style={{ fontSize: "0.6875rem", color: "#64748B" }}>
+                                {stage.probability}% prob
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding: "12px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "3px 10px",
+                                borderRadius: "999px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                                backgroundColor: stage?.color ? `${stage.color}18` : "#F1F5F9",
+                                color: stage?.color || "#475569",
+                                border: `1px solid ${stage?.color ? `${stage.color}35` : "#E2E8F0"}`,
+                              }}
+                            >
+                              {stage?.name || "Unknown"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "12px 16px", color: deal.owner ? "#334155" : "#94A3B8", whiteSpace: "nowrap" }}>
+                            {deal.owner?.name || "Unassigned"}
+                          </td>
+                          <td style={{ padding: "12px 16px", fontSize: "0.8125rem", color: "#64748B", whiteSpace: "nowrap" }}>
+                            {deal.expected_close_date ? (
+                              <span>{new Date(deal.expected_close_date).toLocaleDateString()}</span>
+                            ) : (
+                              <span style={{ color: "#CBD5E1" }}>—</span>
+                            )}
+                          </td>
+                          <td style={{ padding: "12px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <span
+                              style={{
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                fontSize: "0.6875rem",
+                                fontWeight: 700,
+                                textTransform: "uppercase",
+                                backgroundColor:
+                                  deal.priority === "Urgent" ? "#FEF2F2" : deal.priority === "High" ? "#FFFBEB" : "#F0FDFA",
+                                color:
+                                  deal.priority === "Urgent" ? "#DC2626" : deal.priority === "High" ? "#D97706" : "#0D9488",
+                                border:
+                                  deal.priority === "Urgent" ? "1px solid #FECACA" : deal.priority === "High" ? "1px solid #FDE68A" : "1px solid #99F6E4",
+                              }}
+                            >
+                              {deal.priority || "Medium"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "6px" }}>
+                              <button
+                                onClick={() => handleOpenDrawer(deal, false)}
+                                title="View Details"
+                                style={{
+                                  padding: "5px 8px",
+                                  backgroundColor: "#F8FAFC",
+                                  border: "1px solid #E2E8F0",
+                                  borderRadius: "6px",
+                                  color: "#475569",
+                                  cursor: "pointer",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                <Eye size={13} />
+                                <span>Details</span>
+                              </button>
+                              <button
+                                onClick={() => handleOpenDrawer(deal, true)}
+                                title="Edit Deal"
+                                style={{
+                                  padding: "5px 8px",
+                                  backgroundColor: "#F0FDFA",
+                                  border: "1px solid #99F6E4",
+                                  borderRadius: "6px",
+                                  color: "#009F9A",
+                                  cursor: "pointer",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                <Edit3 size={13} />
+                                <span>Edit</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </main>
+        ) : (
+          /* 9-Stage Kanban Board Container */
+          <main
+            style={{
+              flex: 1,
+              overflowX: "auto",
+              overflowY: "hidden",
+              padding: "20px 24px",
+              backgroundColor: "#F1F5F9",
+            }}
+          >
           {isLoading ? (
             <div style={{ height: "400px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", color: "#64748B" }}>
               <RefreshCw size={32} color="#009F9A" className="animate-spin" />
@@ -1407,6 +1657,7 @@ export default function DealsPage({
             </div>
           )}
         </main>
+      )}
       </div>
 
       {/* ========================================================================= */}

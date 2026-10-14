@@ -41,6 +41,7 @@ import {
   CheckCircle2,
   AlertCircle,
   FileText,
+  Briefcase,
   PackageCheck,
   ChevronDown,
   Layers,
@@ -156,6 +157,11 @@ export default function InvoicesPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // View Tabs & Unbilled Orders
+  const [viewTab, setViewTab] = useState<"invoices" | "ready_to_invoice">("invoices");
+  const [readyOrders, setReadyOrders] = useState<Order[]>([]);
+  const [isLoadingReadyOrders, setIsLoadingReadyOrders] = useState(false);
 
   // Drawer & Detail View
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -300,9 +306,22 @@ export default function InvoicesPage() {
     }
   }, [selectedStatus, searchQuery, currentPage]);
 
+  const loadReadyOrders = useCallback(async () => {
+    setIsLoadingReadyOrders(true);
+    try {
+      const res = await ordersApi.list({ invoice_status: "Not Invoiced", limit: 100 });
+      setReadyOrders(res.items || []);
+    } catch (err) {
+      console.error("Failed to load ready orders", err);
+    } finally {
+      setIsLoadingReadyOrders(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadInvoices();
-  }, [loadInvoices]);
+    loadReadyOrders();
+  }, [loadInvoices, loadReadyOrders]);
 
   // Load reference data for create modal
   const loadCreatePrerequisites = async () => {
@@ -326,6 +345,14 @@ export default function InvoicesPage() {
     setIsCreateModalOpen(true);
   };
 
+  // Open Create Modal from Ready for Invoice queue
+  const handleOpenCreateFromReadyOrder = async (ord: Order) => {
+    await loadCreatePrerequisites();
+    setCreateMode("from_order");
+    setSelectedOrderId(ord.id);
+    setIsCreateModalOpen(true);
+  };
+
   // Handle Quick Create from Order
   const handleCreateFromOrder = async () => {
     if (!selectedOrderId) {
@@ -339,6 +366,7 @@ export default function InvoicesPage() {
       setIsCreateModalOpen(false);
       setSelectedOrderId("");
       loadInvoices();
+      loadReadyOrders();
       setSelectedInvoice(created);
       setIsDrawerOpen(true);
     } catch (err: any) {
@@ -562,6 +590,7 @@ export default function InvoicesPage() {
           else if (tab === "invoices") {
             // Already on invoices
           } else if (tab === "payments") router.push("/payments");
+          else if (tab === "inventory") router.push("/inventory");
           else if (tab === "products") router.push("/products");
           else if (tab === "follow-ups") router.push("/follow-ups");
           else if (tab === "company") router.push("/company");
@@ -762,6 +791,300 @@ export default function InvoicesPage() {
             </div>
           </div>
 
+          {/* View Tab Switcher: All Invoices vs Ready for Invoice */}
+          <div style={{ display: "flex", gap: "12px", borderBottom: "1px solid #E2E8F0", paddingBottom: "12px" }}>
+            <button
+              onClick={() => setViewTab("invoices")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: viewTab === "invoices" ? "1px solid #0D9488" : "1px solid #E2E8F0",
+                backgroundColor: viewTab === "invoices" ? "#F0FDFA" : "#FFFFFF",
+                color: viewTab === "invoices" ? "#0F766E" : "#64748B",
+                boxShadow: viewTab === "invoices" ? "0 1px 2px rgba(13, 148, 136, 0.1)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Receipt size={16} />
+              <span>All Invoices</span>
+              <span
+                style={{
+                  backgroundColor: viewTab === "invoices" ? "#0D9488" : "#E2E8F0",
+                  color: viewTab === "invoices" ? "#FFFFFF" : "#475569",
+                  padding: "1px 6px",
+                  borderRadius: "10px",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                }}
+              >
+                {totalInvoices}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setViewTab("ready_to_invoice")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "8px 16px",
+                borderRadius: "8px",
+                fontSize: "0.875rem",
+                fontWeight: 700,
+                cursor: "pointer",
+                border: viewTab === "ready_to_invoice" ? "1px solid #4F46E5" : "1px solid #E2E8F0",
+                backgroundColor: viewTab === "ready_to_invoice" ? "#EEF2FF" : "#FFFFFF",
+                color: viewTab === "ready_to_invoice" ? "#4338CA" : "#64748B",
+                boxShadow: viewTab === "ready_to_invoice" ? "0 1px 2px rgba(79, 70, 229, 0.1)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <PackageCheck size={16} />
+              <span>Ready for Invoice</span>
+              <span
+                style={{
+                  backgroundColor: viewTab === "ready_to_invoice" ? "#4F46E5" : "#E2E8F0",
+                  color: viewTab === "ready_to_invoice" ? "#FFFFFF" : "#475569",
+                  padding: "1px 6px",
+                  borderRadius: "10px",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                }}
+              >
+                {readyOrders.length}
+              </span>
+            </button>
+          </div>
+
+          {viewTab === "ready_to_invoice" ? (
+            /* ======================================================== */
+            /* READY FOR INVOICE QUEUE (Unbilled Orders)               */
+            /* ======================================================== */
+            <div
+              style={{
+                backgroundColor: "#FFFFFF",
+                border: "1px solid #E2E8F0",
+                borderRadius: "10px",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: "16px 20px", borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#0F172A", margin: "0 0 2px 0" }}>
+                    Unbilled Orders Awaiting Invoice Generation
+                  </h3>
+                  <p style={{ fontSize: "0.75rem", color: "#64748B", margin: 0 }}>
+                    These orders have accepted quotations and are ready to be billed without creating empty database invoices.
+                  </p>
+                </div>
+                <button
+                  onClick={loadReadyOrders}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#475569",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <RefreshCw size={12} className={isLoadingReadyOrders ? "spin-animation" : ""} /> Refresh
+                </button>
+              </div>
+
+              {isLoadingReadyOrders ? (
+                <div style={{ padding: "60px 0", textAlign: "center", color: "#64748B" }}>
+                  <RefreshCw size={24} className="spin-animation" style={{ margin: "0 auto 12px" }} />
+                  <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600 }}>Loading unbilled orders...</p>
+                </div>
+              ) : readyOrders.length === 0 ? (
+                <div style={{ padding: "60px 0", textAlign: "center" }}>
+                  <PackageCheck size={40} style={{ color: "#CBD5E1", margin: "0 auto 12px" }} />
+                  <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "#1E293B", margin: "0 0 4px 0" }}>
+                    No Unbilled Orders
+                  </h3>
+                  <p style={{ fontSize: "0.8125rem", color: "#64748B", margin: 0 }}>
+                    All accepted quotations and fulfillment orders have been fully invoiced.
+                  </p>
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.8125rem" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+                      <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Order #</th>
+                      <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Title & Customer</th>
+                      <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Origin & Lineage</th>
+                      <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Order Stage</th>
+                      <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Billing Status</th>
+                      <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "right" }}>Amount</th>
+                      <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "center" }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {readyOrders.map((ord) => (
+                      <tr key={ord.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                        <td style={{ padding: "12px 16px" }}>
+                          <span
+                            onClick={() => router.push("/orders")}
+                            style={{
+                              fontWeight: 700,
+                              color: "#0D9488",
+                              fontFamily: "monospace",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {ord.order_number}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <div style={{ fontWeight: 600, color: "#0F172A" }}>{ord.title}</div>
+                          <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                            {ord.customer?.name} {ord.customer?.company ? `• ${ord.customer.company}` : ""}
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                            {(ord.lead_number || ord.deal?.lead_number || ord.quotation?.lead_number) && (
+                              <span
+                                onClick={() => router.push(`/leads?search=${encodeURIComponent(ord.lead_number || ord.deal?.lead_number || ord.quotation?.lead_number || "")}`)}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#F0FDFA",
+                                  color: "#0D9488",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  width: "fit-content",
+                                }}
+                                title="Originating Lead"
+                              >
+                                <UserIcon size={10} /> {ord.lead_number || ord.deal?.lead_number || ord.quotation?.lead_number}
+                              </span>
+                            )}
+                            {ord.deal && (
+                              <span
+                                onClick={() => router.push("/deals")}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#F0F9FF",
+                                  color: "#0284C7",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  width: "fit-content",
+                                }}
+                                title="Linked Deal"
+                              >
+                                <Briefcase size={10} /> {ord.deal.deal_number}
+                              </span>
+                            )}
+                            {ord.quotation && (
+                              <span
+                                onClick={() => router.push("/quotations")}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#FAF5FF",
+                                  color: "#7C3AED",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  width: "fit-content",
+                                }}
+                                title="Accepted Quotation"
+                              >
+                                <FileText size={10} /> {ord.quotation.quotation_number}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <span
+                            style={{
+                              padding: "2px 8px",
+                              borderRadius: "4px",
+                              fontSize: "0.75rem",
+                              fontWeight: 600,
+                              backgroundColor: "#F1F5F9",
+                              color: "#475569",
+                            }}
+                          >
+                            {ord.stage}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <span
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: "6px",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              backgroundColor: "#EEF2FF",
+                              color: "#4F46E5",
+                              border: "1px solid #C7D2FE",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <Clock size={11} /> Ready for Invoice
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#0F172A" }}>
+                          {formatINR(ord.total_amount)}
+                        </td>
+                        <td style={{ padding: "12px 16px", textAlign: "center" }}>
+                          <button
+                            onClick={() => handleOpenCreateFromReadyOrder(ord)}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "6px 12px",
+                              borderRadius: "6px",
+                              backgroundColor: "#0D9488",
+                              color: "#FFFFFF",
+                              border: "none",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              boxShadow: "0 1px 2px rgba(13, 148, 136, 0.2)",
+                            }}
+                          >
+                            <Plus size={12} /> Create Invoice
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          ) : (
+            <>
           {/* Search & Status Filters */}
           <div
             style={{
@@ -911,14 +1234,11 @@ export default function InvoicesPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.8125rem" }}>
                 <thead>
                   <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
-                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Invoice #</th>
+                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Invoice # & Dates</th>
                     <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Customer</th>
                     <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Source</th>
-                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Dates</th>
                     <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569" }}>Status</th>
-                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "right" }}>Grand Total</th>
-                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "right" }}>Paid</th>
-                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "right" }}>Balance</th>
+                    <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "right" }}>Total & Balance</th>
                     <th style={{ padding: "12px 16px", fontWeight: 700, color: "#475569", textAlign: "center" }}>Actions</th>
                   </tr>
                 </thead>
@@ -942,8 +1262,8 @@ export default function InvoicesPage() {
                           setIsDrawerOpen(true);
                         }}
                       >
-                        {/* Invoice Number */}
-                        <td style={{ padding: "12px 16px" }}>
+                        {/* Invoice Number & Dates */}
+                        <td style={{ padding: "12px 16px", whiteSpace: "nowrap" }}>
                           <span
                             style={{
                               fontWeight: 700,
@@ -959,6 +1279,9 @@ export default function InvoicesPage() {
                             <Receipt size={13} />
                             {inv.invoice_number}
                           </span>
+                          <div style={{ fontSize: "0.75rem", color: isOverdue ? "#DC2626" : "#64748B", fontWeight: isOverdue ? 700 : 400, marginTop: "4px" }}>
+                            Date: {inv.invoice_date?.slice(0, 10)} {inv.due_date ? `• Due: ${inv.due_date.slice(0, 10)}` : ""} {isOverdue && "⚠️"}
+                          </div>
                         </td>
 
                         {/* Customer */}
@@ -969,59 +1292,97 @@ export default function InvoicesPage() {
                           )}
                         </td>
 
-                        {/* Linked Source (Order / Quote / Deal) */}
+                        {/* Linked Source (Lead / Deal / Quotation / Order) */}
                         <td style={{ padding: "12px 16px" }} onClick={(e) => e.stopPropagation()}>
-                          {inv.order ? (
-                            <span
-                              onClick={() => router.push("/orders")}
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "3px",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                backgroundColor: "#EFF6FF",
-                                color: "#1D4ED8",
-                                fontSize: "0.72rem",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                              }}
-                              title="View Order"
-                            >
-                              <PackageCheck size={11} /> {inv.order.order_number}
-                            </span>
-                          ) : inv.quotation ? (
-                            <span
-                              onClick={() => router.push("/quotations")}
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "3px",
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                backgroundColor: "#FAF5FF",
-                                color: "#7C3AED",
-                                fontSize: "0.72rem",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                              }}
-                              title="View Quotation"
-                            >
-                              <FileText size={11} /> {inv.quotation.quotation_number}
-                            </span>
-                          ) : (
-                            <span style={{ color: "#94A3B8", fontSize: "0.75rem" }}>Direct / Custom</span>
-                          )}
-                        </td>
-
-                        {/* Dates */}
-                        <td style={{ padding: "12px 16px" }}>
-                          <div style={{ fontWeight: 600, color: "#1E293B" }}>{inv.invoice_date?.slice(0, 10)}</div>
-                          {inv.due_date && (
-                            <div style={{ fontSize: "0.75rem", color: isOverdue ? "#DC2626" : "#64748B", fontWeight: isOverdue ? 700 : 400, marginTop: "2px" }}>
-                              Due: {inv.due_date?.slice(0, 10)} {isOverdue && "⚠️"}
-                            </div>
-                          )}
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "3px" }}>
+                            {(inv.lead_number || inv.deal?.lead_number) && (
+                              <span
+                                onClick={() => router.push(`/leads?search=${encodeURIComponent(inv.lead_number || inv.deal?.lead_number || "")}`)}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#F0FDFA",
+                                  color: "#0F766E",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  width: "fit-content",
+                                }}
+                                title="Originating Lead"
+                              >
+                                <UserIcon size={10} /> {inv.lead_number || inv.deal?.lead_number}
+                              </span>
+                            )}
+                            {inv.deal && (
+                              <span
+                                onClick={() => router.push("/deals")}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#F0F9FF",
+                                  color: "#0284C7",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  width: "fit-content",
+                                }}
+                                title="Linked Deal"
+                              >
+                                <Briefcase size={10} /> {inv.deal.deal_number}
+                              </span>
+                            )}
+                            {inv.quotation && (
+                              <span
+                                onClick={() => router.push("/quotations")}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#FAF5FF",
+                                  color: "#7C3AED",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  width: "fit-content",
+                                }}
+                                title="Accepted Quotation"
+                              >
+                                <FileText size={10} /> {inv.quotation.quotation_number}
+                              </span>
+                            )}
+                            {inv.order && (
+                              <span
+                                onClick={() => router.push("/orders")}
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  backgroundColor: "#EFF6FF",
+                                  color: "#1D4ED8",
+                                  fontSize: "0.72rem",
+                                  fontWeight: 600,
+                                  cursor: "pointer",
+                                  width: "fit-content",
+                                }}
+                                title="Linked Order"
+                              >
+                                <PackageCheck size={10} /> {inv.order.order_number}
+                              </span>
+                            )}
+                            {!inv.order && !inv.quotation && !inv.deal && !inv.lead_number && (
+                              <span style={{ color: "#94A3B8", fontSize: "0.75rem" }}>Direct Invoice</span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Status Badge */}
@@ -1042,26 +1403,26 @@ export default function InvoicesPage() {
                           </span>
                         </td>
 
-                        {/* Grand Total */}
-                        <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 700, color: "#0F172A" }}>
-                          {formatINR(inv.grand_total)}
-                        </td>
-
-                        {/* Paid Amount */}
-                        <td style={{ padding: "12px 16px", textAlign: "right", fontWeight: 600, color: "#15803D" }}>
-                          {formatINR(inv.amount_paid)}
-                        </td>
-
-                        {/* Remaining Balance */}
-                        <td style={{ padding: "12px 16px", textAlign: "right" }}>
-                          <span
-                            style={{
-                              fontWeight: 700,
-                              color: inv.remaining_balance > 0 ? (isOverdue ? "#DC2626" : "#D97706") : "#15803D",
-                            }}
-                          >
-                            {formatINR(inv.remaining_balance)}
-                          </span>
+                        {/* Total & Balance */}
+                        <td style={{ padding: "12px 16px", textAlign: "right", whiteSpace: "nowrap" }}>
+                          <div style={{ fontWeight: 700, color: "#0F172A" }}>
+                            {formatINR(inv.grand_total)}
+                          </div>
+                          <div style={{ fontSize: "0.75rem", marginTop: "2px" }}>
+                            <span
+                              style={{
+                                fontWeight: 700,
+                                color: inv.remaining_balance > 0 ? (isOverdue ? "#DC2626" : "#D97706") : "#15803D",
+                              }}
+                            >
+                              Due: {formatINR(inv.remaining_balance)}
+                            </span>
+                            {inv.amount_paid > 0 && (
+                              <span style={{ color: "#15803D", marginLeft: "4px" }}>
+                                (Paid: {formatINR(inv.amount_paid)})
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Actions */}
@@ -1166,6 +1527,8 @@ export default function InvoicesPage() {
               </div>
             )}
           </div>
+          </>
+          )}
         </div>
       </div>
 
@@ -1401,6 +1764,94 @@ export default function InvoicesPage() {
                   }}
                 >
                   {formatINR(selectedInvoice.remaining_balance)}
+                </div>
+              </div>
+            </div>
+
+            {/* Sales Origin & Lineage Card in Invoice Drawer */}
+            <div
+              style={{
+                margin: "12px 24px",
+                padding: "12px 16px",
+                backgroundColor: "#F8FAFC",
+                borderRadius: "8px",
+                border: "1px solid #E2E8F0",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <Layers size={14} color="#0D9488" />
+                  Sales Origin & Lineage
+                </span>
+                <span style={{ fontSize: "0.6875rem", color: "#64748B" }}>End-to-End Tracking</span>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "8px", fontSize: "0.75rem" }}>
+                {/* Originating Lead */}
+                <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                  <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Originating Lead</div>
+                  {selectedInvoice.lead_number || selectedInvoice.deal?.lead_number ? (
+                    <div
+                      onClick={() => router.push(`/leads?search=${encodeURIComponent(selectedInvoice.lead_number || selectedInvoice.deal?.lead_number || "")}`)}
+                      style={{ fontWeight: 700, color: "#0D9488", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <UserIcon size={12} />
+                      {selectedInvoice.lead_number || selectedInvoice.deal?.lead_number}
+                    </div>
+                  ) : (
+                    <div style={{ color: "#94A3B8" }}>—</div>
+                  )}
+                </div>
+
+                {/* Linked Deal */}
+                <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                  <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Linked Deal</div>
+                  {selectedInvoice.deal ? (
+                    <div
+                      onClick={() => router.push("/deals")}
+                      style={{ fontWeight: 700, color: "#0284C7", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <Briefcase size={12} />
+                      {selectedInvoice.deal.deal_number}
+                    </div>
+                  ) : (
+                    <div style={{ color: "#94A3B8" }}>—</div>
+                  )}
+                </div>
+
+                {/* Accepted Quotation */}
+                <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                  <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Quotation</div>
+                  {selectedInvoice.quotation ? (
+                    <div
+                      onClick={() => router.push("/quotations")}
+                      style={{ fontWeight: 700, color: "#7C3AED", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <FileText size={12} />
+                      {selectedInvoice.quotation.quotation_number}
+                    </div>
+                  ) : (
+                    <div style={{ color: "#94A3B8" }}>—</div>
+                  )}
+                </div>
+
+                {/* Linked Order */}
+                <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                  <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Linked Order</div>
+                  {selectedInvoice.order ? (
+                    <div
+                      onClick={() => router.push("/orders")}
+                      style={{ fontWeight: 700, color: "#1D4ED8", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <PackageCheck size={12} />
+                      {selectedInvoice.order.order_number}
+                    </div>
+                  ) : (
+                    <div style={{ color: "#94A3B8" }}>—</div>
+                  )}
                 </div>
               </div>
             </div>

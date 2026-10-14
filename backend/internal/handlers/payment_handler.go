@@ -7,17 +7,19 @@ import (
 
 	"crm-backend-go/internal/middleware"
 	"crm-backend-go/internal/models"
+	"crm-backend-go/internal/pdf"
 	"crm-backend-go/internal/repository"
 
 	"github.com/gin-gonic/gin"
 )
 
 type PaymentHandler struct {
-	repo *repository.PaymentRepository
+	repo        *repository.PaymentRepository
+	companyRepo *repository.CompanyRepository
 }
 
-func NewPaymentHandler(repo *repository.PaymentRepository) *PaymentHandler {
-	return &PaymentHandler{repo: repo}
+func NewPaymentHandler(repo *repository.PaymentRepository, companyRepo *repository.CompanyRepository) *PaymentHandler {
+	return &PaymentHandler{repo: repo, companyRepo: companyRepo}
 }
 
 // List godoc
@@ -159,4 +161,54 @@ func (h *PaymentHandler) GetReceipt(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, receipt)
+}
+
+// GenerateReceiptPDF godoc
+// @Summary Generate Maroto v2 A4 PDF for a Payment Receipt
+// @Tags Payments
+// @Produce application/pdf
+// @Security BearerAuth
+// @Param id path int true "Payment ID"
+// @Param action query string false "inline or download"
+// @Router /api/payments/{id}/pdf [get]
+func (h *PaymentHandler) GenerateReceiptPDF(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid payment ID"})
+		return
+	}
+
+	workspaceID := 1
+	receipt, err := h.repo.GetReceipt(c.Request.Context(), id, workspaceID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"detail": fmt.Sprintf("Payment receipt not found: %v", err)})
+		return
+	}
+
+	var comp *models.CompanyProfile
+	var logoBytes []byte
+	var logoMime string
+	if h.companyRepo != nil {
+		comp, _ = h.companyRepo.GetProfile(c.Request.Context())
+		logoBytes, logoMime, _ = h.companyRepo.GetLogo(c.Request.Context())
+	} else if receipt.Company != nil {
+		comp = receipt.Company
+	}
+
+	pdfBytes, err := pdf.GeneratePaymentReceiptPDF(receipt, comp, logoBytes, logoMime)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": fmt.Sprintf("Failed to generate receipt PDF: %v", err)})
+		return
+	}
+
+	action := c.DefaultQuery("action", "inline")
+	filename := fmt.Sprintf("Payment-Receipt-PAY-%05d.pdf", receipt.Payment.ID)
+	if action == "download" {
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	} else {
+		c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+	}
+
+	c.Header("Content-Type", "application/pdf")
+	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }

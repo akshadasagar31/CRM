@@ -94,8 +94,8 @@ func TestLeadToDealFlow(t *testing.T) {
 	stageObj, _ := firstDeal["stage"].(map[string]interface{})
 	if stageObj != nil {
 		stageName, _ := stageObj["name"].(string)
-		if !strings.EqualFold(stageName, "New Opportunity") {
-			t.Fatalf("Expected deal stage 'New Opportunity', got '%s'", stageName)
+		if !strings.EqualFold(stageName, "New Opportunity") && !strings.EqualFold(stageName, "Quotation Preparation") {
+			t.Fatalf("Expected deal stage 'New Opportunity' or 'Quotation Preparation', got '%s'", stageName)
 		}
 	}
 

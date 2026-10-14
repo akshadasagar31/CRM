@@ -61,6 +61,7 @@ func main() {
 	paymentRepo := repository.NewPaymentRepository(db, invoiceRepo, orderRepo, companyRepo, customerRepo)
 	automationRepo := repository.NewAutomationRepository(db)
 	dashboardRepo := repository.NewDashboardRepository(db)
+	inventoryRepo := repository.NewInventoryRepository(db)
 
 	// Start background automated reminders evaluator
 	automationRepo.StartPeriodicEvaluator(context.Background())
@@ -80,9 +81,10 @@ func main() {
 	quotationHandler := handlers.NewQuotationHandler(quotationRepo, companyRepo)
 	orderHandler := handlers.NewOrderHandler(orderRepo)
 	invoiceHandler := handlers.NewInvoiceHandler(invoiceRepo, companyRepo)
-	paymentHandler := handlers.NewPaymentHandler(paymentRepo)
+	paymentHandler := handlers.NewPaymentHandler(paymentRepo, companyRepo)
 	automationHandler := handlers.NewAutomationHandler(automationRepo)
 	dashboardHandler := handlers.NewDashboardHandler(dashboardRepo)
+	inventoryHandler := handlers.NewInventoryHandler(inventoryRepo)
 
 	router := gin.Default()
 	router.Use(middleware.CORSMiddleware())
@@ -290,6 +292,7 @@ func main() {
 		protected.GET("/payments/summary", paymentHandler.GetSummary)
 		protected.POST("/payments", paymentHandler.RecordPayment)
 		protected.GET("/payments/:id/receipt", paymentHandler.GetReceipt)
+		protected.GET("/payments/:id/pdf", paymentHandler.GenerateReceiptPDF)
 		protected.DELETE("/payments/:id", middleware.RequireRole("admin", "manager"), paymentHandler.DeletePayment)
 
 		// Company Profile (Viewable by authenticated users; editable by Admin only)
@@ -308,6 +311,14 @@ func main() {
 		protected.GET("/automation/reminders", automationHandler.ListReminders)
 		protected.POST("/automation/reminders/evaluate", automationHandler.EvaluateReminders)
 		protected.PATCH("/automation/reminders/:id/status", automationHandler.UpdateReminderStatus)
+
+		// Inventory Management
+		protected.GET("/inventory/stats", inventoryHandler.GetStats)
+		protected.GET("/inventory/movements", inventoryHandler.ListMovements)
+		protected.GET("/inventory/alerts", inventoryHandler.GetAlerts)
+		protected.POST("/inventory/stock-in", inventoryHandler.StockIn)
+		protected.POST("/inventory/adjust", inventoryHandler.AdjustStock)
+		protected.POST("/inventory/return", inventoryHandler.ReturnStock)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

@@ -869,6 +869,7 @@ function QuotationsContent() {
           else if (tab === "orders") router.push("/orders");
           else if (tab === "invoices") router.push("/invoices");
           else if (tab === "payments") router.push("/payments");
+          else if (tab === "inventory") router.push("/inventory");
           else if (tab === "products") router.push("/products");
           else if (tab === "follow-ups") router.push("/follow-ups");
           else if (tab === "company") router.push("/company");

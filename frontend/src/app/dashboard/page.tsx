@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar, { SidebarTab } from "@/components/Sidebar";
 import {
@@ -81,6 +81,227 @@ const getRelativeTime = (dateStr: string): string => {
 };
 
 type TimeframeOption = "this_month" | "last_30_days" | "this_quarter" | "this_year" | "all";
+
+// --- Smooth Rolling Animated Counter Component ---
+interface AnimatedCounterProps {
+  value: number;
+  formatter?: (val: number) => string;
+  duration?: number;
+  prefix?: string;
+  suffix?: string;
+}
+
+function AnimatedCounter({
+  value,
+  formatter,
+  duration = 750,
+  prefix = "",
+  suffix = "",
+}: AnimatedCounterProps) {
+  const target = typeof value === "number" && !isNaN(value) ? value : 0;
+  const [displayValue, setDisplayValue] = useState<number>(0);
+  const currentValRef = useRef<number>(0);
+  const startTimeRef = useRef<number | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const start = currentValRef.current;
+    startTimeRef.current = null;
+
+    if (start === target) {
+      setDisplayValue(target);
+      return;
+    }
+
+    const animate = (timestamp: number) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const elapsed = timestamp - startTimeRef.current;
+      const progress = Math.min(elapsed / duration, 1);
+      // Smooth cubic-bezier ease out
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      const current = start + (target - start) * easeOut;
+      currentValRef.current = current;
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        animFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        currentValRef.current = target;
+        setDisplayValue(target);
+      }
+    };
+
+    animFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animFrameRef.current) {
+        cancelAnimationFrame(animFrameRef.current);
+      }
+    };
+  }, [target, duration]);
+
+  const formatted = formatter ? formatter(displayValue) : Math.round(displayValue).toLocaleString();
+  return <span>{prefix}{formatted}{suffix}</span>;
+}
+
+// --- Layout-Matched Dashboard Loading Skeleton ---
+function DashboardSkeleton() {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem", width: "100%" }}>
+      {/* 1. Reminders Skeleton */}
+      <div
+        style={{
+          backgroundColor: "#FFFFFF",
+          borderRadius: "14px",
+          border: "1px solid #E2E8F0",
+          overflow: "hidden",
+          padding: "1.25rem",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="skeleton-shimmer" style={{ width: "240px", height: "20px" }} />
+          <div className="skeleton-shimmer" style={{ width: "120px", height: "24px" }} />
+        </div>
+        <div className="skeleton-shimmer" style={{ width: "100%", height: "48px", borderRadius: "8px" }} />
+      </div>
+
+      {/* 2. 6 KPI Cards Grid Skeleton */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "1.125rem" }}>
+        {[...Array(6)].map((_, i) => (
+          <div
+            key={i}
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: "12px",
+              border: "1px solid #E2E8F0",
+              padding: "1.25rem",
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.75rem",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div className="skeleton-shimmer" style={{ width: "70px", height: "12px" }} />
+              <div className="skeleton-shimmer" style={{ width: "32px", height: "32px", borderRadius: "8px" }} />
+            </div>
+            <div className="skeleton-shimmer" style={{ width: "90px", height: "24px" }} />
+            <div className="skeleton-shimmer" style={{ width: "100px", height: "12px" }} />
+          </div>
+        ))}
+      </div>
+
+      {/* 3. Charts Grid Skeleton */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "1.25rem" }}>
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: "14px",
+            border: "1px solid #E2E8F0",
+            padding: "1.5rem",
+            height: "320px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1.25rem",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div className="skeleton-shimmer" style={{ width: "200px", height: "18px" }} />
+            <div className="skeleton-shimmer" style={{ width: "120px", height: "16px" }} />
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: "20px", height: "190px", padding: "0 1rem" }}>
+            {[40, 75, 55, 90, 65, 80].map((h, idx) => (
+              <div key={idx} style={{ flex: 1, display: "flex", gap: "4px", alignItems: "flex-end", height: "100%" }}>
+                <div className="skeleton-shimmer" style={{ width: "50%", height: `${h}%`, borderRadius: "3px 3px 0 0" }} />
+                <div className="skeleton-shimmer" style={{ width: "50%", height: `${h * 0.7}%`, borderRadius: "3px 3px 0 0" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: "14px",
+            border: "1px solid #E2E8F0",
+            padding: "1.5rem",
+            height: "320px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div className="skeleton-shimmer" style={{ width: "160px", height: "18px" }} />
+            <div className="skeleton-shimmer" style={{ width: "70px", height: "16px" }} />
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "10px" }}>
+            {[80, 50, 65, 30].map((w, idx) => (
+              <div key={idx} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div className="skeleton-shimmer" style={{ width: "80px", height: "12px" }} />
+                  <div className="skeleton-shimmer" style={{ width: "50px", height: "12px" }} />
+                </div>
+                <div className="skeleton-shimmer" style={{ width: `${w}%`, height: "6px", borderRadius: "3px" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Bottom Activity Skeleton */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "1.25rem" }}>
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: "14px",
+            border: "1px solid #E2E8F0",
+            padding: "1.5rem",
+            minHeight: "260px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+          }}
+        >
+          <div className="skeleton-shimmer" style={{ width: "160px", height: "18px" }} />
+          {[...Array(4)].map((_, i) => (
+            <div key={i} style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <div className="skeleton-shimmer" style={{ width: "30px", height: "30px", borderRadius: "8px" }} />
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div className="skeleton-shimmer" style={{ width: "40%", height: "12px" }} />
+                <div className="skeleton-shimmer" style={{ width: "75%", height: "10px" }} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            backgroundColor: "#FFFFFF",
+            borderRadius: "14px",
+            border: "1px solid #E2E8F0",
+            padding: "1.5rem",
+            minHeight: "260px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1rem",
+          }}
+        >
+          <div className="skeleton-shimmer" style={{ width: "180px", height: "18px" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            <div className="skeleton-shimmer" style={{ height: "40px", borderRadius: "8px" }} />
+            <div className="skeleton-shimmer" style={{ height: "40px", borderRadius: "8px" }} />
+            <div className="skeleton-shimmer" style={{ height: "40px", borderRadius: "8px" }} />
+            <div className="skeleton-shimmer" style={{ height: "40px", borderRadius: "8px" }} />
+          </div>
+          <div className="skeleton-shimmer" style={{ height: "90px", borderRadius: "10px", marginTop: "6px" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -260,6 +481,7 @@ export default function DashboardPage() {
           else if (tab === "orders") router.push("/orders");
           else if (tab === "invoices") router.push("/invoices");
           else if (tab === "payments") router.push("/payments");
+          else if (tab === "inventory") router.push("/inventory");
           else if (tab === "products") router.push("/products");
           else if (tab === "follow-ups") router.push("/follow-ups");
           else if (tab === "company") router.push("/company");
@@ -415,463 +637,499 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 1. Automated Reminders & Action Center Section */}
-          <div
-            style={{
-              backgroundColor: "#FFFFFF",
-              borderRadius: "14px",
-              border: "1px solid #E2E8F0",
-              overflow: "hidden",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
-            }}
-          >
-            {/* Action Center Header Bar */}
+          {/* Timeframe Shimmer Bar during background refresh */}
+          {isRefreshing && !isLoading && (
             <div
               style={{
-                padding: "1rem 1.25rem",
-                borderBottom: "1px solid #F1F5F9",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                backgroundColor: "#FAF5FF",
+                height: "3px",
+                width: "100%",
+                backgroundColor: "#F1F5F9",
+                borderRadius: "2px",
+                overflow: "hidden",
+                marginTop: "-0.75rem",
+                marginBottom: "-0.5rem",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div
+                className="skeleton-shimmer"
+                style={{
+                  height: "100%",
+                  width: "100%",
+                  backgroundColor: "#0D9488",
+                  borderRadius: "2px",
+                }}
+              />
+            </div>
+          )}
+
+          {isLoading ? (
+            <DashboardSkeleton />
+          ) : (
+            <>
+              {/* 1. Automated Reminders & Action Center Section */}
+              <div
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "14px",
+                  border: "1px solid #E2E8F0",
+                  overflow: "hidden",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
+                }}
+              >
+                {/* Action Center Header Bar */}
                 <div
                   style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    backgroundColor: "#EDE9FE",
-                    color: "#7C3AED",
+                    padding: "1rem 1.25rem",
+                    borderBottom: "1px solid #F1F5F9",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center",
+                    justifyContent: "space-between",
+                    backgroundColor: "#FAF5FF",
                   }}
                 >
-                  <Bell size={18} />
-                </div>
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <h2 style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#4C1D95", margin: 0 }}>
-                      Automated Reminders & Action Center
-                    </h2>
-                    {reminders.length > 0 && (
-                      <span
-                        style={{
-                          backgroundColor: "#EF4444",
-                          color: "#FFFFFF",
-                          fontSize: "0.6875rem",
-                          fontWeight: 700,
-                          padding: "2px 8px",
-                          borderRadius: "10px",
-                        }}
-                      >
-                        {reminders.length} Active
-                      </span>
-                    )}
-                  </div>
-                  <p style={{ margin: 0, fontSize: "0.75rem", color: "#6B21A8" }}>
-                    Intelligent alerts for overdue invoices and scheduled follow-ups
-                  </p>
-                </div>
-              </div>
-
-              {/* Reminder Tabs Filter */}
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <button
-                  onClick={() => setReminderFilter("all")}
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    border: "none",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    backgroundColor: reminderFilter === "all" ? "#7C3AED" : "transparent",
-                    color: reminderFilter === "all" ? "#FFFFFF" : "#6B21A8",
-                  }}
-                >
-                  All ({reminders.length})
-                </button>
-                <button
-                  onClick={() => setReminderFilter("invoice_overdue")}
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    border: "none",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    backgroundColor: reminderFilter === "invoice_overdue" ? "#7C3AED" : "transparent",
-                    color: reminderFilter === "invoice_overdue" ? "#FFFFFF" : "#6B21A8",
-                  }}
-                >
-                  Invoices ({reminders.filter((r) => r.reminder_type === "invoice_overdue").length})
-                </button>
-                <button
-                  onClick={() => setReminderFilter("follow_up_due")}
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: "6px",
-                    border: "none",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    backgroundColor: reminderFilter === "follow_up_due" ? "#7C3AED" : "transparent",
-                    color: reminderFilter === "follow_up_due" ? "#FFFFFF" : "#6B21A8",
-                  }}
-                >
-                  Follow-ups ({reminders.filter((r) => r.reminder_type === "follow_up_due").length})
-                </button>
-              </div>
-            </div>
-
-            {/* Reminders List Body */}
-            <div style={{ padding: "1rem 1.25rem", maxHeight: "280px", overflowY: "auto" }}>
-              {filteredReminders.length === 0 ? (
-                <div style={{ padding: "1.5rem", textAlign: "center", color: "#059669", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                  <CheckCircle2 size={20} />
-                  <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>
-                    All caught up! No overdue invoices or pending follow-ups requiring attention.
-                  </span>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {filteredReminders.map((rem) => {
-                    const isOverdue = rem.reminder_type === "invoice_overdue";
-                    return (
-                      <div
-                        key={rem.id}
-                        style={{
-                          backgroundColor: isOverdue ? "#FFF1F2" : "#FFFBEB",
-                          border: isOverdue ? "1px solid #FECDD3" : "1px solid #FDE68A",
-                          borderRadius: "10px",
-                          padding: "10px 14px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "12px",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
-                          <div
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "8px",
+                        backgroundColor: "#EDE9FE",
+                        color: "#7C3AED",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Bell size={18} />
+                    </div>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <h2 style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#4C1D95", margin: 0 }}>
+                          Automated Reminders & Action Center
+                        </h2>
+                        {reminders.length > 0 && (
+                          <span
                             style={{
-                              width: "32px",
-                              height: "32px",
-                              borderRadius: "8px",
-                              backgroundColor: isOverdue ? "#FEE2E2" : "#FEF3C7",
-                              color: isOverdue ? "#E11D48" : "#D97706",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
+                              backgroundColor: "#EF4444",
+                              color: "#FFFFFF",
+                              fontSize: "0.6875rem",
+                              fontWeight: 700,
+                              padding: "2px 8px",
+                              borderRadius: "10px",
                             }}
                           >
-                            {isOverdue ? <Receipt size={17} /> : <Calendar size={17} />}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span style={{ fontSize: "0.875rem", fontWeight: 700, color: isOverdue ? "#9F1239" : "#92400E" }}>
-                                {rem.title}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: "0.6875rem",
-                                  fontWeight: 700,
-                                  padding: "1px 6px",
-                                  borderRadius: "4px",
-                                  backgroundColor: isOverdue ? "#E11D48" : "#D97706",
-                                  color: "#FFFFFF",
-                                  textTransform: "uppercase",
-                                }}
-                              >
-                                {rem.severity}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: "0.8125rem", color: isOverdue ? "#881337" : "#78350F", marginTop: "2px" }}>
-                              {rem.message}
-                            </div>
-                          </div>
-                        </div>
+                            {reminders.length} Active
+                          </span>
+                        )}
+                      </div>
+                      <p style={{ margin: 0, fontSize: "0.75rem", color: "#6B21A8" }}>
+                        Intelligent alerts for overdue invoices and scheduled follow-ups
+                      </p>
+                    </div>
+                  </div>
 
-                        {/* Action Buttons */}
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-                          {isOverdue ? (
-                            <>
-                              <button
-                                onClick={() => router.push(`/payments`)}
+                  {/* Reminder Tabs Filter */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <button
+                      onClick={() => setReminderFilter("all")}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        border: "none",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        backgroundColor: reminderFilter === "all" ? "#7C3AED" : "transparent",
+                        color: reminderFilter === "all" ? "#FFFFFF" : "#6B21A8",
+                      }}
+                    >
+                      All ({reminders.length})
+                    </button>
+                    <button
+                      onClick={() => setReminderFilter("invoice_overdue")}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        border: "none",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        backgroundColor: reminderFilter === "invoice_overdue" ? "#7C3AED" : "transparent",
+                        color: reminderFilter === "invoice_overdue" ? "#FFFFFF" : "#6B21A8",
+                      }}
+                    >
+                      Invoices ({reminders.filter((r) => r.reminder_type === "invoice_overdue").length})
+                    </button>
+                    <button
+                      onClick={() => setReminderFilter("follow_up_due")}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "6px",
+                        border: "none",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        backgroundColor: reminderFilter === "follow_up_due" ? "#7C3AED" : "transparent",
+                        color: reminderFilter === "follow_up_due" ? "#FFFFFF" : "#6B21A8",
+                      }}
+                    >
+                      Follow-ups ({reminders.filter((r) => r.reminder_type === "follow_up_due").length})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Reminders List Body */}
+                <div style={{ padding: "1rem 1.25rem", maxHeight: "280px", overflowY: "auto" }}>
+                  {filteredReminders.length === 0 ? (
+                    <div style={{ padding: "1.5rem", textAlign: "center", color: "#059669", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                      <CheckCircle2 size={20} />
+                      <span style={{ fontWeight: 600, fontSize: "0.875rem" }}>
+                        All caught up! No overdue invoices or pending follow-ups requiring attention.
+                      </span>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                      {filteredReminders.map((rem) => {
+                        const isOverdue = rem.reminder_type === "invoice_overdue";
+                        return (
+                          <div
+                            key={rem.id}
+                            className="dashboard-row-hover"
+                            style={{
+                              backgroundColor: isOverdue ? "#FFF1F2" : "#FFFBEB",
+                              border: isOverdue ? "1px solid #FECDD3" : "1px solid #FDE68A",
+                              borderRadius: "10px",
+                              padding: "10px 14px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "12px",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
+                              <div
                                 style={{
-                                  padding: "6px 12px",
-                                  borderRadius: "6px",
-                                  border: "none",
-                                  backgroundColor: "#E11D48",
-                                  color: "#FFFFFF",
-                                  fontSize: "0.75rem",
-                                  fontWeight: 600,
-                                  cursor: "pointer",
+                                  width: "32px",
+                                  height: "32px",
+                                  borderRadius: "8px",
+                                  backgroundColor: isOverdue ? "#FEE2E2" : "#FEF3C7",
+                                  color: isOverdue ? "#E11D48" : "#D97706",
                                   display: "flex",
                                   alignItems: "center",
-                                  gap: "4px",
+                                  justifyContent: "center",
+                                  flexShrink: 0,
                                 }}
                               >
-                                <CreditCard size={13} />
-                                <span>Record Payment</span>
-                              </button>
+                                {isOverdue ? <Receipt size={17} /> : <Calendar size={17} />}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                  <span style={{ fontSize: "0.875rem", fontWeight: 700, color: isOverdue ? "#9F1239" : "#92400E" }}>
+                                    {rem.title}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontSize: "0.6875rem",
+                                      fontWeight: 700,
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      backgroundColor: isOverdue ? "#E11D48" : "#D97706",
+                                      color: "#FFFFFF",
+                                      textTransform: "uppercase",
+                                    }}
+                                  >
+                                    {rem.severity}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: "0.8125rem", color: isOverdue ? "#881337" : "#78350F", marginTop: "2px" }}>
+                                  {rem.message}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+                              {isOverdue ? (
+                                <>
+                                  <button
+                                    onClick={() => router.push(`/payments`)}
+                                    style={{
+                                      padding: "6px 12px",
+                                      borderRadius: "6px",
+                                      border: "none",
+                                      backgroundColor: "#E11D48",
+                                      color: "#FFFFFF",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                    }}
+                                  >
+                                    <CreditCard size={13} />
+                                    <span>Record Payment</span>
+                                  </button>
+                                  <button
+                                    onClick={() => router.push(`/invoices?search=${encodeURIComponent(rem.entity_id)}`)}
+                                    style={{
+                                      padding: "6px 10px",
+                                      borderRadius: "6px",
+                                      border: "1px solid #FDA4AF",
+                                      backgroundColor: "#FFFFFF",
+                                      color: "#9F1239",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    View Invoice
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => handleCompleteFollowUp(rem)}
+                                  style={{
+                                    padding: "6px 12px",
+                                    borderRadius: "6px",
+                                    border: "none",
+                                    backgroundColor: "#0D9488",
+                                    color: "#FFFFFF",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}
+                                >
+                                  <Check size={13} />
+                                  <span>Mark Complete</span>
+                                </button>
+                              )}
+
+                              {/* Snooze & Dismiss */}
                               <button
-                                onClick={() => router.push(`/invoices?search=${encodeURIComponent(rem.entity_id)}`)}
+                                onClick={() => handleUpdateReminder(rem.id, "snoozed", 24)}
+                                title="Snooze reminder for 24 hours"
                                 style={{
                                   padding: "6px 10px",
                                   borderRadius: "6px",
-                                  border: "1px solid #FDA4AF",
+                                  border: "1px solid #CBD5E1",
                                   backgroundColor: "#FFFFFF",
-                                  color: "#9F1239",
+                                  color: "#475569",
                                   fontSize: "0.75rem",
-                                  fontWeight: 600,
+                                  fontWeight: 500,
                                   cursor: "pointer",
                                 }}
                               >
-                                View Invoice
+                                Snooze 24h
                               </button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => handleCompleteFollowUp(rem)}
-                              style={{
-                                padding: "6px 12px",
-                                borderRadius: "6px",
-                                border: "none",
-                                backgroundColor: "#0D9488",
-                                color: "#FFFFFF",
-                                fontSize: "0.75rem",
-                                fontWeight: 600,
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px",
-                              }}
-                            >
-                              <Check size={13} />
-                              <span>Mark Complete</span>
-                            </button>
-                          )}
-
-                          {/* Snooze & Dismiss */}
-                          <button
-                            onClick={() => handleUpdateReminder(rem.id, "snoozed", 24)}
-                            title="Snooze reminder for 24 hours"
-                            style={{
-                              padding: "6px 10px",
-                              borderRadius: "6px",
-                              border: "1px solid #CBD5E1",
-                              backgroundColor: "#FFFFFF",
-                              color: "#475569",
-                              fontSize: "0.75rem",
-                              fontWeight: 500,
-                              cursor: "pointer",
-                            }}
-                          >
-                            Snooze 24h
-                          </button>
-                          <button
-                            onClick={() => handleUpdateReminder(rem.id, "dismissed")}
-                            title="Dismiss reminder"
-                            style={{
-                              background: "none",
-                              border: "none",
-                              color: "#94A3B8",
-                              fontSize: "0.75rem",
-                              cursor: "pointer",
-                              padding: "4px",
-                            }}
-                          >
-                            Dismiss
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 2. Key Metrics KPI Cards Grid */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "1.125rem" }}>
-            {/* Card 1: Pipeline Value */}
-            <div
-              style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                border: "1px solid #E2E8F0",
-                padding: "1.25rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
-                  Pipeline Value
-                </span>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#EFF6FF", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Briefcase size={16} />
+                              <button
+                                onClick={() => handleUpdateReminder(rem.id, "dismissed")}
+                                title="Dismiss reminder"
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  color: "#94A3B8",
+                                  fontSize: "0.75rem",
+                                  cursor: "pointer",
+                                  padding: "4px",
+                                }}
+                              >
+                                Dismiss
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0F172A" }}>
-                {formatCompactINR(metrics?.total_pipeline_value)}
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                {metrics?.total_deals || 0} active deals in pipeline
-              </div>
-            </div>
 
-            {/* Card 2: Revenue Collected */}
-            <div
-              style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                border: "1px solid #E2E8F0",
-                padding: "1.25rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
-                  Received Revenue
-                </span>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#ECFDF5", color: "#059669", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <CheckCircle2 size={16} />
+              {/* 2. Key Metrics KPI Cards Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "1.125rem" }}>
+                {/* Card 1: Pipeline Value */}
+                <div
+                  className="dashboard-kpi-card"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "12px",
+                    border: "1px solid #E2E8F0",
+                    padding: "1.25rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                      Pipeline Value
+                    </span>
+                    <div className="kpi-icon-box" style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#EFF6FF", color: "#2563EB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Briefcase size={16} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0F172A" }}>
+                    <AnimatedCounter value={metrics?.total_pipeline_value || 0} formatter={formatCompactINR} />
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                    <AnimatedCounter value={metrics?.total_deals || 0} /> active deals in pipeline
+                  </div>
+                </div>
+
+                {/* Card 2: Revenue Collected */}
+                <div
+                  className="dashboard-kpi-card"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "12px",
+                    border: "1px solid #E2E8F0",
+                    padding: "1.25rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                      Received Revenue
+                    </span>
+                    <div className="kpi-icon-box" style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#ECFDF5", color: "#059669", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <CheckCircle2 size={16} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#059669" }}>
+                    <AnimatedCounter value={metrics?.total_received || 0} formatter={formatCompactINR} />
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                    Payments collected in period
+                  </div>
+                </div>
+
+                {/* Card 3: Total Invoiced */}
+                <div
+                  className="dashboard-kpi-card"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "12px",
+                    border: "1px solid #E2E8F0",
+                    padding: "1.25rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                      Total Invoiced
+                    </span>
+                    <div className="kpi-icon-box" style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#EEF2FF", color: "#4F46E5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <FileText size={16} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0F172A" }}>
+                    <AnimatedCounter value={metrics?.total_invoiced || 0} formatter={formatCompactINR} />
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                    Billed across invoices
+                  </div>
+                </div>
+
+                {/* Card 4: Outstanding Balance */}
+                <div
+                  className="dashboard-kpi-card"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "12px",
+                    border: "1px solid #E2E8F0",
+                    padding: "1.25rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                      Outstanding
+                    </span>
+                    <div className="kpi-icon-box" style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#FEF3C7", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Clock size={16} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#D97706" }}>
+                    <AnimatedCounter value={metrics?.outstanding_balance || 0} formatter={formatCompactINR} />
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                    Pending collection balance
+                  </div>
+                </div>
+
+                {/* Card 5: Overdue Balance */}
+                <div
+                  className="dashboard-kpi-card"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "12px",
+                    border: "1px solid #E2E8F0",
+                    padding: "1.25rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                      Overdue Invoices
+                    </span>
+                    <div className="kpi-icon-box" style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#FEE2E2", color: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <AlertTriangle size={16} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#DC2626" }}>
+                    <AnimatedCounter value={metrics?.overdue_balance || 0} formatter={formatCompactINR} />
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                    Invoices past due date
+                  </div>
+                </div>
+
+                {/* Card 6: Won Deals / Win Rate */}
+                <div
+                  className="dashboard-kpi-card"
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    borderRadius: "12px",
+                    border: "1px solid #E2E8F0",
+                    padding: "1.25rem",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                      Won Deals Revenue
+                    </span>
+                    <div className="kpi-icon-box" style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#CCFBF1", color: "#0F766E", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <TrendingUp size={16} />
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0F766E" }}>
+                    <AnimatedCounter value={metrics?.won_deals_value || 0} formatter={formatCompactINR} />
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                    <AnimatedCounter value={metrics?.won_deals_count || 0} /> won (<AnimatedCounter value={metrics?.conversion_rate || 0} formatter={(v) => v.toFixed(0)} />% win rate)
+                  </div>
                 </div>
               </div>
-              <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#059669" }}>
-                {formatCompactINR(metrics?.total_received)}
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                Payments collected in period
-              </div>
-            </div>
-
-            {/* Card 3: Total Invoiced */}
-            <div
-              style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                border: "1px solid #E2E8F0",
-                padding: "1.25rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
-                  Total Invoiced
-                </span>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#EEF2FF", color: "#4F46E5", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <FileText size={16} />
-                </div>
-              </div>
-              <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0F172A" }}>
-                {formatCompactINR(metrics?.total_invoiced)}
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                Billed across invoices
-              </div>
-            </div>
-
-            {/* Card 4: Outstanding Balance */}
-            <div
-              style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                border: "1px solid #E2E8F0",
-                padding: "1.25rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
-                  Outstanding
-                </span>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#FEF3C7", color: "#D97706", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Clock size={16} />
-                </div>
-              </div>
-              <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#D97706" }}>
-                {formatCompactINR(metrics?.outstanding_balance)}
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                Pending collection balance
-              </div>
-            </div>
-
-            {/* Card 5: Overdue Balance */}
-            <div
-              style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                border: "1px solid #E2E8F0",
-                padding: "1.25rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
-                  Overdue Invoices
-                </span>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#FEE2E2", color: "#DC2626", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <AlertTriangle size={16} />
-                </div>
-              </div>
-              <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#DC2626" }}>
-                {formatCompactINR(metrics?.overdue_balance)}
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                Invoices past due date
-              </div>
-            </div>
-
-            {/* Card 6: Won Deals / Win Rate */}
-            <div
-              style={{
-                backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                border: "1px solid #E2E8F0",
-                padding: "1.25rem",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
-                  Won Deals Revenue
-                </span>
-                <div style={{ width: "32px", height: "32px", borderRadius: "8px", backgroundColor: "#CCFBF1", color: "#0F766E", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <TrendingUp size={16} />
-                </div>
-              </div>
-              <div style={{ fontSize: "1.375rem", fontWeight: 800, color: "#0F766E" }}>
-                {formatCompactINR(metrics?.won_deals_value)}
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                {metrics?.won_deals_count || 0} won ({(metrics?.conversion_rate || 0).toFixed(0)}% win rate)
-              </div>
-            </div>
-          </div>
 
           {/* 3. Visual Sales Charts Section (2 Columns) */}
           <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "1.25rem" }}>
@@ -942,6 +1200,7 @@ export default function DashboardPage() {
                       >
                         {/* Invoiced Bar */}
                         <rect
+                          className="chart-bar-rect"
                           x={xCenter - barW - 2}
                           y={invY}
                           width={barW}
@@ -949,9 +1208,13 @@ export default function DashboardPage() {
                           rx="3"
                           fill="#3B82F6"
                           opacity={isHovered ? 1 : 0.85}
+                          style={{
+                            transitionDelay: `${idx * 40}ms`,
+                          }}
                         />
                         {/* Received Bar */}
                         <rect
+                          className="chart-bar-rect"
                           x={xCenter + 2}
                           y={recY}
                           width={barW}
@@ -959,6 +1222,9 @@ export default function DashboardPage() {
                           rx="3"
                           fill="#10B981"
                           opacity={isHovered ? 1 : 0.85}
+                          style={{
+                            transitionDelay: `${idx * 40 + 20}ms`,
+                          }}
                         />
                         {/* Month Label */}
                         <text
@@ -1040,7 +1306,7 @@ export default function DashboardPage() {
                     No deals recorded in pipeline yet.
                   </div>
                 ) : (
-                  pipelineDist.map((stg) => {
+                  pipelineDist.map((stg, idx) => {
                     const pct = totalPipelineSum > 0 ? (stg.total_value / totalPipelineSum) * 100 : 0;
                     return (
                       <div key={stg.stage_id} style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1057,12 +1323,13 @@ export default function DashboardPage() {
                         {/* Progress Bar */}
                         <div style={{ width: "100%", height: "6px", backgroundColor: "#F1F5F9", borderRadius: "3px", overflow: "hidden" }}>
                           <div
+                            className="progress-bar-fill"
                             style={{
                               width: `${Math.max(pct, stg.deals_count > 0 ? 5 : 0)}%`,
                               height: "100%",
                               backgroundColor: stg.color || "#0D9488",
                               borderRadius: "3px",
-                              transition: "width 0.3s ease",
+                              transitionDelay: `${idx * 45}ms`,
                             }}
                           />
                         </div>
@@ -1136,11 +1403,13 @@ export default function DashboardPage() {
                     return (
                       <div
                         key={act.id + act.module}
+                        className="dashboard-row-hover"
                         style={{
                           display: "flex",
                           alignItems: "flex-start",
                           gap: "10px",
-                          paddingBottom: "0.75rem",
+                          padding: "6px 8px",
+                          borderRadius: "8px",
                           borderBottom: "1px solid #F8FAFC",
                         }}
                       >
@@ -1317,29 +1586,35 @@ export default function DashboardPage() {
               >
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
                   <span>Total Leads Ingested:</span>
-                  <strong style={{ color: "#0F172A" }}>{metrics?.total_leads || 0}</strong>
+                  <strong style={{ color: "#0F172A" }}>
+                    <AnimatedCounter value={metrics?.total_leads || 0} />
+                  </strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
                   <span>Customer Accounts:</span>
-                  <strong style={{ color: "#0F172A" }}>{metrics?.total_customers || 0}</strong>
+                  <strong style={{ color: "#0F172A" }}>
+                    <AnimatedCounter value={metrics?.total_customers || 0} />
+                  </strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
                   <span>Pending Follow-ups:</span>
                   <strong style={{ color: metrics?.pending_follow_ups ? "#D97706" : "#059669" }}>
-                    {metrics?.pending_follow_ups || 0}
+                    <AnimatedCounter value={metrics?.pending_follow_ups || 0} />
                   </strong>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", color: "#475569" }}>
                   <span>Overdue Follow-ups:</span>
                   <strong style={{ color: metrics?.overdue_follow_ups ? "#DC2626" : "#059669" }}>
-                    {metrics?.overdue_follow_ups || 0}
+                    <AnimatedCounter value={metrics?.overdue_follow_ups || 0} />
                   </strong>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
+  </div>
+</div>
   );
 }

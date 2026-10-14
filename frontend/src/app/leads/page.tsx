@@ -113,13 +113,10 @@ export default function UniversalLeadsPage() {
     action: "prevent",
   });
 
-  // Leads Data & Pagination State
+  // Leads Data State
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalLeads, setTotalLeads] = useState(0);
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(25);
-  const [totalPages, setTotalPages] = useState(1);
   const [viewCounts, setViewCounts] = useState<Record<string, number>>({
     all: 0,
     my_leads: 0,
@@ -278,6 +275,10 @@ export default function UniversalLeadsPage() {
         router.push("/deals");
         return;
       }
+      if (tabParam === "inventory") {
+        router.push("/inventory");
+        return;
+      }
       if (tabParam && ["leads", "follow-ups", "api-keys", "api-docs", "profile"].includes(tabParam)) {
         setActiveTab(tabParam);
       }
@@ -301,6 +302,10 @@ export default function UniversalLeadsPage() {
   const handleSelectTab = (tab: SidebarTab) => {
     if (tab === "dashboard") {
       router.push("/dashboard");
+      return;
+    }
+    if (tab === "inventory") {
+      router.push("/inventory");
       return;
     }
     if (tab === "products") {
@@ -423,13 +428,11 @@ export default function UniversalLeadsPage() {
         include_deleted: currentView === "trash",
         sort_by: sortField,
         sort_order: sortOrder,
-        page,
-        limit,
+        limit: 0,
       });
 
       setLeads(res.items);
       setTotalLeads(res.total);
-      setTotalPages(res.pages);
       if (res.view_counts) {
         setViewCounts(res.view_counts);
       }
@@ -455,8 +458,6 @@ export default function UniversalLeadsPage() {
     selectedFollowUpFilter,
     sortField,
     sortOrder,
-    page,
-    limit,
   ]);
 
   // Handle Search input debounce
@@ -464,7 +465,6 @@ export default function UniversalLeadsPage() {
     setSearchTerm(val);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => {
-      setPage(1);
       fetchLeads();
     }, 350);
   };
@@ -1390,7 +1390,6 @@ export default function UniversalLeadsPage() {
                 key={viewItem.id}
                 onClick={() => {
                   setCurrentView(viewItem.id as ViewType);
-                  setPage(1);
                 }}
                 style={{
                   display: "flex",
@@ -1466,7 +1465,6 @@ export default function UniversalLeadsPage() {
               value={selectedStatus}
               onChange={(e) => {
                 setSelectedStatus(e.target.value);
-                setPage(1);
               }}
               style={{
                 padding: "0.45rem 0.625rem",
@@ -1491,7 +1489,6 @@ export default function UniversalLeadsPage() {
               value={selectedSource}
               onChange={(e) => {
                 setSelectedSource(e.target.value);
-                setPage(1);
               }}
               style={{
                 padding: "0.45rem 0.625rem",
@@ -1516,7 +1513,6 @@ export default function UniversalLeadsPage() {
               value={selectedOwnerId}
               onChange={(e) => {
                 setSelectedOwnerId(e.target.value);
-                setPage(1);
               }}
               style={{
                 padding: "0.45rem 0.625rem",
@@ -1542,7 +1538,6 @@ export default function UniversalLeadsPage() {
               value={selectedFollowUpFilter}
               onChange={(e) => {
                 setSelectedFollowUpFilter(e.target.value);
-                setPage(1);
               }}
               style={{
                 padding: "0.45rem 0.625rem",
@@ -1894,11 +1889,11 @@ export default function UniversalLeadsPage() {
                         )}
 
                         {visibleColumns.status && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
+                          <td style={{ padding: "0.75rem 1rem", whiteSpace: "nowrap" }}>
                             <span
                               style={{
                                 display: "inline-block",
-                                padding: "0.2rem 0.5rem",
+                                padding: "0.2rem 0.55rem",
                                 borderRadius: "999px",
                                 fontSize: "0.6875rem",
                                 fontWeight: 700,
@@ -1909,33 +1904,6 @@ export default function UniversalLeadsPage() {
                             >
                               {lead.status}
                             </span>
-                            {lead.deal_number && (
-                              <div style={{ marginTop: "4px" }}>
-                                <Link
-                                  href="/deals"
-                                  title={`Linked Deal: ${lead.deal_number} (${lead.deal_stage || ""})`}
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "3px",
-                                    padding: "0.15rem 0.45rem",
-                                    borderRadius: "4px",
-                                    fontSize: "0.6875rem",
-                                    fontWeight: 700,
-                                    backgroundColor: lead.deal_stage_color ? `${lead.deal_stage_color}18` : "#EFF6FF",
-                                    color: lead.deal_stage_color || "#2563EB",
-                                    border: `1px solid ${lead.deal_stage_color ? `${lead.deal_stage_color}40` : "#BFDBFE"}`,
-                                    textDecoration: "none",
-                                  }}
-                                >
-                                  <Briefcase size={10} />
-                                  <span>{lead.deal_number}</span>
-                                  {lead.deal_stage && (
-                                    <span style={{ fontWeight: 600, opacity: 0.85 }}>• {lead.deal_stage}</span>
-                                  )}
-                                </Link>
-                              </div>
-                            )}
                           </td>
                         )}
 
@@ -2126,7 +2094,7 @@ export default function UniversalLeadsPage() {
             </div>
           )}
 
-          {/* Table Footer with Pagination */}
+          {/* Table Footer with Total Count */}
           <div
             style={{
               padding: "0.75rem 1.25rem",
@@ -2140,63 +2108,9 @@ export default function UniversalLeadsPage() {
             }}
           >
             <div>
-              Showing {leads.length > 0 ? (page - 1) * limit + 1 : 0} to{" "}
-              {Math.min(page * limit, totalLeads)} of {totalLeads} leads
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                <span>Per page:</span>
-                <select
-                  value={limit}
-                  onChange={(e) => {
-                    setLimit(Number(e.target.value));
-                    setPage(1);
-                  }}
-                  style={{
-                    padding: "0.25rem 0.5rem",
-                    borderRadius: "4px",
-                    border: "1px solid #CBD5E1",
-                    backgroundColor: "#FFFFFF",
-                  }}
-                >
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                <button
-                  onClick={() => setPage(Math.max(1, page - 1))}
-                  disabled={page <= 1}
-                  style={{
-                    padding: "0.25rem 0.5rem",
-                    borderRadius: "4px",
-                    border: "1px solid #CBD5E1",
-                    backgroundColor: page <= 1 ? "#F1F5F9" : "#FFFFFF",
-                    cursor: page <= 1 ? "not-allowed" : "pointer",
-                  }}
-                >
-                  Prev
-                </button>
-                <span>
-                  Page {page} of {totalPages}
-                </span>
-                <button
-                  onClick={() => setPage(Math.min(totalPages, page + 1))}
-                  disabled={page >= totalPages}
-                  style={{
-                    padding: "0.25rem 0.5rem",
-                    borderRadius: "4px",
-                    border: "1px solid #CBD5E1",
-                    backgroundColor: page >= totalPages ? "#F1F5F9" : "#FFFFFF",
-                    cursor: page >= totalPages ? "not-allowed" : "pointer",
-                  }}
-                >
-                  Next
-                </button>
-              </div>
+              {leads.length !== totalLeads
+                ? `Showing ${leads.length} of ${totalLeads} leads`
+                : `Showing all ${leads.length} leads`}
             </div>
           </div>
         </div>
@@ -2583,6 +2497,51 @@ export default function UniversalLeadsPage() {
                       </div>
                       <div style={{ fontSize: "0.875rem", color: "#991B1B" }}>
                         {activeLead.lost_reason}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Linked Deal Lineage & Full Stage History */}
+                  {activeLead.deal_number && (
+                    <div style={{ backgroundColor: "#F0FDF4", borderRadius: "8px", padding: "1rem", border: "1px solid #BBF7D0" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                        <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#166534", textTransform: "uppercase" }}>
+                          Linked Deal Lineage & Stage
+                        </div>
+                        <Link
+                          href="/deals"
+                          style={{
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            color: "#15803D",
+                            textDecoration: "none",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          View in Pipeline <ExternalLink size={12} />
+                        </Link>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        <span style={{ fontWeight: 800, color: "#0F172A", fontSize: "0.9375rem" }}>
+                          Deal #{activeLead.deal_number}
+                        </span>
+                        {activeLead.deal_stage && (
+                          <span
+                            style={{
+                              padding: "2px 8px",
+                              borderRadius: "999px",
+                              fontSize: "0.75rem",
+                              fontWeight: 700,
+                              backgroundColor: activeLead.deal_stage_color ? `${activeLead.deal_stage_color}20` : "#DCFCE7",
+                              color: activeLead.deal_stage_color || "#15803D",
+                              border: `1px solid ${activeLead.deal_stage_color ? `${activeLead.deal_stage_color}40` : "#86EFAC"}`,
+                            }}
+                          >
+                            Stage: {activeLead.deal_stage}
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}

@@ -96,7 +96,12 @@ func (h *LeadHandler) List(c *gin.Context) {
 	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	limit := 20
+	if limitStr := c.Query("limit"); limitStr != "" {
+		limit, _ = strconv.Atoi(limitStr)
+	} else if c.Query("all") == "true" {
+		limit = 0
+	}
 	sortBy := c.DefaultQuery("sort_by", "created_at")
 	sortDir := c.DefaultQuery("sort_dir", "desc")
 

@@ -22,7 +22,12 @@ func NewProductHandler(repo *repository.ProductRepository) *ProductHandler {
 // List handles GET /api/products
 func (h *ProductHandler) List(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+	limit := 50
+	if limitStr := c.Query("limit"); limitStr != "" {
+		limit, _ = strconv.Atoi(limitStr)
+	} else if c.Query("all") == "true" {
+		limit = 0
+	}
 	search := c.Query("search")
 	category := c.Query("category")
 	status := c.Query("status")

@@ -43,22 +43,26 @@ import {
 
 const ORDER_STAGES: OrderStage[] = [
   "Not Started",
+  "Confirmed",
   "Planning",
   "In Progress",
   "Client Review",
   "Revision/Changes",
   "Delivered",
   "Completed",
+  "Cancelled",
 ];
 
 const STAGE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   "Not Started": { bg: "#F1F5F9", text: "#475569", border: "#CBD5E1" },
+  "Confirmed": { bg: "#F0FDF4", text: "#16A34A", border: "#BBF7D0" },
   "Planning": { bg: "#EEF2FF", text: "#4F46E5", border: "#C7D2FE" },
   "In Progress": { bg: "#EFF6FF", text: "#2563EB", border: "#BFDBFE" },
   "Client Review": { bg: "#FAF5FF", text: "#9333EA", border: "#E9D5FF" },
   "Revision/Changes": { bg: "#FFFBEB", text: "#D97706", border: "#FDE68A" },
   "Delivered": { bg: "#ECFEFF", text: "#0891B2", border: "#A5F3FC" },
   "Completed": { bg: "#ECFDF5", text: "#059669", border: "#A7F3D0" },
+  "Cancelled": { bg: "#FEF2F2", text: "#DC2626", border: "#FECACA" },
 };
 
 const PAYMENT_COLORS: Record<string, { bg: string; text: string }> = {
@@ -368,6 +372,7 @@ export default function OrdersPage() {
             // Already on orders
           } else if (tab === "invoices") router.push("/invoices");
           else if (tab === "payments") router.push("/payments");
+          else if (tab === "inventory") router.push("/inventory");
           else if (tab === "products") router.push("/products");
           else if (tab === "follow-ups") router.push("/follow-ups");
           else if (tab === "company") router.push("/company");
@@ -726,14 +731,12 @@ export default function OrdersPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                 <thead>
                   <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
-                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Order #</th>
+                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Order # & Date</th>
                     <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Title & Customer</th>
-                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Linked Deal / Quote</th>
-                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Stage</th>
-                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Payment</th>
-                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Invoice</th>
+                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Sales Lineage</th>
+                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Stage & Inventory</th>
+                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Billing Status</th>
                     <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right" }}>Amount</th>
-                    <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em" }}>Delivery Date</th>
                     <th style={{ padding: "12px 16px", fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center" }}>Actions</th>
                   </tr>
                 </thead>
@@ -755,7 +758,7 @@ export default function OrdersPage() {
                         onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
                         onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
                       >
-                        {/* Order Number */}
+                        {/* Order Number & Delivery Date */}
                         <td style={{ padding: "14px 16px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#0D9488", fontFamily: "monospace" }}>
@@ -779,6 +782,9 @@ export default function OrdersPage() {
                               {copiedId === String(ord.id) ? <Check size={12} color="#059669" /> : <Copy size={12} />}
                             </button>
                           </div>
+                          <div style={{ fontSize: "0.75rem", color: ord.delivery_date ? "#64748B" : "#94A3B8", marginTop: "3px" }}>
+                            Delivery: {ord.delivery_date || "Not set"}
+                          </div>
                         </td>
 
                         {/* Title & Customer */}
@@ -793,7 +799,7 @@ export default function OrdersPage() {
 
                         {/* Linked Deal / Quote / Lead */}
                         <td style={{ padding: "14px 16px" }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
                             {(ord.lead_number || ord.deal?.lead_number || ord.quotation?.lead_number) && (
                               <span
                                 onClick={(e) => {
@@ -869,13 +875,13 @@ export default function OrdersPage() {
                                 {ord.quotation.quotation_number}
                               </span>
                             )}
-                            {!ord.deal && !ord.quotation && !(ord.lead_number || ord.deal?.lead_number || ord.quotation?.lead_number) && (
+                            {!ord.deal && !ord.quotation && !ord.lead_number && (
                               <span style={{ fontSize: "0.75rem", color: "#94A3B8" }}>—</span>
                             )}
                           </div>
                         </td>
 
-                        {/* Stage */}
+                        {/* Stage & Inventory */}
                         <td style={{ padding: "14px 16px" }}>
                           <span
                             style={{
@@ -891,53 +897,54 @@ export default function OrdersPage() {
                           >
                             {ord.stage}
                           </span>
+                          {ord.inventory_status === "reserved" && (
+                            <div style={{ fontSize: "0.6875rem", color: "#7C3AED", fontWeight: 700, marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
+                              <span>📦 Reserved</span>
+                            </div>
+                          )}
+                          {ord.inventory_status === "deducted" && (
+                            <div style={{ fontSize: "0.6875rem", color: "#16A34A", fontWeight: 700, marginTop: "4px", display: "flex", alignItems: "center", gap: "3px" }}>
+                              <span>✓ Stock Deducted</span>
+                            </div>
+                          )}
                         </td>
 
-                        {/* Payment Status */}
+                        {/* Billing Status (Payment & Invoice) */}
                         <td style={{ padding: "14px 16px" }}>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              fontSize: "0.6875rem",
-                              fontWeight: 700,
-                              backgroundColor: payStyle.bg,
-                              color: payStyle.text,
-                            }}
-                          >
-                            {ord.payment_status}
-                          </span>
-                        </td>
-
-                        {/* Invoice Status */}
-                        <td style={{ padding: "14px 16px" }}>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                              fontSize: "0.6875rem",
-                              fontWeight: 700,
-                              backgroundColor: invStyle.bg,
-                              color: invStyle.text,
-                            }}
-                          >
-                            {ord.invoice_status}
-                          </span>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "fit-content" }}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "0.6875rem",
+                                fontWeight: 700,
+                                backgroundColor: payStyle.bg,
+                                color: payStyle.text,
+                              }}
+                            >
+                              Pay: {ord.payment_status}
+                            </span>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "0.6875rem",
+                                fontWeight: 700,
+                                backgroundColor: invStyle.bg,
+                                color: invStyle.text,
+                              }}
+                            >
+                              Inv: {ord.invoice_status}
+                            </span>
+                          </div>
                         </td>
 
                         {/* Amount */}
                         <td style={{ padding: "14px 16px", textAlign: "right" }}>
                           <span style={{ fontSize: "0.875rem", fontWeight: 700, color: "#0F172A" }}>
                             {formatCurrency(ord.total_amount, ord.currency)}
-                          </span>
-                        </td>
-
-                        {/* Delivery Date */}
-                        <td style={{ padding: "14px 16px" }}>
-                          <span style={{ fontSize: "0.8125rem", color: ord.delivery_date ? "#334155" : "#94A3B8" }}>
-                            {ord.delivery_date || "Not set"}
                           </span>
                         </td>
 

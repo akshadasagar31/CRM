@@ -82,7 +82,6 @@ export default function ProductsPage() {
   const [totalCount, setTotalCount] = useState(0);
   const [activeCount, setActiveCount] = useState(0);
   const [inactiveCount, setInactiveCount] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -92,8 +91,6 @@ export default function ProductsPage() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
 
   // Modals & Drawers
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -198,21 +195,19 @@ export default function ProductsPage() {
         status: selectedStatus !== "all" ? selectedStatus : undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
-        page: currentPage,
-        limit: pageSize,
+        limit: 0,
       });
 
       setProducts(res.items || []);
       setTotalCount(res.total || 0);
       setActiveCount(res.active_count || 0);
       setInactiveCount(res.inactive_count || 0);
-      setTotalPages(res.pages || 1);
     } catch (err: any) {
       showToast(err.message || "Failed to load products", "error");
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, selectedCategory, selectedStatus, sortBy, sortOrder, currentPage, pageSize]);
+  }, [searchQuery, selectedCategory, selectedStatus, sortBy, sortOrder]);
 
   useEffect(() => {
     fetchProducts();
@@ -229,6 +224,8 @@ export default function ProductsPage() {
       router.push("/leads");
     } else if (tab === "deals") {
       router.push("/deals");
+    } else if (tab === "inventory") {
+      router.push("/inventory");
     } else if (tab === "products") {
       // Current route
     } else if (tab === "quotations") {
@@ -867,7 +864,6 @@ export default function ProductsPage() {
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
-                  setCurrentPage(1);
                 }}
                 style={{
                   width: "100%",
@@ -884,7 +880,6 @@ export default function ProductsPage() {
                 <button
                   onClick={() => {
                     setSearchQuery("");
-                    setCurrentPage(1);
                   }}
                   style={{
                     position: "absolute",
@@ -911,7 +906,6 @@ export default function ProductsPage() {
                   value={selectedCategory}
                   onChange={(e) => {
                     setSelectedCategory(e.target.value);
-                    setCurrentPage(1);
                   }}
                   style={{
                     padding: "0.45rem 0.75rem",
@@ -941,7 +935,6 @@ export default function ProductsPage() {
                   value={selectedStatus}
                   onChange={(e) => {
                     setSelectedStatus(e.target.value);
-                    setCurrentPage(1);
                   }}
                   style={{
                     padding: "0.45rem 0.75rem",
@@ -970,7 +963,6 @@ export default function ProductsPage() {
                     const [field, order] = e.target.value.split("-");
                     setSortBy(field);
                     setSortOrder(order as "asc" | "desc");
-                    setCurrentPage(1);
                   }}
                   style={{
                     padding: "0.45rem 0.75rem",
@@ -1064,6 +1056,7 @@ export default function ProductsPage() {
                     <th style={{ padding: "0.875rem 1rem" }}>Category</th>
                     <th style={{ padding: "0.875rem 1rem" }}>Unit</th>
                     <th style={{ padding: "0.875rem 1rem", textAlign: "right" }}>Selling Price</th>
+                    <th style={{ padding: "0.875rem 1rem", textAlign: "right" }}>Stock (Avail / On-Hand)</th>
                     <th style={{ padding: "0.875rem 1rem", textAlign: "center" }}>Tax</th>
                     <th style={{ padding: "0.875rem 1rem", textAlign: "center" }}>Status</th>
                     <th style={{ padding: "0.875rem 1.25rem", textAlign: "right" }}>Actions</th>
@@ -1072,14 +1065,14 @@ export default function ProductsPage() {
                 <tbody>
                   {isLoading && products.length === 0 ? (
                     <tr>
-                      <td colSpan={9} style={{ padding: "3rem", textAlign: "center", color: "#64748B" }}>
+                      <td colSpan={10} style={{ padding: "3rem", textAlign: "center", color: "#64748B" }}>
                         <RefreshCw size={24} style={{ animation: "spin 1s linear infinite", margin: "0 auto 8px" }} />
                         <div style={{ fontWeight: 600 }}>Loading products...</div>
                       </td>
                     </tr>
                   ) : products.length === 0 ? (
                     <tr>
-                      <td colSpan={9} style={{ padding: "4rem 2rem", textAlign: "center" }}>
+                      <td colSpan={10} style={{ padding: "4rem 2rem", textAlign: "center" }}>
                         <div
                           style={{
                             width: "56px",
@@ -1268,6 +1261,16 @@ export default function ProductsPage() {
                             </div>
                           </td>
 
+                          {/* Stock Level */}
+                          <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <div style={{ fontSize: "0.875rem", fontWeight: 800, color: ((p.available_stock || 0) <= 0) ? "#DC2626" : ((p.available_stock || 0) <= (p.low_stock_threshold || 10)) ? "#D97706" : "#16A34A" }}>
+                              {p.available_stock || 0} Avail
+                            </div>
+                            <div style={{ fontSize: "0.6875rem", color: "#64748B" }}>
+                              {p.current_stock || 0} On-Hand ({p.reserved_stock || 0} Res)
+                            </div>
+                          </td>
+
                           {/* Tax Rate */}
                           <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", textAlign: "center", whiteSpace: "nowrap" }}>
                             <span
@@ -1433,7 +1436,7 @@ export default function ProductsPage() {
               </table>
             </div>
 
-            {/* Pagination Footer */}
+            {/* Table Footer with Total Count */}
             <div
               style={{
                 display: "flex",
@@ -1446,84 +1449,10 @@ export default function ProductsPage() {
                 gap: "1rem",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "0.75rem", color: "#64748B" }}>
-                <span>
-                  Showing {products.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to{" "}
-                  {Math.min(currentPage * pageSize, totalCount)} of {totalCount} products
-                </span>
-                <span style={{ color: "#CBD5E1" }}>|</span>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <span>Rows:</span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    style={{
-                      padding: "2px 6px",
-                      borderRadius: "6px",
-                      border: "1px solid #CBD5E1",
-                      backgroundColor: "#FFFFFF",
-                      fontSize: "0.75rem",
-                      color: "#334155",
-                    }}
-                  >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Prev / Next controls */}
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "0.35rem 0.65rem",
-                    borderRadius: "6px",
-                    border: "1px solid #CBD5E1",
-                    backgroundColor: currentPage <= 1 ? "#F1F5F9" : "#FFFFFF",
-                    color: currentPage <= 1 ? "#94A3B8" : "#334155",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    cursor: currentPage <= 1 ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <ChevronLeft size={14} />
-                  <span>Prev</span>
-                </button>
-
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#334155", padding: "0 6px" }}>
-                  Page {currentPage} of {totalPages}
-                </span>
-
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage >= totalPages}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "0.35rem 0.65rem",
-                    borderRadius: "6px",
-                    border: "1px solid #CBD5E1",
-                    backgroundColor: currentPage >= totalPages ? "#F1F5F9" : "#FFFFFF",
-                    color: currentPage >= totalPages ? "#94A3B8" : "#334155",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    cursor: currentPage >= totalPages ? "not-allowed" : "pointer",
-                  }}
-                >
-                  <span>Next</span>
-                  <ChevronRight size={14} />
-                </button>
+              <div style={{ fontSize: "0.8125rem", color: "#64748B" }}>
+                {products.length !== totalCount
+                  ? `Showing ${products.length} of ${totalCount} products`
+                  : `Showing all ${products.length} products`}
               </div>
             </div>
           </section>

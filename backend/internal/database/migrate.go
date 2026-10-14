@@ -580,6 +580,34 @@ func (db *DB) Migrate() error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_automated_reminders_status ON automated_reminders(workspace_id, status);`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS uq_automated_reminders_entity ON automated_reminders(workspace_id, reminder_type, entity_id);`,
+
+		// 38. Inventory Management & Stock Movements
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS current_stock NUMERIC(12, 2) NOT NULL DEFAULT 0.00;`,
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS reserved_stock NUMERIC(12, 2) NOT NULL DEFAULT 0.00;`,
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS sold_quantity NUMERIC(12, 2) NOT NULL DEFAULT 0.00;`,
+		`ALTER TABLE products ADD COLUMN IF NOT EXISTS low_stock_threshold NUMERIC(12, 2) NOT NULL DEFAULT 10.00;`,
+		`ALTER TABLE orders ADD COLUMN IF NOT EXISTS inventory_status VARCHAR(50) NOT NULL DEFAULT 'unreserved';`,
+		`CREATE TABLE IF NOT EXISTS stock_movements (
+			id SERIAL PRIMARY KEY,
+			product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+			movement_type VARCHAR(50) NOT NULL,
+			quantity NUMERIC(12, 2) NOT NULL,
+			reference_type VARCHAR(50),
+			reference_id VARCHAR(100),
+			previous_stock NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+			new_stock NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+			previous_reserved NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+			new_reserved NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+			notes TEXT,
+			condition VARCHAR(50) NOT NULL DEFAULT 'good',
+			workspace_id INTEGER NOT NULL DEFAULT 1,
+			created_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_stock_movements_workspace ON stock_movements(workspace_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_stock_movements_created_at ON stock_movements(created_at DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_stock_movements_ref ON stock_movements(reference_type, reference_id);`,
 	}
 
 	for _, query := range queries {

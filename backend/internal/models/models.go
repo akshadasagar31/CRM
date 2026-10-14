@@ -454,49 +454,57 @@ type LeadConvertResponse struct {
 
 // Product represents a product, subscription or service in the catalog
 type Product struct {
-	ID           int          `json:"id"`
-	Name         string       `json:"name"`
-	SKU          string       `json:"sku"`
-	Category     string       `json:"category"`
-	Description  *string      `json:"description"`
-	Unit         string       `json:"unit"`
-	SellingPrice float64      `json:"selling_price"`
-	Currency     string       `json:"currency"`
-	TaxRate      float64      `json:"tax_rate"`
-	HsnSac       *string      `json:"hsn_sac"`
-	Status       string       `json:"status"` // "active" or "inactive"
-	WorkspaceID  int          `json:"workspace_id"`
-	CreatedByID  *int         `json:"created_by_id"`
-	Creator      *UserSummary `json:"creator,omitempty"`
-	CreatedAt    time.Time    `json:"created_at"`
-	UpdatedAt    time.Time    `json:"updated_at"`
-	DeletedAt    *time.Time   `json:"deleted_at,omitempty"`
+	ID                int          `json:"id"`
+	Name              string       `json:"name"`
+	SKU               string       `json:"sku"`
+	Category          string       `json:"category"`
+	Description       *string      `json:"description"`
+	Unit              string       `json:"unit"`
+	SellingPrice      float64      `json:"selling_price"`
+	Currency          string       `json:"currency"`
+	TaxRate           float64      `json:"tax_rate"`
+	HsnSac            *string      `json:"hsn_sac"`
+	Status            string       `json:"status"` // "active" or "inactive"
+	CurrentStock      float64      `json:"current_stock"`
+	ReservedStock     float64      `json:"reserved_stock"`
+	AvailableStock    float64      `json:"available_stock"`
+	SoldQuantity      float64      `json:"sold_quantity"`
+	LowStockThreshold float64      `json:"low_stock_threshold"`
+	WorkspaceID       int          `json:"workspace_id"`
+	CreatedByID       *int         `json:"created_by_id"`
+	Creator           *UserSummary `json:"creator,omitempty"`
+	CreatedAt         time.Time    `json:"created_at"`
+	UpdatedAt         time.Time    `json:"updated_at"`
+	DeletedAt         *time.Time   `json:"deleted_at,omitempty"`
 }
 
 type ProductCreateInput struct {
-	Name         string  `json:"name" binding:"required"`
-	SKU          string  `json:"sku" binding:"required"`
-	Category     string  `json:"category"`
-	Description  *string `json:"description"`
-	Unit         string  `json:"unit"`
-	SellingPrice float64 `json:"selling_price"`
-	Currency     string  `json:"currency"`
-	TaxRate      float64 `json:"tax_rate"`
-	HsnSac       *string `json:"hsn_sac"`
-	Status       string  `json:"status"` // "active" or "inactive"
+	Name              string   `json:"name" binding:"required"`
+	SKU               string   `json:"sku" binding:"required"`
+	Category          string   `json:"category"`
+	Description       *string  `json:"description"`
+	Unit              string   `json:"unit"`
+	SellingPrice      float64  `json:"selling_price"`
+	Currency          string   `json:"currency"`
+	TaxRate           float64  `json:"tax_rate"`
+	HsnSac            *string  `json:"hsn_sac"`
+	Status            string   `json:"status"` // "active" or "inactive"
+	InitialStock      *float64 `json:"initial_stock"`
+	LowStockThreshold *float64 `json:"low_stock_threshold"`
 }
 
 type ProductUpdateInput struct {
-	Name         *string  `json:"name"`
-	SKU          *string  `json:"sku"`
-	Category     *string  `json:"category"`
-	Description  *string  `json:"description"`
-	Unit         *string  `json:"unit"`
-	SellingPrice *float64 `json:"selling_price"`
-	Currency     *string  `json:"currency"`
-	TaxRate      *float64 `json:"tax_rate"`
-	HsnSac       *string  `json:"hsn_sac"`
-	Status       *string  `json:"status"`
+	Name              *string  `json:"name"`
+	SKU               *string  `json:"sku"`
+	Category          *string  `json:"category"`
+	Description       *string  `json:"description"`
+	Unit              *string  `json:"unit"`
+	SellingPrice      *float64 `json:"selling_price"`
+	Currency          *string  `json:"currency"`
+	TaxRate           *float64 `json:"tax_rate"`
+	HsnSac            *string  `json:"hsn_sac"`
+	Status            *string  `json:"status"`
+	LowStockThreshold *float64 `json:"low_stock_threshold"`
 }
 
 type ProductListResponse struct {
@@ -699,8 +707,9 @@ type Order struct {
 	Lead          *Lead           `json:"lead,omitempty"`
 	Stage         string          `json:"stage"` // Not Started, Planning, In Progress, Client Review, Revision/Changes, Delivered, Completed
 	PaymentStatus string          `json:"payment_status"` // Unpaid, Partially Paid, Paid
-	InvoiceStatus string          `json:"invoice_status"` // Not Invoiced, Invoiced
-	TotalAmount   float64         `json:"total_amount"`
+	InvoiceStatus   string          `json:"invoice_status"` // Not Invoiced, Invoiced
+	InventoryStatus string          `json:"inventory_status"` // unreserved, reserved, deducted
+	TotalAmount     float64         `json:"total_amount"`
 	Currency      string          `json:"currency"`
 	StartDate     *string         `json:"start_date,omitempty"`
 	DeliveryDate  *string         `json:"delivery_date,omitempty"`
@@ -1122,6 +1131,76 @@ type AutomatedReminder struct {
 type ReminderStatusInput struct {
 	Status      string `json:"status" binding:"required"` // pending, snoozed, dismissed, resolved
 	SnoozeHours int    `json:"snooze_hours,omitempty"`
+}
+
+// StockMovement represents an inventory audit log entry
+type StockMovement struct {
+	ID               int          `json:"id"`
+	ProductID        int          `json:"product_id"`
+	Product          *Product     `json:"product,omitempty"`
+	MovementType     string       `json:"movement_type"` // stock_in, reserve, release_reservation, dispatch, return, adjustment
+	Quantity         float64      `json:"quantity"`
+	ReferenceType    *string      `json:"reference_type,omitempty"` // order, purchase, adjustment, return, initial
+	ReferenceID      *string      `json:"reference_id,omitempty"`
+	PreviousStock    float64      `json:"previous_stock"`
+	NewStock         float64      `json:"new_stock"`
+	PreviousReserved float64      `json:"previous_reserved"`
+	NewReserved      float64      `json:"new_reserved"`
+	Notes            *string      `json:"notes,omitempty"`
+	Condition        string       `json:"condition"` // good, damaged, scrap
+	WorkspaceID      int          `json:"workspace_id"`
+	CreatedByID      *int         `json:"created_by_id,omitempty"`
+	Creator          *UserSummary `json:"creator,omitempty"`
+	CreatedAt        time.Time    `json:"created_at"`
+}
+
+type StockInInput struct {
+	ProductID int     `json:"product_id" binding:"required"`
+	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
+	Notes     *string `json:"notes"`
+}
+
+type StockAdjustmentInput struct {
+	ProductID      int     `json:"product_id" binding:"required"`
+	AdjustmentType string  `json:"adjustment_type"` // "set" (exact target stock) or "delta" (relative change)
+	Quantity       float64 `json:"quantity"`        // target value if "set", or change amount (+/-) if "delta"
+	Reason         string  `json:"reason" binding:"required"` // damage, loss, audit, correction
+	Notes          *string `json:"notes"`
+}
+
+type StockReturnInput struct {
+	ProductID int     `json:"product_id" binding:"required"`
+	OrderID   *int    `json:"order_id"`
+	Quantity  float64 `json:"quantity" binding:"required,gt=0"`
+	Restock   bool    `json:"restock"`   // true to add back to inventory, false if damaged/scrap
+	Condition string  `json:"condition"` // good, damaged, scrap
+	Reason    string  `json:"reason" binding:"required"`
+	Notes     *string `json:"notes"`
+}
+
+type InventoryStats struct {
+	TotalProducts   int     `json:"total_products"`
+	TotalUnits      float64 `json:"total_units"`
+	TotalReserved   float64 `json:"total_reserved"`
+	TotalAvailable  float64 `json:"total_available"`
+	LowStockCount   int     `json:"low_stock_count"`
+	OutOfStockCount int     `json:"out_of_stock_count"`
+}
+
+type StockMovementListResponse struct {
+	Items []StockMovement `json:"items"`
+	Total int             `json:"total"`
+	Page  int             `json:"page"`
+	Limit int             `json:"limit"`
+	Pages int             `json:"pages"`
+}
+
+type StockMovementFilter struct {
+	ProductID     *int
+	MovementType  *string
+	ReferenceType *string
+	Page          int
+	Limit         int
 }
 
 

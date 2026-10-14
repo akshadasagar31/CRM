@@ -82,13 +82,24 @@ func (r *ProductRepository) Create(ctx context.Context, input models.ProductCrea
 		return nil, err
 	}
 
+	lowStockThreshold := 10.00
+	if input.LowStockThreshold != nil && *input.LowStockThreshold >= 0 {
+		lowStockThreshold = *input.LowStockThreshold
+	}
+
+	initialStock := 0.00
+	if input.InitialStock != nil && *input.InitialStock > 0 {
+		initialStock = *input.InitialStock
+	}
+
 	query := `
 		INSERT INTO products (
 			name, sku, category, description, unit,
 			selling_price, currency, tax_rate, hsn_sac,
-			status, workspace_id, created_by_id, created_at, updated_at
+			status, current_stock, reserved_stock, sold_quantity, low_stock_threshold,
+			workspace_id, created_by_id, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0.00, 0.00, $12, $13, $14, NOW(), NOW())
 		RETURNING id
 	`
 
@@ -96,10 +107,22 @@ func (r *ProductRepository) Create(ctx context.Context, input models.ProductCrea
 	err = r.db.Pool.QueryRow(ctx, query,
 		name, sku, category, input.Description, unit,
 		input.SellingPrice, currency, input.TaxRate, input.HsnSac,
-		status, workspaceID, createdByID,
+		status, initialStock, lowStockThreshold,
+		workspaceID, createdByID,
 	).Scan(&id)
 	if err != nil {
 		return nil, err
+	}
+
+	if initialStock > 0 {
+		initNote := "Initial stock balance on creation"
+		_, _ = r.db.Pool.Exec(ctx, `
+			INSERT INTO stock_movements (
+				product_id, movement_type, quantity, reference_type, reference_id,
+				previous_stock, new_stock, previous_reserved, new_reserved, notes,
+				condition, workspace_id, created_by_id, created_at
+			) VALUES ($1, 'stock_in', $2, 'initial', 'PRODUCT_CREATE', 0.00, $2, 0.00, 0.00, $3, 'good', $4, $5, NOW())
+		`, id, initialStock, initNote, workspaceID, createdByID)
 	}
 
 	return r.GetByID(ctx, id, workspaceID)
@@ -110,7 +133,9 @@ func (r *ProductRepository) GetByID(ctx context.Context, id int, workspaceID int
 	query := `
 		SELECT p.id, p.name, p.sku, p.category, p.description, p.unit,
 		       p.selling_price, p.currency, p.tax_rate, p.hsn_sac,
-		       p.status, p.workspace_id, p.created_by_id, p.created_at, p.updated_at, p.deleted_at,
+		       p.status, COALESCE(p.current_stock, 0), COALESCE(p.reserved_stock, 0),
+		       COALESCE(p.sold_quantity, 0), COALESCE(p.low_stock_threshold, 10),
+		       p.workspace_id, p.created_by_id, p.created_at, p.updated_at, p.deleted_at,
 		       u.id, u.name, u.email
 		FROM products p
 		LEFT JOIN users u ON u.id = p.created_by_id
@@ -124,7 +149,9 @@ func (r *ProductRepository) GetByID(ctx context.Context, id int, workspaceID int
 	err := r.db.Pool.QueryRow(ctx, query, id, workspaceID).Scan(
 		&p.ID, &p.Name, &p.SKU, &p.Category, &p.Description, &p.Unit,
 		&p.SellingPrice, &p.Currency, &p.TaxRate, &p.HsnSac,
-		&p.Status, &p.WorkspaceID, &p.CreatedByID, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
+		&p.Status, &p.CurrentStock, &p.ReservedStock,
+		&p.SoldQuantity, &p.LowStockThreshold,
+		&p.WorkspaceID, &p.CreatedByID, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 		&uID, &uName, &uEmail,
 	)
 	if err != nil {
@@ -132,6 +159,11 @@ func (r *ProductRepository) GetByID(ctx context.Context, id int, workspaceID int
 			return nil, nil
 		}
 		return nil, err
+	}
+
+	p.AvailableStock = p.CurrentStock - p.ReservedStock
+	if p.AvailableStock < 0 {
+		p.AvailableStock = 0
 	}
 
 	if uID != nil && uName != nil && uEmail != nil {
@@ -146,10 +178,9 @@ func (r *ProductRepository) List(ctx context.Context, filter ProductFilter, work
 	if filter.Page < 1 {
 		filter.Page = 1
 	}
-	if filter.Limit < 1 || filter.Limit > 200 {
+	if filter.Limit > 200 {
 		filter.Limit = 50
 	}
-	offset := (filter.Page - 1) * filter.Limit
 
 	whereClauses := []string{"p.workspace_id = $1", "p.deleted_at IS NULL"}
 	args := []interface{}{workspaceID}
@@ -208,15 +239,23 @@ func (r *ProductRepository) List(ctx context.Context, filter ProductFilter, work
 	selectQuery := `
 		SELECT p.id, p.name, p.sku, p.category, p.description, p.unit,
 		       p.selling_price, p.currency, p.tax_rate, p.hsn_sac,
-		       p.status, p.workspace_id, p.created_by_id, p.created_at, p.updated_at, p.deleted_at,
+		       p.status, COALESCE(p.current_stock, 0), COALESCE(p.reserved_stock, 0),
+		       COALESCE(p.sold_quantity, 0), COALESCE(p.low_stock_threshold, 10),
+		       p.workspace_id, p.created_by_id, p.created_at, p.updated_at, p.deleted_at,
 		       u.id, u.name, u.email
 		FROM products p
 		LEFT JOIN users u ON u.id = p.created_by_id
 	` + whereSQL + `
-		ORDER BY ` + sortCol + ` ` + sortDir + `, p.id DESC
-		LIMIT $` + strconv.Itoa(idx) + ` OFFSET $` + strconv.Itoa(idx+1)
+		ORDER BY ` + sortCol + ` ` + sortDir + `, p.id DESC`
 
-	args = append(args, filter.Limit, offset)
+	if filter.Limit > 0 {
+		offset := (filter.Page - 1) * filter.Limit
+		if offset < 0 {
+			offset = 0
+		}
+		selectQuery += ` LIMIT $` + strconv.Itoa(idx) + ` OFFSET $` + strconv.Itoa(idx+1)
+		args = append(args, filter.Limit, offset)
+	}
 
 	rows, err := r.db.Pool.Query(ctx, selectQuery, args...)
 	if err != nil {
@@ -233,10 +272,17 @@ func (r *ProductRepository) List(ctx context.Context, filter ProductFilter, work
 		if err := rows.Scan(
 			&p.ID, &p.Name, &p.SKU, &p.Category, &p.Description, &p.Unit,
 			&p.SellingPrice, &p.Currency, &p.TaxRate, &p.HsnSac,
-			&p.Status, &p.WorkspaceID, &p.CreatedByID, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
+			&p.Status, &p.CurrentStock, &p.ReservedStock,
+			&p.SoldQuantity, &p.LowStockThreshold,
+			&p.WorkspaceID, &p.CreatedByID, &p.CreatedAt, &p.UpdatedAt, &p.DeletedAt,
 			&uID, &uName, &uEmail,
 		); err != nil {
 			return nil, err
+		}
+
+		p.AvailableStock = p.CurrentStock - p.ReservedStock
+		if p.AvailableStock < 0 {
+			p.AvailableStock = 0
 		}
 
 		if uID != nil && uName != nil && uEmail != nil {
@@ -250,16 +296,22 @@ func (r *ProductRepository) List(ctx context.Context, filter ProductFilter, work
 		items = []models.Product{}
 	}
 
-	pages := (total + filter.Limit - 1) / filter.Limit
-	if pages < 1 {
-		pages = 1
+	pages := 1
+	effectiveLimit := filter.Limit
+	if filter.Limit > 0 {
+		pages = (total + filter.Limit - 1) / filter.Limit
+		if pages < 1 {
+			pages = 1
+		}
+	} else {
+		effectiveLimit = total
 	}
 
 	return &models.ProductListResponse{
 		Items:         items,
 		Total:         total,
 		Page:          filter.Page,
-		Limit:         filter.Limit,
+		Limit:         effectiveLimit,
 		Pages:         pages,
 		ActiveCount:   activeCount,
 		InactiveCount: inactiveCount,
@@ -374,6 +426,12 @@ func (r *ProductRepository) Update(ctx context.Context, id int, input models.Pro
 		}
 		setClauses = append(setClauses, "status = $"+strconv.Itoa(idx))
 		args = append(args, status)
+		idx++
+	}
+
+	if input.LowStockThreshold != nil && *input.LowStockThreshold >= 0 {
+		setClauses = append(setClauses, "low_stock_threshold = $"+strconv.Itoa(idx))
+		args = append(args, *input.LowStockThreshold)
 		idx++
 	}
 
