@@ -100,7 +100,23 @@ flowchart LR
 - **Tax & Compliance**: GSTIN / VAT / Tax ID registration numbers displayed on all generated PDFs.
 - **Sequence Generators**: Customizable numbering formats for Leads (`LEAD-`), Quotes (`QT-`), Orders (`ORD-`), Invoices (`INV-`), and Receipts (`REC-`).
 
-### 11. Developer API, Webhooks & Interactive Documentation
+### 11. Automated Email Notifications & Deliverability Hub
+- **Automated Trigger Matrix**:
+  - ⏰ **Follow-Up Reminders**: Background cron engine running every 60 seconds scans due follow-ups (`completed = 0 AND due_date <= NOW()`) and dispatches responsive corporate email notifications to assigned sales representatives.
+  - 📄 **Quotation Finalization**: Automatically renders and attaches the vector Maroto v2 PDF quotation when status transitions to `Sent` or `Accepted` (with manual resend action available in Quotations table & drawer).
+  - 🧾 **Invoice Finalization**: Automatically renders and attaches the vector Maroto v2 PDF tax invoice when status transitions to `Sent` (with manual resend action available in Invoices table & drawer).
+- **Enterprise Anti-Spoofing & Deliverability Standards**:
+  - **SPF (Sender Policy Framework)**: Authorizes outbound SMTP servers (`v=spf1 include:_spf.crm.app ~all`).
+  - **DKIM (DomainKeys Identified Mail)**: Cryptographically signs headers with 2048-bit RSA keys ensuring message authenticity.
+  - **DMARC (Domain-based Message Authentication)**: Enforces quarantine/reject policies (`v=DMARC1; p=quarantine; pct=100; ...`) preventing domain impersonation.
+- **High-Reliability & Idempotent Architecture**:
+  - **Zero Duplicate Guarantees**: Deterministic idempotency keys (`quotation:{id}:{status}`, `invoice:{id}:{status}`, `follow_up:{id}:{due_timestamp}`) enforced via PostgreSQL unique constraints prevent double delivery.
+  - **Exponential Backoff Retries**: Up to 3 automatic retry attempts with intelligent intervals (2 min, 5 min, 15 min) for transient network or mailbox downtime.
+  - **Hybrid SMTP & Dev Sandbox**: Seamless local development mode logs full MIME payloads with attachments to the terminal without needing active SMTP credentials.
+- **Centralized Email Audit Ledger**:
+  - Live outgoing email log view under **Company Settings > Automated Emails & Logs** displaying real-time delivery status (`Delivered`, `Queued / In Retry`, `Failed`), recipient addresses, PDF attachments, error diagnostics, rendered HTML message preview, and one-click manual retry dispatch.
+
+### 12. Developer API, Webhooks & Interactive Documentation
 - **Interactive API Playground (`/api-docs`)**: In-app test console with live execution against the Go backend, request headers, parameter builder, and automated code generation for **cURL**, **JavaScript Fetch**, and **Python Requests**.
 - **Swagger OpenAPI 2.0 (`/docs`)**: Auto-generated interactive Swagger specification.
 - **Public Ingestion Webhooks**: Ingest leads from landing pages, forms, Meta ads, or WhatsApp using Bearer API keys.
@@ -172,9 +188,24 @@ flowchart LR
 | `GET` / `POST` | `/api/invoices` | List invoices or generate invoice from order |
 | `GET` / `PATCH` | `/api/invoices/{id}` | Retrieve invoice or update details |
 | `GET` | `/api/invoices/{id}/pdf` | Stream generated tax invoice PDF |
+| `POST` | `/api/invoices/{id}/send-email` | Manual email trigger to dispatch tax invoice PDF |
 | `GET` / `POST` | `/api/payments` | List payment ledger entries or record a payment |
 | `GET` | `/api/payments/{id}/receipt` | Get structured receipt details |
 | `GET` | `/api/payments/{id}/pdf` | Stream official PDF payment receipt |
+
+### Quotations Email & Dispatch
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/quotations/{id}/send-email` | Manual email trigger to dispatch quotation PDF |
+
+### Email Deliverability, Retries & Audit Logs
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/emails` | List outgoing email logs with filters (`status`, `email_type`, `entity_type`, `entity_id`) |
+| `GET` | `/api/emails/{id}` | Retrieve specific outgoing email log and rendered body |
+| `GET` | `/api/emails/status` | Get latest delivery status for a specific entity |
+| `POST` | `/api/emails/{id}/retry` | Immediately re-queue a failed or pending email dispatch |
+| `GET` | `/api/emails/deliverability` | Retrieve active SMTP gateway settings and SPF/DKIM/DMARC DNS instructions |
 
 ### Company, Dashboard & Webhooks
 | Method | Endpoint | Description |
@@ -207,6 +238,16 @@ cd backend
 # export DATABASE_URL="postgres://postgres:postgres@localhost:5432/crm?sslmode=disable"
 # export PORT="8001"
 # export JWT_SECRET="your-super-secret-key"
+
+# SMTP Gateway Configuration (Optional - defaults to mock console output in development):
+# export SMTP_HOST="smtp.example.com"
+# export SMTP_PORT="587"
+# export SMTP_USERNAME="your-username"
+# export SMTP_PASSWORD="your-password"
+# export SMTP_FROM_EMAIL="noreply@yourdomain.com"
+# export SMTP_FROM_NAME="BizCopilot CRM"
+# export SMTP_ENCRYPTION="starttls" # "starttls", "tls", or "none"
+# export SMTP_MOCK_MODE="false"     # set "true" to force console mock logging
 
 # Run migrations and start server:
 go run ./cmd/server

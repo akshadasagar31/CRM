@@ -382,12 +382,12 @@ func (r *QuotationRepository) GetByID(ctx context.Context, id int, workspaceID i
 		       COALESCE(q.taxable_amount, q.subtotal), COALESCE(q.cgst_amount, 0), COALESCE(q.sgst_amount, 0),
 		       COALESCE(q.igst_amount, 0), COALESCE(q.total_gst_amount, q.tax_amount), COALESCE(q.round_off_amount, 0),
 		       q.workspace_id, q.created_by_id, q.created_at, q.updated_at,
-		       d.id, d.deal_number, d.name, d.value, d.currency, d.requirement, d.pipeline_id, d.stage_id,
-		       c.id, c.name, c.email, c.phone, c.company, c.city, c.state, c.pincode, c.gstin,
+		       COALESCE(d.id, 0), COALESCE(d.deal_number, ''), COALESCE(d.name, ''), COALESCE(d.value, 0), COALESCE(d.currency, 'INR'), COALESCE(d.requirement, ''), COALESCE(d.pipeline_id, 0), COALESCE(d.stage_id, 0),
+		       COALESCE(c.id, 0), COALESCE(c.name, 'Customer'), c.email, c.phone, c.company, c.city, c.state, c.pincode, c.gstin,
 		       u.id, u.name, u.email
 		FROM quotations q
-		JOIN deals d ON q.deal_id = d.id
-		JOIN customers c ON q.customer_id = c.id
+		LEFT JOIN deals d ON q.deal_id = d.id
+		LEFT JOIN customers c ON q.customer_id = c.id
 		LEFT JOIN users u ON q.created_by_id = u.id
 		WHERE q.id = $1 AND q.workspace_id = $2
 	`
@@ -424,32 +424,36 @@ func (r *QuotationRepository) GetByID(ctx context.Context, id int, workspaceID i
 		return nil, err
 	}
 
-	q.Deal = &models.Deal{
-		ID:          dID,
-		DealNumber:  dNum,
-		Name:        dName,
-		Value:       dVal,
-		Currency:    dCurr,
-		Requirement: dReq,
-		PipelineID:  dPipeID,
-		StageID:     dStageID,
+	if dID > 0 {
+		q.Deal = &models.Deal{
+			ID:          dID,
+			DealNumber:  dNum,
+			Name:        dName,
+			Value:       dVal,
+			Currency:    dCurr,
+			Requirement: dReq,
+			PipelineID:  dPipeID,
+			StageID:     dStageID,
+		}
+
+		// Fetch Deal Stage details if possible
+		if stage, _ := r.pipeRepo.GetStageByID(ctx, dStageID); stage != nil {
+			q.Deal.Stage = stage
+		}
 	}
 
-	// Fetch Deal Stage details if possible
-	if stage, _ := r.pipeRepo.GetStageByID(ctx, dStageID); stage != nil {
-		q.Deal.Stage = stage
-	}
-
-	q.Customer = &models.Customer{
-		ID:      cID,
-		Name:    cName,
-		Email:   cEmail,
-		Phone:   cPhone,
-		Company: cCompany,
-		City:    cCity,
-		State:   cState,
-		Pincode: cPincode,
-		GSTIN:   cGSTIN,
+	if cID > 0 {
+		q.Customer = &models.Customer{
+			ID:      cID,
+			Name:    cName,
+			Email:   cEmail,
+			Phone:   cPhone,
+			Company: cCompany,
+			City:    cCity,
+			State:   cState,
+			Pincode: cPincode,
+			GSTIN:   cGSTIN,
+		}
 	}
 
 	if uID != nil && uName != nil && uEmail != nil {

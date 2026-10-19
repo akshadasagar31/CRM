@@ -606,8 +606,36 @@ func (db *DB) Migrate() error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_stock_movements_workspace ON stock_movements(workspace_id);`,
-		`CREATE INDEX IF NOT EXISTS idx_stock_movements_created_at ON stock_movements(created_at DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_stock_movements_ref ON stock_movements(reference_type, reference_id);`,
+
+		// 34. Email Notification Logs & Delivery Tracking
+		`CREATE TABLE IF NOT EXISTS email_logs (
+			id SERIAL PRIMARY KEY,
+			workspace_id INTEGER NOT NULL DEFAULT 1,
+			recipient_email VARCHAR(255) NOT NULL,
+			recipient_name VARCHAR(255),
+			subject VARCHAR(500) NOT NULL,
+			body_html TEXT NOT NULL,
+			body_text TEXT NOT NULL,
+			entity_type VARCHAR(50) NOT NULL,
+			entity_id VARCHAR(50) NOT NULL,
+			email_type VARCHAR(50) NOT NULL,
+			status VARCHAR(50) NOT NULL DEFAULT 'pending',
+			retry_count INTEGER NOT NULL DEFAULT 0,
+			max_retries INTEGER NOT NULL DEFAULT 3,
+			next_retry_at TIMESTAMP WITH TIME ZONE,
+			last_error TEXT,
+			has_attachment BOOLEAN NOT NULL DEFAULT FALSE,
+			attachment_name VARCHAR(255),
+			idempotency_key VARCHAR(255) UNIQUE,
+			sent_at TIMESTAMP WITH TIME ZONE,
+			created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+			updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+		);`,
+		`CREATE INDEX IF NOT EXISTS idx_email_logs_workspace_status ON email_logs(workspace_id, status);`,
+		`CREATE INDEX IF NOT EXISTS idx_email_logs_entity ON email_logs(entity_type, entity_id);`,
+		`CREATE INDEX IF NOT EXISTS idx_email_logs_idempotency ON email_logs(idempotency_key);`,
+		`CREATE INDEX IF NOT EXISTS idx_email_logs_created_at ON email_logs(created_at DESC);`,
 	}
 
 	for _, query := range queries {

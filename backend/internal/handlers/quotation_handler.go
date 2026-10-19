@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"crm-backend-go/internal/models"
 	"crm-backend-go/internal/pdf"
 	"crm-backend-go/internal/repository"
+	"crm-backend-go/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,10 +19,15 @@ import (
 type QuotationHandler struct {
 	repo        *repository.QuotationRepository
 	companyRepo *repository.CompanyRepository
+	emailWorker *services.EmailWorker
 }
 
 func NewQuotationHandler(repo *repository.QuotationRepository, companyRepo *repository.CompanyRepository) *QuotationHandler {
 	return &QuotationHandler{repo: repo, companyRepo: companyRepo}
+}
+
+func (h *QuotationHandler) SetEmailWorker(worker *services.EmailWorker) {
+	h.emailWorker = worker
 }
 
 // Create godoc
@@ -51,6 +58,10 @@ func (h *QuotationHandler) Create(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
 		return
+	}
+
+	if h.emailWorker != nil && (strings.EqualFold(q.Status, "Finalized") || strings.EqualFold(q.Status, "Sent") || strings.EqualFold(q.Status, "Accepted")) {
+		_, _ = h.emailWorker.TriggerQuotationEmail(c.Request.Context(), q.ID, false)
 	}
 
 	c.JSON(http.StatusCreated, q)
@@ -215,7 +226,36 @@ func (h *QuotationHandler) ChangeStatus(c *gin.Context) {
 		return
 	}
 
+	if h.emailWorker != nil && (strings.EqualFold(q.Status, "Finalized") || strings.EqualFold(q.Status, "Sent") || strings.EqualFold(q.Status, "Accepted")) {
+		_, _ = h.emailWorker.TriggerQuotationEmail(context.Background(), id, false)
+	}
+
 	c.JSON(http.StatusOK, q)
+}
+
+// SendEmail handles manual / explicit email sending for a quotation
+func (h *QuotationHandler) SendEmail(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid quotation ID"})
+		return
+	}
+
+	if h.emailWorker == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Email worker not initialized"})
+		return
+	}
+
+	logItem, err := h.emailWorker.TriggerQuotationEmail(c.Request.Context(), id, true)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": fmt.Sprintf("Failed to send quotation email: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Quotation email queued for delivery",
+		"email_log": logItem,
+	})
 }
 
 // Delete godoc
@@ -257,7 +297,7 @@ func (h *QuotationHandler) GeneratePDF(c *gin.Context) {
 	}
 
 	quote, err := h.repo.GetByID(c.Request.Context(), id, 1)
-	if err != nil {
+	if err != nil || quote == nil {
 		c.JSON(http.StatusNotFound, gin.H{"detail": "Quotation not found"})
 		return
 	}

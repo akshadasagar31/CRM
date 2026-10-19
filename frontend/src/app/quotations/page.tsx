@@ -122,6 +122,23 @@ function QuotationsContent() {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState<number | null>(null);
+
+  const handleSendEmail = async (quote: Quotation) => {
+    setIsSendingEmail(quote.id);
+    try {
+      const res = await quotationsApi.sendEmail(quote.id);
+      showToast(res.message || "Quotation email queued for delivery!", "success");
+      loadAllData();
+      if (selectedQuotation && selectedQuotation.id === quote.id) {
+        setSelectedQuotation({ ...selectedQuotation, status: "Sent" });
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to send quotation email", "error");
+    } finally {
+      setIsSendingEmail(null);
+    }
+  };
 
   useEffect(() => {
     if (isPrintModalOpen && printQuotation) {
@@ -1344,6 +1361,22 @@ function QuotationsContent() {
                                 }}
                               >
                                 <Printer size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                title="Email PDF to Customer"
+                                disabled={isSendingEmail === quote.id}
+                                onClick={() => handleSendEmail(quote)}
+                                style={{
+                                  padding: "6px",
+                                  borderRadius: "6px",
+                                  border: "1px solid #E2E8F0",
+                                  backgroundColor: isSendingEmail === quote.id ? "#F1F5F9" : "#FFFFFF",
+                                  color: "#2563EB",
+                                  cursor: isSendingEmail === quote.id ? "wait" : "pointer",
+                                }}
+                              >
+                                {isSendingEmail === quote.id ? <RefreshCw size={14} className="animate-spin" /> : <Mail size={14} />}
                               </button>
                               <button
                                 type="button"
@@ -2757,6 +2790,28 @@ function QuotationsContent() {
                 >
                   <Printer size={14} />
                   <span>Print / PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSendEmail(selectedQuotation)}
+                  disabled={isSendingEmail === selectedQuotation.id}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 14px",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    color: "#FFFFFF",
+                    backgroundColor: "#2563EB",
+                    border: "none",
+                    borderRadius: "8px",
+                    cursor: isSendingEmail === selectedQuotation.id ? "wait" : "pointer",
+                  }}
+                >
+                  <Mail size={14} />
+                  <span>{isSendingEmail === selectedQuotation.id ? "Sending..." : "Email PDF"}</span>
                 </button>
 
                 {selectedQuotation.status.toLowerCase() !== "sent" && selectedQuotation.status.toLowerCase() !== "accepted" && (

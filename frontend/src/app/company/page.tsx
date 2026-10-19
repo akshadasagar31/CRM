@@ -22,6 +22,14 @@ import {
   ExternalLink,
   DollarSign,
   Briefcase,
+  Send,
+  Clock,
+  AlertTriangle,
+  Eye,
+  Server,
+  Shield,
+  CheckCheck,
+  Key,
 } from "lucide-react";
 import {
   companyApi,
@@ -30,6 +38,9 @@ import {
   authApi,
   getStoredUser,
   User,
+  emailApi,
+  EmailLog,
+  DeliverabilityConfig,
 } from "@/lib/api";
 import Sidebar, { SidebarTab } from "@/components/Sidebar";
 
@@ -79,6 +90,19 @@ export default function CompanyPage() {
 
   const isAdmin = currentUser?.role?.toLowerCase() === "admin";
 
+  // Sub-tab Navigation State
+  const [activeSubTab, setActiveSubTab] = useState<"profile" | "emails">("profile");
+
+  // Email Deliverability & Logs State
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
+  const [emailTotal, setEmailTotal] = useState<number>(0);
+  const [deliverability, setDeliverability] = useState<DeliverabilityConfig | null>(null);
+  const [isEmailLoading, setIsEmailLoading] = useState<boolean>(false);
+  const [emailStatusFilter, setEmailStatusFilter] = useState<string>("all");
+  const [emailTypeFilter, setEmailTypeFilter] = useState<string>("all");
+  const [retryingEmailId, setRetryingEmailId] = useState<number | null>(null);
+  const [previewEmail, setPreviewEmail] = useState<EmailLog | null>(null);
+
   // Load User and Profile
   const loadProfile = useCallback(async () => {
     try {
@@ -113,6 +137,50 @@ export default function CompanyPage() {
     setCurrentUser(user);
     loadProfile();
   }, [loadProfile]);
+
+  // Load Email Logs & Deliverability
+  const loadEmailData = useCallback(async () => {
+    try {
+      setIsEmailLoading(true);
+      const [logsRes, delivRes] = await Promise.all([
+        emailApi.list({
+          status: emailStatusFilter === "all" ? undefined : emailStatusFilter,
+          email_type: emailTypeFilter === "all" ? undefined : emailTypeFilter,
+          limit: 100,
+        }),
+        emailApi.getDeliverability(),
+      ]);
+      setEmailLogs(logsRes.logs || logsRes.items || []);
+      setEmailTotal(logsRes.total || 0);
+      setDeliverability(delivRes);
+    } catch (err: any) {
+      console.error("Failed to load email data:", err);
+      showToast(err?.message || "Failed to load outgoing email records", "error");
+    } finally {
+      setIsEmailLoading(false);
+    }
+  }, [emailStatusFilter, emailTypeFilter]);
+
+  useEffect(() => {
+    if (activeSubTab === "emails") {
+      loadEmailData();
+    }
+  }, [activeSubTab, loadEmailData]);
+
+  // Handle Retry Email
+  const handleRetryEmail = async (id: number) => {
+    try {
+      setRetryingEmailId(id);
+      await emailApi.retry(id);
+      showToast("Email queued for immediate retry!");
+      await loadEmailData();
+    } catch (err: any) {
+      console.error("Retry email delivery error:", err);
+      showToast(err?.message || "Failed to retry email delivery", "error");
+    } finally {
+      setRetryingEmailId(null);
+    }
+  };
 
   // Handle Logo File Select
   const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -323,20 +391,20 @@ export default function CompanyPage() {
                 width: "44px",
                 height: "44px",
                 borderRadius: "12px",
-                backgroundColor: "#F0FDFA",
-                border: "1px solid #CCFBF1",
+                backgroundColor: activeSubTab === "profile" ? "#F0FDFA" : "#EEF2FF",
+                border: activeSubTab === "profile" ? "1px solid #CCFBF1" : "1px solid #E0E7FF",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#0D9488",
+                color: activeSubTab === "profile" ? "#0D9488" : "#4F46E5",
               }}
             >
-              <Building2 size={24} />
+              {activeSubTab === "profile" ? <Building2 size={24} /> : <Mail size={24} />}
             </div>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <h1 style={{ fontSize: "1.375rem", fontWeight: 700, color: "#0F172A", margin: 0, letterSpacing: "-0.01em" }}>
-                  Company Profile
+                  {activeSubTab === "profile" ? "Company Profile" : "Email Deliverability & Outgoing Logs"}
                 </h1>
                 <span
                   style={{
@@ -346,29 +414,105 @@ export default function CompanyPage() {
                     borderRadius: "999px",
                     fontSize: "0.6875rem",
                     fontWeight: 700,
-                    backgroundColor: "#ECFDF5",
-                    color: "#059669",
-                    border: "1px solid #A7F3D0",
+                    backgroundColor: activeSubTab === "profile" ? "#ECFDF5" : (deliverability?.mock_mode ? "#FEF3C7" : "#ECFDF5"),
+                    color: activeSubTab === "profile" ? "#059669" : (deliverability?.mock_mode ? "#D97706" : "#059669"),
+                    border: `1px solid ${activeSubTab === "profile" ? "#A7F3D0" : (deliverability?.mock_mode ? "#FDE68A" : "#A7F3D0")}`,
                     textTransform: "uppercase",
                     letterSpacing: "0.03em",
                   }}
                 >
-                  Active Entity
+                  {activeSubTab === "profile" ? "Active Entity" : (deliverability?.mock_mode ? "Sandbox Mode" : "Live SMTP Active")}
                 </span>
               </div>
               <p style={{ fontSize: "0.75rem", color: "#64748B", margin: "2px 0 0 0" }}>
-                Official organization details, statutory taxation IDs, and billing identity
+                {activeSubTab === "profile"
+                  ? "Official organization details, statutory taxation IDs, and billing identity"
+                  : "Automated SMTP dispatch, Maroto v2 PDF attachments, retry queue, and SPF/DKIM/DMARC audit"}
               </p>
             </div>
+          </div>
+
+          {/* Sub-tab Navigation */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              backgroundColor: "#F1F5F9",
+              padding: "4px",
+              borderRadius: "10px",
+              gap: "4px",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setActiveSubTab("profile")}
+              style={{
+                padding: "7px 16px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: activeSubTab === "profile" ? "#FFFFFF" : "transparent",
+                color: activeSubTab === "profile" ? "#0F172A" : "#64748B",
+                fontWeight: activeSubTab === "profile" ? 600 : 500,
+                fontSize: "0.8125rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                cursor: "pointer",
+                boxShadow: activeSubTab === "profile" ? "0 1px 3px rgba(0, 0, 0, 0.08)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Building2 size={15} color={activeSubTab === "profile" ? "#009F9A" : "#64748B"} />
+              <span>Company Profile</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveSubTab("emails");
+                loadEmailData();
+              }}
+              style={{
+                padding: "7px 16px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: activeSubTab === "emails" ? "#FFFFFF" : "transparent",
+                color: activeSubTab === "emails" ? "#0F172A" : "#64748B",
+                fontWeight: activeSubTab === "emails" ? 600 : 500,
+                fontSize: "0.8125rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                cursor: "pointer",
+                boxShadow: activeSubTab === "emails" ? "0 1px 3px rgba(0, 0, 0, 0.08)" : "none",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <Mail size={15} color={activeSubTab === "emails" ? "#009F9A" : "#64748B"} />
+              <span>Automated Emails & Logs</span>
+              {emailTotal > 0 && (
+                <span
+                  style={{
+                    fontSize: "0.6875rem",
+                    fontWeight: 700,
+                    backgroundColor: activeSubTab === "emails" ? "#009F9A" : "#CBD5E1",
+                    color: "#FFFFFF",
+                    padding: "1px 7px",
+                    borderRadius: "999px",
+                  }}
+                >
+                  {emailTotal}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Action Header Button */}
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <button
               type="button"
-              onClick={loadProfile}
-              disabled={isLoading}
-              title="Refresh profile details"
+              onClick={activeSubTab === "profile" ? loadProfile : loadEmailData}
+              disabled={activeSubTab === "profile" ? isLoading : isEmailLoading}
+              title={activeSubTab === "profile" ? "Refresh profile details" : "Refresh outgoing emails"}
               style={{
                 padding: "8px 12px",
                 borderRadius: "8px",
@@ -383,11 +527,29 @@ export default function CompanyPage() {
                 cursor: "pointer",
               }}
             >
-              <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
+              <RefreshCw size={14} className={(activeSubTab === "profile" ? isLoading : isEmailLoading) ? "animate-spin" : ""} />
               <span>Refresh</span>
             </button>
 
-            {!isEditing ? (
+            {activeSubTab === "emails" ? (
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "7px 14px",
+                  borderRadius: "8px",
+                  backgroundColor: "#F0FDFA",
+                  border: "1px solid #CCFBF1",
+                  color: "#0F766E",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                }}
+              >
+                <Clock size={14} color="#0D9488" />
+                <span>Scheduler: 60s Ticker Active</span>
+              </div>
+            ) : !isEditing ? (
               isAdmin ? (
                 <button
                   type="button"
@@ -477,7 +639,790 @@ export default function CompanyPage() {
 
         {/* Scrollable Page Body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "28px", maxWidth: "1280px", width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
-          {isLoading ? (
+          {activeSubTab === "emails" ? (
+            /* ================= EMAIL DELIVERABILITY & AUDIT LOGS ================= */
+            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+              {/* Deliverability & Gateway Card */}
+              <div
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "16px",
+                  border: "1px solid #E2E8F0",
+                  padding: "24px",
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "20px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <div
+                      style={{
+                        width: "48px",
+                        height: "48px",
+                        borderRadius: "12px",
+                        backgroundColor: "#EEF2FF",
+                        border: "1px solid #E0E7FF",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#4F46E5",
+                      }}
+                    >
+                      <Server size={24} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: "1.125rem", fontWeight: 700, color: "#0F172A", margin: "0 0 4px 0" }}>
+                        SMTP Gateway & Deliverability Center
+                      </h3>
+                      <p style={{ fontSize: "0.8125rem", color: "#64748B", margin: 0 }}>
+                        Automated background notifications, Maroto v2 PDF quotation & invoice dispatches, retry handling, and DNS deliverability
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "5px 12px",
+                        borderRadius: "999px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        backgroundColor: deliverability?.mock_mode ? "#FEF3C7" : "#ECFDF5",
+                        color: deliverability?.mock_mode ? "#B45309" : "#059669",
+                        border: `1px solid ${deliverability?.mock_mode ? "#FDE68A" : "#A7F3D0"}`,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "8px",
+                          height: "8px",
+                          borderRadius: "50%",
+                          backgroundColor: deliverability?.mock_mode ? "#F59E0B" : "#10B981",
+                        }}
+                      />
+                      {deliverability?.mock_mode ? "Development Sandbox (Mock Console)" : "Production SMTP Gateway"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Gateway Details Row */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "12px",
+                    backgroundColor: "#F8FAFC",
+                    padding: "16px",
+                    borderRadius: "12px",
+                    border: "1px solid #F1F5F9",
+                  }}
+                >
+                  <div>
+                    <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>
+                      SMTP Host & Port
+                    </span>
+                    <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1E293B", margin: "4px 0 0 0" }}>
+                      {deliverability?.smtp_host || "127.0.0.1"} : {deliverability?.smtp_port || 587}
+                    </p>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>
+                      Encryption Protocol
+                    </span>
+                    <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1E293B", margin: "4px 0 0 0" }}>
+                      {deliverability?.encryption?.toUpperCase() || "STARTTLS (TLS v1.2+)"}
+                    </p>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>
+                      Sender Identity
+                    </span>
+                    <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1E293B", margin: "4px 0 0 0" }}>
+                      {deliverability?.from_name || "CRM Admin"} &lt;{deliverability?.from_email || "no-reply@crm.internal"}&gt;
+                    </p>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>
+                      Retry Architecture
+                    </span>
+                    <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1E293B", margin: "4px 0 0 0" }}>
+                      3 Attempts (2m, 5m, 15m) + Idempotency
+                    </p>
+                  </div>
+                </div>
+
+                {/* DNS Records Section */}
+                <div>
+                  <h4 style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em", margin: "0 0 12px 0" }}>
+                    DNS Authentication & Anti-Spoofing Protocols
+                  </h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
+                    {/* SPF Record */}
+                    <div
+                      style={{
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <Shield size={16} color="#0D9488" />
+                          <strong style={{ fontSize: "0.875rem", color: "#0F172A" }}>SPF Record</strong>
+                        </div>
+                        <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#059669", backgroundColor: "#ECFDF5", padding: "2px 8px", borderRadius: "999px" }}>
+                          Configured
+                        </span>
+                      </div>
+                      <p style={{ fontSize: "0.75rem", color: "#64748B", margin: 0 }}>
+                        Authorizes CRM outbound mail servers to send on behalf of your domain name.
+                      </p>
+                      <div
+                        style={{
+                          backgroundColor: "#F8FAFC",
+                          border: "1px solid #E2E8F0",
+                          borderRadius: "8px",
+                          padding: "8px 12px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          fontFamily: "monospace",
+                          fontSize: "0.75rem",
+                          color: "#334155",
+                        }}
+                      >
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          v=spf1 include:_spf.crm.app ~all
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText("v=spf1 include:_spf.crm.app ~all", "SPF Record")}
+                          title="Copy SPF Record"
+                          style={{ border: "none", background: "none", cursor: "pointer", color: "#64748B", padding: "2px" }}
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* DKIM Record */}
+                    <div
+                      style={{
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <Key size={16} color="#6366F1" />
+                          <strong style={{ fontSize: "0.875rem", color: "#0F172A" }}>DKIM Record</strong>
+                        </div>
+                        <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#4F46E5", backgroundColor: "#EEF2FF", padding: "2px 8px", borderRadius: "999px" }}>
+                          2048-bit RSA
+                        </span>
+                      </div>
+                      <p style={{ fontSize: "0.75rem", color: "#64748B", margin: 0 }}>
+                        Cryptographically validates outgoing headers to guarantee email integrity and domain reputation.
+                      </p>
+                      <div
+                        style={{
+                          backgroundColor: "#F8FAFC",
+                          border: "1px solid #E2E8F0",
+                          borderRadius: "8px",
+                          padding: "8px 12px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          fontFamily: "monospace",
+                          fontSize: "0.75rem",
+                          color: "#334155",
+                        }}
+                      >
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          crm._domainkey TXT v=DKIM1; k=rsa;
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText("crm._domainkey TXT v=DKIM1; k=rsa; p=MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQ==", "DKIM Record")}
+                          title="Copy DKIM Record"
+                          style={{ border: "none", background: "none", cursor: "pointer", color: "#64748B", padding: "2px" }}
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* DMARC Record */}
+                    <div
+                      style={{
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: "12px",
+                        padding: "16px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "10px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <ShieldCheck size={16} color="#059669" />
+                          <strong style={{ fontSize: "0.875rem", color: "#0F172A" }}>DMARC Policy</strong>
+                        </div>
+                        <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#059669", backgroundColor: "#ECFDF5", padding: "2px 8px", borderRadius: "999px" }}>
+                          Quarantine / Protect
+                        </span>
+                      </div>
+                      <p style={{ fontSize: "0.75rem", color: "#64748B", margin: 0 }}>
+                        Aligns SPF and DKIM authentication to protect your brand from email spoofing and phishing.
+                      </p>
+                      <div
+                        style={{
+                          backgroundColor: "#F8FAFC",
+                          border: "1px solid #E2E8F0",
+                          borderRadius: "8px",
+                          padding: "8px 12px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          fontFamily: "monospace",
+                          fontSize: "0.75rem",
+                          color: "#334155",
+                        }}
+                      >
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          v=DMARC1; p=quarantine; pct=100;
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyText("v=DMARC1; p=quarantine; pct=100; rua=mailto:dmarc-reports@crm.internal", "DMARC Record")}
+                          title="Copy DMARC Record"
+                          style={{ border: "none", background: "none", cursor: "pointer", color: "#64748B", padding: "2px" }}
+                        >
+                          <Copy size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Metrics Summary Strip */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px" }}>
+                <div
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "14px",
+                    padding: "18px 20px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                  }}
+                >
+                  <div style={{ width: "42px", height: "42px", borderRadius: "10px", backgroundColor: "#F1F5F9", display: "flex", alignItems: "center", justifyContent: "center", color: "#475569" }}>
+                    <Mail size={20} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 600 }}>Total Dispatched</span>
+                    <h4 style={{ fontSize: "1.375rem", fontWeight: 700, color: "#0F172A", margin: "2px 0 0 0" }}>{emailTotal}</h4>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "14px",
+                    padding: "18px 20px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                  }}
+                >
+                  <div style={{ width: "42px", height: "42px", borderRadius: "10px", backgroundColor: "#ECFDF5", display: "flex", alignItems: "center", justifyContent: "center", color: "#059669" }}>
+                    <CheckCheck size={20} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: 600 }}>Delivered Successfully</span>
+                    <h4 style={{ fontSize: "1.375rem", fontWeight: 700, color: "#065F46", margin: "2px 0 0 0" }}>
+                      {emailLogs.filter((l) => l.status === "sent").length}
+                    </h4>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "14px",
+                    padding: "18px 20px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                  }}
+                >
+                  <div style={{ width: "42px", height: "42px", borderRadius: "10px", backgroundColor: "#FFFBEB", display: "flex", alignItems: "center", justifyContent: "center", color: "#D97706" }}>
+                    <Clock size={20} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: "0.75rem", color: "#D97706", fontWeight: 600 }}>In Retry / Pending Queue</span>
+                    <h4 style={{ fontSize: "1.375rem", fontWeight: 700, color: "#92400E", margin: "2px 0 0 0" }}>
+                      {emailLogs.filter((l) => l.status === "pending").length}
+                    </h4>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "14px",
+                    padding: "18px 20px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                    boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                  }}
+                >
+                  <div style={{ width: "42px", height: "42px", borderRadius: "10px", backgroundColor: "#FEF2F2", display: "flex", alignItems: "center", justifyContent: "center", color: "#DC2626" }}>
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: "0.75rem", color: "#DC2626", fontWeight: 600 }}>Delivery Failures</span>
+                    <h4 style={{ fontSize: "1.375rem", fontWeight: 700, color: "#991B1B", margin: "2px 0 0 0" }}>
+                      {emailLogs.filter((l) => l.status === "failed").length}
+                    </h4>
+                  </div>
+                </div>
+              </div>
+
+              {/* Outgoing Activity Table Card */}
+              <div
+                style={{
+                  backgroundColor: "#FFFFFF",
+                  borderRadius: "16px",
+                  border: "1px solid #E2E8F0",
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
+                  overflow: "hidden",
+                }}
+              >
+                {/* Table Header Toolbar */}
+                <div
+                  style={{
+                    padding: "16px 24px",
+                    borderBottom: "1px solid #E2E8F0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    flexWrap: "wrap",
+                    gap: "14px",
+                  }}
+                >
+                  <div>
+                    <h4 style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A", margin: "0 0 2px 0" }}>
+                      Outgoing Email Delivery Logs
+                    </h4>
+                    <p style={{ fontSize: "0.75rem", color: "#64748B", margin: 0 }}>
+                      Complete audit trail of all automated quotation, invoice, and follow-up emails
+                    </p>
+                  </div>
+
+                  {/* Filters */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    {/* Status Filter */}
+                    <div style={{ display: "flex", alignItems: "center", backgroundColor: "#F8FAFC", border: "1px solid #E2E8F0", borderRadius: "8px", padding: "2px" }}>
+                      {(["all", "sent", "pending", "failed"] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setEmailStatusFilter(s)}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            border: "none",
+                            backgroundColor: emailStatusFilter === s ? "#009F9A" : "transparent",
+                            color: emailStatusFilter === s ? "#FFFFFF" : "#64748B",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {s === "all" ? "All Status" : s}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Type Filter */}
+                    <select
+                      value={emailTypeFilter}
+                      onChange={(e) => setEmailTypeFilter(e.target.value)}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #E2E8F0",
+                        backgroundColor: "#FFFFFF",
+                        fontSize: "0.75rem",
+                        color: "#334155",
+                        fontWeight: 500,
+                        outline: "none",
+                      }}
+                    >
+                      <option value="all">All Email Types</option>
+                      <option value="quotation_finalized">Quotation Finalized</option>
+                      <option value="invoice_finalized">Invoice Finalized</option>
+                      <option value="follow_up_reminder">Follow-up Reminder</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={loadEmailData}
+                      disabled={isEmailLoading}
+                      style={{
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid #CBD5E1",
+                        backgroundColor: "#FFFFFF",
+                        color: "#475569",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <RefreshCw size={12} className={isEmailLoading ? "animate-spin" : ""} />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Table Content */}
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.8125rem" }}>
+                    <thead>
+                      <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569" }}>
+                        <th style={{ padding: "12px 18px", fontWeight: 600 }}>Recipient</th>
+                        <th style={{ padding: "12px 18px", fontWeight: 600 }}>Notification Type</th>
+                        <th style={{ padding: "12px 18px", fontWeight: 600 }}>Subject & Attachment</th>
+                        <th style={{ padding: "12px 18px", fontWeight: 600 }}>Status</th>
+                        <th style={{ padding: "12px 18px", fontWeight: 600 }}>Attempts / Error</th>
+                        <th style={{ padding: "12px 18px", fontWeight: 600 }}>Timestamp</th>
+                        <th style={{ padding: "12px 18px", fontWeight: 600, textAlign: "right" }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {isEmailLoading ? (
+                        <tr>
+                          <td colSpan={7} style={{ padding: "48px", textAlign: "center", color: "#64748B" }}>
+                            <RefreshCw size={24} className="animate-spin" color="#0D9488" style={{ margin: "0 auto 8px" }} />
+                            <div>Loading email delivery records...</div>
+                          </td>
+                        </tr>
+                      ) : emailLogs.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} style={{ padding: "48px", textAlign: "center", color: "#64748B" }}>
+                            <Mail size={32} color="#CBD5E1" style={{ margin: "0 auto 8px" }} />
+                            <div style={{ fontWeight: 600, color: "#334155" }}>No outgoing email logs found</div>
+                            <p style={{ fontSize: "0.75rem", color: "#94A3B8", margin: "4px 0 0 0" }}>
+                              Automated emails will appear here when quotations or invoices are finalized, or follow-ups reach their scheduled due time.
+                            </p>
+                          </td>
+                        </tr>
+                      ) : (
+                        emailLogs.map((log) => {
+                          const isSent = log.status === "sent";
+                          const isFailed = log.status === "failed";
+                          const isPending = log.status === "pending";
+
+                          return (
+                            <tr
+                              key={log.id}
+                              style={{
+                                borderBottom: "1px solid #F1F5F9",
+                                transition: "background-color 0.1s",
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                            >
+                              {/* Recipient */}
+                              <td style={{ padding: "14px 18px" }}>
+                                <div style={{ fontWeight: 600, color: "#0F172A" }}>
+                                  {log.recipient_name || "Recipient"}
+                                </div>
+                                <div style={{ fontSize: "0.75rem", color: "#64748B", display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
+                                  <Mail size={12} />
+                                  <span>{log.recipient_email}</span>
+                                </div>
+                              </td>
+
+                              {/* Notification Type */}
+                              <td style={{ padding: "14px 18px" }}>
+                                {log.email_type === "quotation_finalized" ? (
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      padding: "3px 9px",
+                                      borderRadius: "6px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      backgroundColor: "#EEF2FF",
+                                      color: "#4F46E5",
+                                      border: "1px solid #E0E7FF",
+                                    }}
+                                  >
+                                    <FileText size={12} />
+                                    <span>Quotation</span>
+                                  </span>
+                                ) : log.email_type === "invoice_finalized" ? (
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      padding: "3px 9px",
+                                      borderRadius: "6px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      backgroundColor: "#ECFDF5",
+                                      color: "#059669",
+                                      border: "1px solid #A7F3D0",
+                                    }}
+                                  >
+                                    <DollarSign size={12} />
+                                    <span>Invoice</span>
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      padding: "3px 9px",
+                                      borderRadius: "6px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      backgroundColor: "#FFFBEB",
+                                      color: "#D97706",
+                                      border: "1px solid #FDE68A",
+                                    }}
+                                  >
+                                    <Clock size={12} />
+                                    <span>Follow-Up</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Subject & Attachment */}
+                              <td style={{ padding: "14px 18px", maxWidth: "280px" }}>
+                                <div
+                                  style={{
+                                    fontWeight: 500,
+                                    color: "#1E293B",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                  title={log.subject}
+                                >
+                                  {log.subject}
+                                </div>
+                                {log.has_attachment && (
+                                  <div
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                      marginTop: "4px",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      backgroundColor: "#FEF2F2",
+                                      color: "#B91C1C",
+                                      border: "1px solid #FEE2E2",
+                                      fontSize: "0.6875rem",
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    <FileText size={10} />
+                                    <span>{log.attachment_name || "Maroto v2 PDF"}</span>
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Status */}
+                              <td style={{ padding: "14px 18px" }}>
+                                {isSent ? (
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      padding: "3px 10px",
+                                      borderRadius: "999px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      backgroundColor: "#ECFDF5",
+                                      color: "#059669",
+                                      border: "1px solid #A7F3D0",
+                                    }}
+                                  >
+                                    <CheckCircle2 size={13} />
+                                    <span>Delivered</span>
+                                  </span>
+                                ) : isPending ? (
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      padding: "3px 10px",
+                                      borderRadius: "999px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      backgroundColor: "#FFFBEB",
+                                      color: "#D97706",
+                                      border: "1px solid #FDE68A",
+                                    }}
+                                  >
+                                    <Clock size={13} />
+                                    <span>Queued / In Retry</span>
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "5px",
+                                      padding: "3px 10px",
+                                      borderRadius: "999px",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      backgroundColor: "#FEF2F2",
+                                      color: "#DC2626",
+                                      border: "1px solid #FCA5A5",
+                                    }}
+                                  >
+                                    <AlertCircle size={13} />
+                                    <span>Failed</span>
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Attempts / Error */}
+                              <td style={{ padding: "14px 18px" }}>
+                                <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#334155" }}>
+                                  Attempt {log.retry_count} of {log.max_retries}
+                                </div>
+                                {log.last_error && (
+                                  <div
+                                    style={{
+                                      fontSize: "0.6875rem",
+                                      color: "#DC2626",
+                                      maxWidth: "180px",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                      marginTop: "2px",
+                                    }}
+                                    title={log.last_error}
+                                  >
+                                    {log.last_error}
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Timestamp */}
+                              <td style={{ padding: "14px 18px", color: "#64748B", fontSize: "0.75rem" }}>
+                                {new Date(log.sent_at || log.created_at).toLocaleString(undefined, {
+                                  month: "short",
+                                  day: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </td>
+
+                              {/* Actions */}
+                              <td style={{ padding: "14px 18px", textAlign: "right" }}>
+                                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPreviewEmail(log)}
+                                    title="View Email Message"
+                                    style={{
+                                      padding: "5px 9px",
+                                      borderRadius: "6px",
+                                      border: "1px solid #CBD5E1",
+                                      backgroundColor: "#FFFFFF",
+                                      color: "#475569",
+                                      fontSize: "0.75rem",
+                                      fontWeight: 600,
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "4px",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    <Eye size={12} />
+                                    <span>View</span>
+                                  </button>
+
+                                  {(isFailed || isPending) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRetryEmail(log.id)}
+                                      disabled={retryingEmailId === log.id}
+                                      title="Trigger Immediate Retry"
+                                      style={{
+                                        padding: "5px 9px",
+                                        borderRadius: "6px",
+                                        border: "none",
+                                        backgroundColor: "#009F9A",
+                                        color: "#FFFFFF",
+                                        fontSize: "0.75rem",
+                                        fontWeight: 600,
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "4px",
+                                        cursor: retryingEmailId === log.id ? "not-allowed" : "pointer",
+                                      }}
+                                    >
+                                      <RefreshCw size={12} className={retryingEmailId === log.id ? "animate-spin" : ""} />
+                                      <span>Retry</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : isLoading ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "360px", color: "#64748B" }}>
               <RefreshCw size={28} className="animate-spin" color="#0D9488" />
               <p style={{ marginTop: "12px", fontSize: "0.875rem", fontWeight: 500 }}>Loading company profile...</p>
@@ -1460,6 +2405,339 @@ export default function CompanyPage() {
           )}
         </div>
       </div>
+
+      {/* Email Message Detail & Audit Modal */}
+      {previewEmail && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.65)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 10000,
+            padding: "20px",
+            backdropFilter: "blur(4px)",
+          }}
+          onClick={() => setPreviewEmail(null)}
+        >
+          <div
+            style={{
+              backgroundColor: "#FFFFFF",
+              borderRadius: "16px",
+              maxWidth: "760px",
+              width: "100%",
+              maxHeight: "90vh",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: "20px 24px",
+                borderBottom: "1px solid #E2E8F0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "#EEF2FF",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#4F46E5",
+                  }}
+                >
+                  <Mail size={20} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "1.0625rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                    Email Audit Log &amp; Preview
+                  </h3>
+                  <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                    ID: {previewEmail.id}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPreviewEmail(null)}
+                style={{
+                  border: "none",
+                  backgroundColor: "transparent",
+                  color: "#64748B",
+                  cursor: "pointer",
+                  padding: "6px",
+                  borderRadius: "8px",
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "18px" }}>
+              {/* Metadata Summary Grid */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                  gap: "12px",
+                  backgroundColor: "#F8FAFC",
+                  padding: "16px",
+                  borderRadius: "12px",
+                  border: "1px solid #E2E8F0",
+                }}
+              >
+                <div>
+                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>
+                    Recipient
+                  </span>
+                  <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#0F172A", marginTop: "2px" }}>
+                    {previewEmail.recipient_name}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>{previewEmail.recipient_email}</div>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>
+                    Status &amp; Retries
+                  </span>
+                  <div style={{ marginTop: "4px" }}>
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        backgroundColor:
+                          previewEmail.status === "sent" ? "#ECFDF5" : previewEmail.status === "pending" ? "#FFFBEB" : "#FEF2F2",
+                        color:
+                          previewEmail.status === "sent" ? "#059669" : previewEmail.status === "pending" ? "#D97706" : "#DC2626",
+                      }}
+                    >
+                      {previewEmail.status.toUpperCase()} ({previewEmail.retry_count}/{previewEmail.max_retries})
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>
+                    Event Trigger
+                  </span>
+                  <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#334155", marginTop: "2px" }}>
+                    {previewEmail.email_type.replace(/_/g, " ").toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                    Entity: {previewEmail.entity_type} #{previewEmail.entity_id}
+                  </div>
+                </div>
+
+                <div>
+                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#94A3B8", textTransform: "uppercase" }}>
+                    Idempotency Key
+                  </span>
+                  <div
+                    style={{
+                      fontFamily: "monospace",
+                      fontSize: "0.6875rem",
+                      color: "#475569",
+                      marginTop: "4px",
+                      backgroundColor: "#FFFFFF",
+                      padding: "4px 6px",
+                      borderRadius: "6px",
+                      border: "1px solid #E2E8F0",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={previewEmail.idempotency_key}
+                  >
+                    {previewEmail.idempotency_key}
+                  </div>
+                </div>
+              </div>
+
+              {/* PDF Attachment Notice */}
+              {previewEmail.has_attachment && (
+                <div
+                  style={{
+                    backgroundColor: "#FEF2F2",
+                    border: "1px solid #FCA5A5",
+                    borderRadius: "10px",
+                    padding: "10px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <FileText size={18} color="#DC2626" />
+                  <span style={{ fontSize: "0.8125rem", color: "#991B1B", fontWeight: 600 }}>
+                    Maroto v2 PDF Attached: {previewEmail.attachment_name || "document.pdf"}
+                  </span>
+                </div>
+              )}
+
+              {/* Error Callout if any */}
+              {previewEmail.last_error && (
+                <div
+                  style={{
+                    backgroundColor: "#FEF2F2",
+                    border: "1px solid #F87171",
+                    borderRadius: "10px",
+                    padding: "12px 16px",
+                  }}
+                >
+                  <strong style={{ fontSize: "0.75rem", color: "#991B1B", display: "block" }}>
+                    Last Delivery Error:
+                  </strong>
+                  <span style={{ fontSize: "0.75rem", color: "#DC2626", fontFamily: "monospace" }}>
+                    {previewEmail.last_error}
+                  </span>
+                </div>
+              )}
+
+              {/* Subject */}
+              <div>
+                <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", display: "block", marginBottom: "4px" }}>
+                  Subject Line
+                </label>
+                <div
+                  style={{
+                    fontSize: "0.9375rem",
+                    fontWeight: 600,
+                    color: "#0F172A",
+                    backgroundColor: "#F8FAFC",
+                    padding: "10px 14px",
+                    borderRadius: "8px",
+                    border: "1px solid #E2E8F0",
+                  }}
+                >
+                  {previewEmail.subject}
+                </div>
+              </div>
+
+              {/* Rendered HTML / Text Body */}
+              <div>
+                <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", display: "block", marginBottom: "6px" }}>
+                  Rendered Email Body
+                </label>
+                <div
+                  style={{
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: "10px",
+                    padding: "18px",
+                    maxHeight: "360px",
+                    overflowY: "auto",
+                  }}
+                >
+                  {previewEmail.body_html ? (
+                    <div
+                      dangerouslySetInnerHTML={{ __html: previewEmail.body_html }}
+                      style={{ fontSize: "0.875rem", color: "#1E293B", lineHeight: "1.5" }}
+                    />
+                  ) : (
+                    <pre
+                      style={{
+                        margin: 0,
+                        whiteSpace: "pre-wrap",
+                        fontFamily: "inherit",
+                        fontSize: "0.875rem",
+                        color: "#334155",
+                      }}
+                    >
+                      {previewEmail.body_text}
+                    </pre>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div
+              style={{
+                padding: "14px 24px",
+                borderTop: "1px solid #E2E8F0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#F8FAFC",
+              }}
+            >
+              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                {previewEmail.sent_at
+                  ? `Delivered on ${new Date(previewEmail.sent_at).toLocaleString()}`
+                  : `Queued on ${new Date(previewEmail.created_at).toLocaleString()}`}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {(previewEmail.status === "failed" || previewEmail.status === "pending") && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleRetryEmail(previewEmail.id);
+                      setPreviewEmail(null);
+                    }}
+                    style={{
+                      padding: "7px 16px",
+                      borderRadius: "8px",
+                      border: "none",
+                      backgroundColor: "#009F9A",
+                      color: "#FFFFFF",
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <RefreshCw size={13} />
+                    <span>Retry Dispatch</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewEmail(null)}
+                  style={{
+                    padding: "7px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#475569",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

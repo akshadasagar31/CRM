@@ -1,14 +1,17 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"crm-backend-go/internal/middleware"
 	"crm-backend-go/internal/models"
 	"crm-backend-go/internal/pdf"
 	"crm-backend-go/internal/repository"
+	"crm-backend-go/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
@@ -16,10 +19,15 @@ import (
 type InvoiceHandler struct {
 	repo        *repository.InvoiceRepository
 	companyRepo *repository.CompanyRepository
+	emailWorker *services.EmailWorker
 }
 
 func NewInvoiceHandler(repo *repository.InvoiceRepository, companyRepo *repository.CompanyRepository) *InvoiceHandler {
 	return &InvoiceHandler{repo: repo, companyRepo: companyRepo}
+}
+
+func (h *InvoiceHandler) SetEmailWorker(worker *services.EmailWorker) {
+	h.emailWorker = worker
 }
 
 // List godoc
@@ -118,7 +126,16 @@ func (h *InvoiceHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if h.emailWorker != nil && isInvoiceIssuedForEmail(invoice.Status) {
+		_, _ = h.emailWorker.TriggerInvoiceEmail(c.Request.Context(), invoice.ID, false)
+	}
+
 	c.JSON(http.StatusCreated, invoice)
+}
+
+func isInvoiceIssuedForEmail(status string) bool {
+	s := strings.ToLower(strings.TrimSpace(status))
+	return s == "issued/sent" || s == "issued" || s == "sent" || s == "unpaid" || s == "partially paid" || s == "paid"
 }
 
 // CreateFromOrder godoc
@@ -149,6 +166,10 @@ func (h *InvoiceHandler) CreateFromOrder(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
 		return
+	}
+
+	if h.emailWorker != nil && isInvoiceIssuedForEmail(invoice.Status) {
+		_, _ = h.emailWorker.TriggerInvoiceEmail(c.Request.Context(), invoice.ID, false)
 	}
 
 	c.JSON(http.StatusCreated, invoice)
@@ -182,6 +203,10 @@ func (h *InvoiceHandler) CreateFromQuotation(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
 		return
+	}
+
+	if h.emailWorker != nil && isInvoiceIssuedForEmail(invoice.Status) {
+		_, _ = h.emailWorker.TriggerInvoiceEmail(c.Request.Context(), invoice.ID, false)
 	}
 
 	c.JSON(http.StatusCreated, invoice)
@@ -218,6 +243,10 @@ func (h *InvoiceHandler) Update(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
 		return
+	}
+
+	if h.emailWorker != nil && isInvoiceIssuedForEmail(invoice.Status) {
+		_, _ = h.emailWorker.TriggerInvoiceEmail(context.Background(), id, false)
 	}
 
 	c.JSON(http.StatusOK, invoice)
@@ -292,7 +321,36 @@ func (h *InvoiceHandler) ChangeStatus(c *gin.Context) {
 		return
 	}
 
+	if h.emailWorker != nil && isInvoiceIssuedForEmail(invoice.Status) {
+		_, _ = h.emailWorker.TriggerInvoiceEmail(context.Background(), id, false)
+	}
+
 	c.JSON(http.StatusOK, invoice)
+}
+
+// SendEmail handles manual / explicit email sending for an invoice
+func (h *InvoiceHandler) SendEmail(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid invoice ID"})
+		return
+	}
+
+	if h.emailWorker == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Email worker not initialized"})
+		return
+	}
+
+	logItem, err := h.emailWorker.TriggerInvoiceEmail(c.Request.Context(), id, true)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": fmt.Sprintf("Failed to send invoice email: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "Invoice email queued for delivery",
+		"email_log": logItem,
+	})
 }
 
 // Delete godoc

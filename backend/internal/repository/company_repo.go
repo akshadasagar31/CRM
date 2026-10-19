@@ -33,7 +33,7 @@ func (r *CompanyRepository) EnsureDefaultProfile(ctx context.Context) error {
 				address, city, state, country, pincode, default_currency, created_at, updated_at
 			) VALUES (
 				1, 'BizCopilot Technologies Pvt. Ltd.', '27ABCDE1234F1Z5', 'ABCDE1234F',
-				'billing@bizcopilot.com', '+91 98765 43210', 'https://www.bizcopilot.com',
+				'akshadasagar31@gmail.com', '+91 98765 43210', '',
 				'Level 4, TechHub Towers, Cyber City', 'Pune', 'Maharashtra', 'India',
 				'411001', 'INR', NOW(), NOW()
 			)

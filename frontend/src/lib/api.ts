@@ -1774,6 +1774,12 @@ export const quotationsApi = {
     }
     return res.blob();
   },
+
+  sendEmail: async (id: number): Promise<{ message: string; email_log?: any }> => {
+    return request<{ message: string; email_log?: any }>(`/quotations/${id}/send-email`, {
+      method: "POST",
+    });
+  },
 };
 
 // -------------------------------------------------------------
@@ -2347,6 +2353,12 @@ export const invoicesApi = {
     });
   },
 
+  sendEmail: async (id: number): Promise<{ message: string; email_log?: any }> => {
+    return request<{ message: string; email_log?: any }>(`/invoices/${id}/send-email`, {
+      method: "POST",
+    });
+  },
+
   getPdfBlob: async (id: number): Promise<Blob> => {
     const token = getToken();
     const base = getApiBaseUrl();
@@ -2790,6 +2802,88 @@ export const inventoryApi = {
   },
 };
 
+// ==========================================
+// EMAIL NOTIFICATIONS & DELIVERY API
+// ==========================================
 
+export interface EmailLog {
+  id: number;
+  workspace_id: number;
+  recipient_email: string;
+  recipient_name?: string;
+  subject: string;
+  body_html: string;
+  body_text: string;
+  entity_type: string;
+  entity_id: string;
+  email_type: string;
+  status: "pending" | "sent" | "failed";
+  retry_count: number;
+  max_retries: number;
+  next_retry_at?: string;
+  last_error?: string;
+  has_attachment: boolean;
+  attachment_name?: string;
+  idempotency_key: string;
+  sent_at?: string;
+  created_at: string;
+  updated_at: string;
+}
 
+export interface EmailLogListResponse {
+  items: EmailLog[];
+  logs?: EmailLog[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
 
+export interface DeliverabilityConfig {
+  spf_status: string;
+  dkim_status: string;
+  dmarc_status: string;
+  sender_domain: string;
+  from_email: string;
+  from_name: string;
+  smtp_host: string;
+  smtp_port: number;
+  encryption?: string;
+  mock_mode: boolean;
+  dns_instructions: string[];
+}
+
+export const emailApi = {
+  list: async (params?: {
+    entity_type?: string;
+    entity_id?: string;
+    email_type?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<EmailLogListResponse> => {
+    const sp = new URLSearchParams();
+    if (params?.entity_type && params.entity_type !== "all") sp.append("entity_type", params.entity_type);
+    if (params?.entity_id && params.entity_id !== "all") sp.append("entity_id", params.entity_id);
+    if (params?.email_type && params.email_type !== "all") sp.append("email_type", params.email_type);
+    if (params?.status && params.status !== "all") sp.append("status", params.status);
+    if (params?.page) sp.append("page", params.page.toString());
+    if (params?.limit) sp.append("limit", params.limit.toString());
+    const q = sp.toString() ? `?${sp.toString()}` : "";
+    return request<EmailLogListResponse>(`/emails${q}`);
+  },
+  get: async (id: number | string): Promise<EmailLog> => {
+    return request<EmailLog>(`/emails/${id}`);
+  },
+  getStatus: async (entityType: string, entityId: string | number): Promise<{ status: string; item: EmailLog | null }> => {
+    return request<{ status: string; item: EmailLog | null }>(`/emails/status?entity_type=${entityType}&entity_id=${entityId}`);
+  },
+  retry: async (id: number | string): Promise<{ message: string; id: number }> => {
+    return request<{ message: string; id: number }>(`/emails/${id}/retry`, {
+      method: "POST",
+    });
+  },
+  getDeliverability: async (): Promise<DeliverabilityConfig> => {
+    return request<DeliverabilityConfig>("/emails/deliverability");
+  },
+};

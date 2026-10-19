@@ -29,6 +29,7 @@ import {
   RefreshCw,
   X,
   Printer,
+  Mail,
   Receipt,
   DollarSign,
   Calendar,
@@ -227,6 +228,23 @@ export default function InvoicesPage() {
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState<number | null>(null);
+
+  const handleSendEmail = async (inv: Invoice) => {
+    setIsSendingEmail(inv.id);
+    try {
+      const res = await invoicesApi.sendEmail(inv.id);
+      showToast(res.message || "Invoice PDF email queued for delivery!", "success");
+      loadInvoices();
+      if (selectedInvoice && selectedInvoice.id === inv.id) {
+        setSelectedInvoice({ ...selectedInvoice, status: "Sent" });
+      }
+    } catch (err: any) {
+      showToast(err.message || "Failed to send invoice email", "error");
+    } finally {
+      setIsSendingEmail(null);
+    }
+  };
 
   useEffect(() => {
     if (isPrintModalOpen && printInvoice) {
@@ -1449,6 +1467,28 @@ export default function InvoicesPage() {
                               <Printer size={13} /> Print
                             </button>
 
+                            {/* Email Tax Invoice PDF */}
+                            <button
+                              onClick={() => handleSendEmail(inv)}
+                              disabled={isSendingEmail === inv.id}
+                              title="Email Tax Invoice PDF to Customer"
+                              style={{
+                                padding: "5px 8px",
+                                borderRadius: "6px",
+                                border: "1px solid #CBD5E1",
+                                backgroundColor: isSendingEmail === inv.id ? "#F1F5F9" : "#FFFFFF",
+                                color: "#2563EB",
+                                cursor: isSendingEmail === inv.id ? "wait" : "pointer",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                              }}
+                            >
+                              {isSendingEmail === inv.id ? <RefreshCw size={13} className="animate-spin" /> : <Mail size={13} />} Email
+                            </button>
+
                             {/* View / Detail */}
                             <button
                               onClick={() => {
@@ -1633,6 +1673,28 @@ export default function InvoicesPage() {
                   }}
                 >
                   <Printer size={13} /> Print
+                </button>
+
+                {/* Email in Drawer */}
+                <button
+                  onClick={() => handleSendEmail(selectedInvoice)}
+                  disabled={isSendingEmail === selectedInvoice.id}
+                  title="Send Tax Invoice PDF to Customer Email"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    backgroundColor: "#2563EB",
+                    color: "#FFFFFF",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    border: "none",
+                    cursor: isSendingEmail === selectedInvoice.id ? "wait" : "pointer",
+                  }}
+                >
+                  <Mail size={13} /> {isSendingEmail === selectedInvoice.id ? "Sending..." : "Email PDF"}
                 </button>
 
                 <button

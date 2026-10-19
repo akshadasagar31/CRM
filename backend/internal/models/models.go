@@ -1203,6 +1203,48 @@ type StockMovementFilter struct {
 	Limit         int
 }
 
+// EmailLog represents an outgoing email notification audit record
+type EmailLog struct {
+	ID             int        `json:"id"`
+	WorkspaceID    int        `json:"workspace_id"`
+	RecipientEmail string     `json:"recipient_email"`
+	RecipientName  string     `json:"recipient_name"`
+	Subject        string     `json:"subject"`
+	BodyHTML       string     `json:"body_html"`
+	BodyText       string     `json:"body_text"`
+	EntityType     string     `json:"entity_type"` // "follow_up", "quotation", "invoice", "manual"
+	EntityID       string     `json:"entity_id"`
+	EmailType      string     `json:"email_type"` // "follow_up_reminder", "quotation_finalized", "invoice_finalized"
+	Status         string     `json:"status"`     // "pending", "sent", "failed"
+	RetryCount     int        `json:"retry_count"`
+	MaxRetries     int        `json:"max_retries"`
+	NextRetryAt    *time.Time `json:"next_retry_at"`
+	LastError      *string    `json:"last_error"`
+	HasAttachment  bool       `json:"has_attachment"`
+	AttachmentName *string    `json:"attachment_name"`
+	IdempotencyKey string     `json:"idempotency_key"`
+	SentAt         *time.Time `json:"sent_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
 
+type EmailLogListResponse struct {
+	Items []EmailLog `json:"items"`
+	Total int        `json:"total"`
+	Page  int        `json:"page"`
+	Limit int        `json:"limit"`
+	Pages int        `json:"pages"`
+}
 
-
+type DeliverabilityConfig struct {
+	SPFStatus       string   `json:"spf_status"`
+	DKIMStatus      string   `json:"dkim_status"`
+	DMARCStatus     string   `json:"dmarc_status"`
+	SenderDomain    string   `json:"sender_domain"`
+	FromEmail       string   `json:"from_email"`
+	FromName        string   `json:"from_name"`
+	SMTPHost        string   `json:"smtp_host"`
+	SMTPPort        int      `json:"smtp_port"`
+	MockMode        bool     `json:"mock_mode"`
+	DNSInstructions []string `json:"dns_instructions"`
+}
