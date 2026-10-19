@@ -67,6 +67,7 @@ import {
   User,
 } from "@/lib/api";
 import Sidebar, { SidebarTab } from "@/components/Sidebar";
+import { getCleanCustomerName } from "@/lib/titleUtils";
 
 function QuotationsContent() {
   const router = useRouter();
@@ -139,6 +140,16 @@ function QuotationsContent() {
       setIsSendingEmail(null);
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isDrawerOpen) {
+        setIsDrawerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDrawerOpen]);
 
   useEffect(() => {
     if (isPrintModalOpen && printQuotation) {
@@ -272,7 +283,7 @@ function QuotationsContent() {
     const deal = deals.find((d) => d.id === dealId);
     const linkedCust = deal?.customer || customers.find((c) => c.id === deal?.customer_id);
 
-    setQuotationTitle(deal ? `Quotation - ${deal.name}` : "Sales Quotation");
+    setQuotationTitle(deal ? getCleanCustomerName(deal.customer, deal.name) : "Sales Quotation");
     setValidUntil(dateStr);
     setCurrency(companyProfile?.default_currency || "INR");
     setCustomerState(linkedCust?.state || companyProfile?.state || "Maharashtra");
@@ -478,7 +489,7 @@ function QuotationsContent() {
     if (dId) {
       const deal = deals.find((d) => d.id === dId);
       if (deal) {
-        setQuotationTitle(`Quotation - ${deal.name}`);
+        setQuotationTitle(getCleanCustomerName(deal.customer, deal.name));
         const linkedCust = deal.customer || customers.find((c) => c.id === deal.customer_id);
         if (linkedCust?.state) {
           setCustomerState(linkedCust.state);
@@ -1243,14 +1254,14 @@ function QuotationsContent() {
 
                           {/* Title */}
                           <td style={{ padding: "14px 16px", color: "#0F172A", fontWeight: 600, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {quote.title}
+                            {getCleanCustomerName(quote.customer, quote.title)}
                           </td>
 
                           {/* Linked Deal */}
                           <td style={{ padding: "14px 16px", color: "#334155" }}>
                             {quote.deal ? (
                               <div style={{ display: "flex", flexDirection: "column" }}>
-                                <span style={{ fontWeight: 600, color: "#2563EB" }}>{quote.deal.name}</span>
+                                <span style={{ fontWeight: 600, color: "#2563EB" }}>{getCleanCustomerName(quote.deal.customer, quote.deal.name)}</span>
                                 {quote.deal.stage && (
                                   <span style={{ fontSize: "0.6875rem", color: "#64748B" }}>
                                     Stage: {quote.deal.stage.name}
@@ -1536,7 +1547,7 @@ function QuotationsContent() {
                   </option>
                   {deals.map((deal) => (
                     <option key={deal.id} value={deal.id}>
-                      {deal.name} — (Value: ${deal.value.toLocaleString()}) {deal.customer ? `• ${deal.customer.name}` : ""}
+                      #{deal.deal_number || deal.id} - {getCleanCustomerName(deal.customer, deal.name)} — (Value: ${deal.value.toLocaleString()})
                     </option>
                   ))}
                 </select>
@@ -2279,285 +2290,446 @@ function QuotationsContent() {
         </div>
       )}
 
-      {/* QUOTATION DETAIL DRAWER */}
+      {/* QUOTATION DETAIL CENTERED MODAL */}
       {isDrawerOpen && selectedQuotation && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 90,
-            backgroundColor: "rgba(15, 23, 42, 0.4)",
+            zIndex: 1000,
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
             display: "flex",
-            justifyContent: "flex-end",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.5rem",
+            animation: "fadeIn 0.2s ease-out",
           }}
-          onClick={() => setIsDrawerOpen(false)}
         >
           <div
             style={{
               width: "100%",
-              maxWidth: "560px",
-              height: "100%",
+              maxWidth: "1000px",
+              maxHeight: "90vh",
               backgroundColor: "#FFFFFF",
-              boxShadow: "-10px 0 30px rgba(0, 0, 0, 0.15)",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
+              border: "1px solid #E2E8F0",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Drawer Header */}
+            {/* Modal Header */}
             <div
               style={{
-                padding: "20px 24px",
+                padding: "16px 24px",
                 borderBottom: "1px solid #E2E8F0",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 backgroundColor: "#F8FAFC",
+                flexShrink: 0,
               }}
             >
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                      backgroundColor: "#F0FDFA",
-                      color: "#0F766E",
-                      border: "1px solid #99F6E4",
-                    }}
-                  >
-                    {selectedQuotation.quotation_number}
-                  </span>
-                  {(() => {
-                    const badge = getStatusBadge(selectedQuotation.status);
-                    return (
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          fontWeight: 700,
-                          padding: "2px 8px",
-                          borderRadius: "999px",
-                          backgroundColor: badge.bg,
-                          color: badge.text,
-                          border: `1px solid ${badge.border}`,
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        {badge.label}
-                      </span>
-                    );
-                  })()}
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "#CCFBF1",
+                    color: "#0F766E",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <FileText size={20} />
                 </div>
-                <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
-                  {selectedQuotation.title}
-                </h2>
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                    <span
+                      style={{
+                        fontSize: "0.8125rem",
+                        fontWeight: 800,
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        backgroundColor: "#F0FDFA",
+                        color: "#0F766E",
+                        border: "1px solid #99F6E4",
+                      }}
+                    >
+                      {selectedQuotation.quotation_number}
+                    </span>
+                    {(() => {
+                      const badge = getStatusBadge(selectedQuotation.status);
+                      return (
+                        <span
+                          style={{
+                            fontSize: "0.6875rem",
+                            fontWeight: 700,
+                            padding: "2px 8px",
+                            borderRadius: "999px",
+                            backgroundColor: badge.bg,
+                            color: badge.text,
+                            border: `1px solid ${badge.border}`,
+                            textTransform: "uppercase",
+                          }}
+                        >
+                          {badge.label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                  <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                    {getCleanCustomerName(selectedQuotation.customer, selectedQuotation.title)}
+                  </h2>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsDrawerOpen(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#94A3B8",
-                  cursor: "pointer",
-                  padding: "4px",
-                }}
-              >
-                <X size={20} />
-              </button>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsDrawerOpen(false)}
+                  title="Close modal (Esc)"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#64748B",
+                    cursor: "pointer",
+                    padding: "6px",
+                    borderRadius: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
-            {/* Drawer Body */}
+            {/* Modal Body (Internally Scrollable) */}
             <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              {/* Linked Deal Card */}
-              <div
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  border: "1px solid #E2E8F0",
-                  borderRadius: "10px",
-                  padding: "16px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "10px",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    Linked Pipeline Deal
-                  </span>
-                  <Link
-                    href="/deals"
+              {/* 2-Column Overview Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: "16px", alignItems: "start" }}>
+                {/* Left Column: Customer, Deal, Place of Supply */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Linked Deal Card */}
+                  {selectedQuotation.deal && (
+                    <div
+                      style={{
+                        backgroundColor: "#F8FAFC",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: "10px",
+                        padding: "14px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                          Linked Pipeline Deal
+                        </span>
+                        <Link
+                          href="/deals"
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "#2563EB",
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "4px",
+                            textDecoration: "none",
+                          }}
+                        >
+                          <span>View Deal</span>
+                          <ExternalLink size={12} />
+                        </Link>
+                      </div>
+                      <div style={{ fontSize: "0.875rem", fontWeight: 700, color: "#0F172A" }}>
+                        {selectedQuotation.deal.name || `Deal #${selectedQuotation.deal_id}`}
+                      </div>
+                      {selectedQuotation.deal.stage && (
+                        <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                          Pipeline Stage: <strong style={{ color: "#334155" }}>{selectedQuotation.deal.stage.name}</strong>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Customer & Lead Information */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                    {/* Customer */}
+                    <div
+                      style={{
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: "10px",
+                        padding: "14px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                        Customer & Recipient
+                      </span>
+                      <div style={{ fontWeight: 700, color: "#0F172A", fontSize: "0.875rem" }}>
+                        {selectedQuotation.customer?.name || "No Customer Name"}
+                      </div>
+                      {selectedQuotation.customer?.company && (
+                        <div style={{ fontSize: "0.75rem", color: "#475569" }}>
+                          {selectedQuotation.customer.company}
+                        </div>
+                      )}
+                      {selectedQuotation.customer?.email && (
+                        <div style={{ fontSize: "0.75rem", color: "#0D9488" }}>
+                          {selectedQuotation.customer.email}
+                        </div>
+                      )}
+                      {selectedQuotation.customer?.phone && (
+                        <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                          {selectedQuotation.customer.phone}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Originating Lead */}
+                    <div
+                      style={{
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #E2E8F0",
+                        borderRadius: "10px",
+                        padding: "14px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                        Originating Lead
+                      </span>
+                      <div style={{ fontWeight: 700, color: "#0F172A", fontSize: "0.875rem" }}>
+                        {selectedQuotation.lead_number || "—"}
+                      </div>
+                      <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                        Converted & Linked
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Place of Supply & GST Profile */}
+                  <div
                     style={{
-                      fontSize: "0.75rem",
-                      color: "#2563EB",
-                      fontWeight: 600,
+                      backgroundColor: "#F8FAFC",
+                      border: "1px solid #CBD5E1",
+                      borderRadius: "10px",
+                      padding: "12px 14px",
                       display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      textDecoration: "none",
+                      flexDirection: "column",
+                      gap: "8px",
+                      fontSize: "0.75rem",
                     }}
                   >
-                    <span>View Deal</span>
-                    <ExternalLink size={12} />
-                  </Link>
-                </div>
-                <div style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#0F172A" }}>
-                  {selectedQuotation.deal?.name || `Deal #${selectedQuotation.deal_id}`}
-                </div>
-                {selectedQuotation.deal?.stage && (
-                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                    Pipeline Stage: <strong style={{ color: "#334155" }}>{selectedQuotation.deal.stage.name}</strong>
-                  </div>
-                )}
-              </div>
-
-              {/* Customer & Lead Information */}
-              {/* Customer & Lead Information */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                {/* Customer */}
-                <div
-                  style={{
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid #E2E8F0",
-                    borderRadius: "10px",
-                    padding: "14px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                  }}
-                >
-                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
-                    Customer & Recipient
-                  </span>
-                  <div style={{ fontWeight: 700, color: "#0F172A", fontSize: "0.875rem" }}>
-                    {selectedQuotation.customer?.name || "No Customer Name"}
-                  </div>
-                  {selectedQuotation.customer?.company && (
-                    <div style={{ fontSize: "0.75rem", color: "#475569" }}>
-                      {selectedQuotation.customer.company}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, color: "#0F172A" }}>
+                        <Receipt size={14} color="#0D9488" />
+                        <span>Place of Supply & GST Profile</span>
+                      </div>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: "6px",
+                          fontWeight: 700,
+                          fontSize: "0.6875rem",
+                          backgroundColor: selectedQuotation.is_inter_state ? "#EEF2FF" : "#F0FDFA",
+                          color: selectedQuotation.is_inter_state ? "#4338CA" : "#0F766E",
+                          border: `1px solid ${selectedQuotation.is_inter_state ? "#C7D2FE" : "#99F6E4"}`,
+                        }}
+                      >
+                        {selectedQuotation.is_inter_state ? "Inter-State (IGST)" : "Intra-State (CGST + SGST)"}
+                      </span>
                     </div>
-                  )}
-                  {selectedQuotation.customer?.email && (
-                    <div style={{ fontSize: "0.75rem", color: "#0D9488" }}>
-                      {selectedQuotation.customer.email}
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", color: "#334155" }}>
+                      <div>
+                        <span style={{ color: "#64748B" }}>Supplier State: </span>
+                        <strong>{selectedQuotation.company_state || companyProfile?.state || "Maharashtra"}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748B" }}>Place of Supply: </span>
+                        <strong style={{ color: "#0F172A" }}>{selectedQuotation.customer_state || selectedQuotation.customer?.state || "Maharashtra"}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748B" }}>Company GSTIN: </span>
+                        <strong>{selectedQuotation.company_gstin || companyProfile?.gst_number || "—"}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748B" }}>Customer GSTIN: </span>
+                        <strong>{selectedQuotation.customer_gstin || selectedQuotation.customer?.gstin || "Unregistered"}</strong>
+                      </div>
                     </div>
-                  )}
-                </div>
-
-                {/* Lead */}
-                <div
-                  style={{
-                    backgroundColor: "#FFFFFF",
-                    border: "1px solid #E2E8F0",
-                    borderRadius: "10px",
-                    padding: "14px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                  }}
-                >
-                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
-                    Originating Lead
-                  </span>
-                  <div style={{ fontWeight: 700, color: "#0F172A", fontSize: "0.875rem" }}>
-                    {selectedQuotation.lead_number || "—"}
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                    Converted & Linked
                   </div>
                 </div>
-              </div>
 
-              {/* GST & Place of Supply Summary Card */}
-              <div
-                style={{
-                  backgroundColor: "#F8FAFC",
-                  border: "1px solid #CBD5E1",
-                  borderRadius: "10px",
-                  padding: "12px 14px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 700, color: "#0F172A" }}>
-                    <Receipt size={14} color="#0D9488" />
-                    <span>Place of Supply & GST Profile</span>
-                  </div>
-                  <span
+                {/* Right Column: Financial Summary & Dates */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Dates & Validity Card */}
+                  <div
                     style={{
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                      fontWeight: 700,
-                      fontSize: "0.6875rem",
-                      backgroundColor: selectedQuotation.is_inter_state ? "#EEF2FF" : "#F0FDFA",
-                      color: selectedQuotation.is_inter_state ? "#4338CA" : "#0F766E",
-                      border: `1px solid ${selectedQuotation.is_inter_state ? "#C7D2FE" : "#99F6E4"}`,
+                      backgroundColor: "#FFFFFF",
+                      border: "1px solid #E2E8F0",
+                      borderRadius: "10px",
+                      padding: "14px",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "10px",
+                      fontSize: "0.75rem",
                     }}
                   >
-                    {selectedQuotation.is_inter_state ? "Inter-State (IGST)" : "Intra-State (CGST + SGST)"}
-                  </span>
-                </div>
+                    <div>
+                      <span style={{ color: "#64748B", display: "block" }}>Date Issued:</span>
+                      <strong style={{ color: "#0F172A" }}>
+                        {selectedQuotation.created_at
+                          ? new Date(selectedQuotation.created_at).toLocaleDateString()
+                          : "N/A"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "#64748B", display: "block" }}>Valid Until:</span>
+                      <strong style={{ color: selectedQuotation.valid_until && new Date(selectedQuotation.valid_until) < new Date() ? "#DC2626" : "#0F172A" }}>
+                        {selectedQuotation.valid_until
+                          ? new Date(selectedQuotation.valid_until).toLocaleDateString()
+                          : "30 Days from Issue"}
+                      </strong>
+                    </div>
+                  </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", color: "#334155" }}>
-                  <div>
-                    <span style={{ color: "#64748B" }}>Supplier State: </span>
-                    <strong>{selectedQuotation.company_state || companyProfile?.state || "Maharashtra"}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: "#64748B" }}>Place of Supply: </span>
-                    <strong style={{ color: "#0F172A" }}>{selectedQuotation.customer_state || selectedQuotation.customer?.state || "Maharashtra"}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: "#64748B" }}>Company GSTIN: </span>
-                    <strong>{selectedQuotation.company_gstin || companyProfile?.gst_number || "—"}</strong>
-                  </div>
-                  <div>
-                    <span style={{ color: "#64748B" }}>Customer GSTIN: </span>
-                    <strong>{selectedQuotation.customer_gstin || selectedQuotation.customer?.gstin || "Unregistered"}</strong>
-                  </div>
+                  {/* Financial Overview Card */}
+                  {(() => {
+                    const currSym = selectedQuotation.currency === "INR" ? "₹" : "$";
+                    const isInter = selectedQuotation.is_inter_state;
+                    const taxable = selectedQuotation.taxable_amount || selectedQuotation.subtotal || 0;
+                    const cgst = selectedQuotation.cgst_amount || 0;
+                    const sgst = selectedQuotation.sgst_amount || 0;
+                    const igst = selectedQuotation.igst_amount || 0;
+                    const totalGst = selectedQuotation.total_gst_amount || selectedQuotation.tax_amount || 0;
+                    const roundOff = selectedQuotation.round_off_amount || 0;
+
+                    return (
+                      <div
+                        style={{
+                          backgroundColor: "#F8FAFC",
+                          borderRadius: "10px",
+                          border: "1px solid #E2E8F0",
+                          padding: "16px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "8px",
+                          fontSize: "0.8125rem",
+                        }}
+                      >
+                        <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "2px" }}>
+                          Financial Overview
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#64748B" }}>
+                          <span>Taxable Value (Subtotal):</span>
+                          <strong style={{ color: "#0F172A" }}>{currSym}{taxable.toFixed(2)}</strong>
+                        </div>
+
+                        {!isInter ? (
+                          <>
+                            <div style={{ display: "flex", justifyContent: "space-between", color: "#0F766E", fontSize: "0.75rem" }}>
+                              <span>Central GST (CGST):</span>
+                              <strong>+{currSym}{cgst.toFixed(2)}</strong>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", color: "#0F766E", fontSize: "0.75rem" }}>
+                              <span>State GST (SGST):</span>
+                              <strong>+{currSym}{sgst.toFixed(2)}</strong>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "#4338CA", fontSize: "0.75rem" }}>
+                            <span>Integrated GST (IGST):</span>
+                            <strong>+{currSym}{igst.toFixed(2)}</strong>
+                          </div>
+                        )}
+
+                        <div style={{ display: "flex", justifyContent: "space-between", color: "#0F172A", fontWeight: 600, borderTop: "1px dashed #E2E8F0", paddingTop: "6px" }}>
+                          <span>Total GST:</span>
+                          <strong style={{ color: "#0F766E" }}>+{currSym}{totalGst.toFixed(2)}</strong>
+                        </div>
+
+                        {roundOff !== 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", color: "#64748B", fontSize: "0.75rem" }}>
+                            <span>Round-off:</span>
+                            <strong style={{ color: roundOff >= 0 ? "#059669" : "#DC2626" }}>
+                              {roundOff >= 0 ? `+${currSym}${roundOff.toFixed(2)}` : `-${currSym}${Math.abs(roundOff).toFixed(2)}`}
+                            </strong>
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            borderTop: "2px solid #CBD5E1",
+                            paddingTop: "10px",
+                            fontWeight: 800,
+                            fontSize: "1.125rem",
+                            color: "#0F172A",
+                          }}
+                        >
+                          <span>Grand Total:</span>
+                          <span style={{ color: "#0D9488" }}>
+                            {currSym}{selectedQuotation.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Requirement Section */}
+                  {selectedQuotation.deal?.requirement && (
+                    <div
+                      style={{
+                        backgroundColor: "#FFFBEB",
+                        border: "1px solid #FDE68A",
+                        borderRadius: "8px",
+                        padding: "12px",
+                      }}
+                    >
+                      <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#92400E", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
+                        Requirement Specification
+                      </span>
+                      <p style={{ fontSize: "0.8125rem", color: "#78350F", margin: 0, lineHeight: 1.4 }}>
+                        {selectedQuotation.deal.requirement}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Requirement Section */}
-              {selectedQuotation.deal?.requirement && (
-                <div
-                  style={{
-                    backgroundColor: "#FFFBEB",
-                    border: "1px solid #FDE68A",
-                    borderRadius: "8px",
-                    padding: "12px",
-                  }}
-                >
-                  <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#92400E", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
-                    Requirement Specification
-                  </span>
-                  <p style={{ fontSize: "0.8125rem", color: "#78350F", margin: 0, lineHeight: 1.4 }}>
-                    {selectedQuotation.deal.requirement}
-                  </p>
-                </div>
-              )}
-
-              {/* Line Items List with HSN/SAC and GST */}
+              {/* Full Width Line Items Table */}
               <div>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0F172A", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>
+                <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#0F172A", textTransform: "uppercase", display: "block", marginBottom: "8px" }}>
                   Quoted Products & GST Items ({selectedQuotation.items?.length || 0})
                 </span>
-                <div style={{ border: "1px solid #E2E8F0", borderRadius: "8px", overflowX: "auto" }}>
+                <div style={{ border: "1px solid #E2E8F0", borderRadius: "10px", overflow: "hidden" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.75rem" }}>
                     <thead>
-                      <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#64748B", textAlign: "left" }}>
-                        <th style={{ padding: "8px 10px" }}>Item & Spec</th>
-                        <th style={{ padding: "8px 8px", textAlign: "center" }}>HSN</th>
-                        <th style={{ padding: "8px 8px", textAlign: "center" }}>Qty</th>
-                        <th style={{ padding: "8px 8px", textAlign: "right" }}>Taxable</th>
-                        <th style={{ padding: "8px 8px", textAlign: "center" }}>GST %</th>
-                        <th style={{ padding: "8px 10px", textAlign: "right" }}>Total</th>
+                      <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569", textAlign: "left" }}>
+                        <th style={{ padding: "10px 12px" }}>Item & Description</th>
+                        <th style={{ padding: "10px 10px", textAlign: "center" }}>HSN / SAC</th>
+                        <th style={{ padding: "10px 10px", textAlign: "center" }}>Qty</th>
+                        <th style={{ padding: "10px 10px", textAlign: "right" }}>Unit Price</th>
+                        <th style={{ padding: "10px 10px", textAlign: "center" }}>GST %</th>
+                        <th style={{ padding: "10px 12px", textAlign: "right" }}>Total Amount</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2565,23 +2737,23 @@ function QuotationsContent() {
                         const currSym = selectedQuotation.currency === "INR" ? "₹" : "$";
                         return (
                           <tr key={item.id} style={{ borderBottom: "1px solid #F1F5F9" }}>
-                            <td style={{ padding: "8px 10px" }}>
+                            <td style={{ padding: "10px 12px" }}>
                               <div style={{ fontWeight: 600, color: "#0F172A" }}>{item.product_name}</div>
                               {item.sku && <div style={{ fontSize: "0.6875rem", color: "#64748B" }}>SKU: {item.sku}</div>}
                             </td>
-                            <td style={{ padding: "8px 8px", textAlign: "center", color: "#475569" }}>
+                            <td style={{ padding: "10px 10px", textAlign: "center", color: "#475569" }}>
                               {item.hsn_sac || "—"}
                             </td>
-                            <td style={{ padding: "8px 8px", textAlign: "center", color: "#475569" }}>
+                            <td style={{ padding: "10px 10px", textAlign: "center", color: "#475569", fontWeight: 600 }}>
                               {item.quantity}
                             </td>
-                            <td style={{ padding: "8px 8px", textAlign: "right", color: "#475569" }}>
+                            <td style={{ padding: "10px 10px", textAlign: "right", color: "#475569" }}>
                               {currSym}{item.taxable_amount ? item.taxable_amount.toFixed(2) : (item.unit_price * item.quantity).toFixed(2)}
                             </td>
-                            <td style={{ padding: "8px 8px", textAlign: "center", color: "#0F766E", fontWeight: 600 }}>
+                            <td style={{ padding: "10px 10px", textAlign: "center", color: "#0F766E", fontWeight: 700 }}>
                               {item.gst_rate ?? item.tax_percentage}%
                             </td>
-                            <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#0F172A" }}>
+                            <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 700, color: "#0F172A" }}>
                               {currSym}{item.line_total?.toFixed(2)}
                             </td>
                           </tr>
@@ -2592,136 +2764,75 @@ function QuotationsContent() {
                 </div>
               </div>
 
-              {/* Totals Breakdown with GST Split */}
-              {(() => {
-                const currSym = selectedQuotation.currency === "INR" ? "₹" : "$";
-                const isInter = selectedQuotation.is_inter_state;
-                const taxable = selectedQuotation.taxable_amount || selectedQuotation.subtotal || 0;
-                const cgst = selectedQuotation.cgst_amount || 0;
-                const sgst = selectedQuotation.sgst_amount || 0;
-                const igst = selectedQuotation.igst_amount || 0;
-                const totalGst = selectedQuotation.total_gst_amount || selectedQuotation.tax_amount || 0;
-                const roundOff = selectedQuotation.round_off_amount || 0;
-
-                return (
-                  <div
-                    style={{
-                      backgroundColor: "#F8FAFC",
-                      borderRadius: "8px",
-                      border: "1px solid #E2E8F0",
-                      padding: "14px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "6px",
-                      fontSize: "0.8125rem",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", color: "#64748B" }}>
-                      <span>Taxable Value (Subtotal):</span>
-                      <strong style={{ color: "#0F172A" }}>{currSym}{taxable.toFixed(2)}</strong>
-                    </div>
-
-                    {!isInter ? (
-                      <>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "#0F766E", fontSize: "0.75rem" }}>
-                          <span>Central GST (CGST):</span>
-                          <strong>+{currSym}{cgst.toFixed(2)}</strong>
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", color: "#0F766E", fontSize: "0.75rem" }}>
-                          <span>State GST (SGST):</span>
-                          <strong>+{currSym}{sgst.toFixed(2)}</strong>
-                        </div>
-                      </>
-                    ) : (
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#4338CA", fontSize: "0.75rem" }}>
-                        <span>Integrated GST (IGST):</span>
-                        <strong>+{currSym}{igst.toFixed(2)}</strong>
-                      </div>
-                    )}
-
-                    <div style={{ display: "flex", justifyContent: "space-between", color: "#0F172A", fontWeight: 600, borderTop: "1px dashed #E2E8F0", paddingTop: "4px" }}>
-                      <span>Total GST:</span>
-                      <strong style={{ color: "#0F766E" }}>+{currSym}{totalGst.toFixed(2)}</strong>
-                    </div>
-
-                    {roundOff !== 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", color: "#64748B", fontSize: "0.75rem" }}>
-                        <span>Round-off:</span>
-                        <strong style={{ color: roundOff >= 0 ? "#059669" : "#DC2626" }}>
-                          {roundOff >= 0 ? `+${currSym}${roundOff.toFixed(2)}` : `-${currSym}${Math.abs(roundOff).toFixed(2)}`}
-                        </strong>
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        borderTop: "2px solid #CBD5E1",
-                        paddingTop: "8px",
-                        fontWeight: 800,
-                        fontSize: "1rem",
-                        color: "#0F172A",
-                      }}
-                    >
-                      <span>Grand Total:</span>
-                      <span style={{ color: "#0D9488" }}>
-                        {currSym}{selectedQuotation.total_amount?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-
               {/* Terms and Notes if present */}
               {selectedQuotation.terms_and_conditions && (
                 <div>
                   <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", display: "block", marginBottom: "4px" }}>
                     Terms & Conditions
                   </span>
-                  <div style={{ fontSize: "0.75rem", color: "#475569", whiteSpace: "pre-line", lineHeight: 1.5, backgroundColor: "#F8FAFC", padding: "10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                  <div style={{ fontSize: "0.75rem", color: "#475569", whiteSpace: "pre-line", lineHeight: 1.5, backgroundColor: "#F8FAFC", padding: "12px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
                     {selectedQuotation.terms_and_conditions}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Drawer Footer Actions */}
+            {/* Modal Footer Actions */}
             <div
               style={{
-                padding: "16px 24px",
+                padding: "14px 24px",
                 borderTop: "1px solid #E2E8F0",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 backgroundColor: "#F8FAFC",
                 gap: "10px",
+                flexShrink: 0,
               }}
             >
-              {/* Delete button */}
-              <button
-                type="button"
-                onClick={handleDeleteQuotation}
-                disabled={isDeleting}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 14px",
-                  fontSize: "0.8125rem",
-                  fontWeight: 600,
-                  color: "#DC2626",
-                  backgroundColor: "#FEF2F2",
-                  border: "1px solid #FCA5A5",
-                  borderRadius: "8px",
-                  cursor: "pointer",
-                }}
-              >
-                <Trash2 size={14} />
-                <span>Delete</span>
-              </button>
+              {/* Left: Close & Delete */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsDrawerOpen(false)}
+                  style={{
+                    padding: "8px 16px",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
 
-              {/* Action buttons */}
+                <button
+                  type="button"
+                  onClick={handleDeleteQuotation}
+                  disabled={isDeleting}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 14px",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    color: "#DC2626",
+                    backgroundColor: "#FEF2F2",
+                    border: "1px solid #FCA5A5",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>Delete</span>
+                </button>
+              </div>
+
+              {/* Right: Primary Workflow Actions */}
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 {selectedQuotation.status.toLowerCase() === "draft" ? (
                   <button
@@ -2781,7 +2892,7 @@ function QuotationsContent() {
                     padding: "8px 14px",
                     fontSize: "0.8125rem",
                     fontWeight: 600,
-                    color: "#475569",
+                    color: "#334155",
                     backgroundColor: "#FFFFFF",
                     border: "1px solid #CBD5E1",
                     borderRadius: "8px",

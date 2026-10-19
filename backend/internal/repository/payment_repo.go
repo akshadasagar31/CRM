@@ -450,6 +450,11 @@ func (r *PaymentRepository) RecordPayment(ctx context.Context, in models.GlobalP
 		r.syncOrderPaymentStatusTx(ctx, tx, *existing.OrderID)
 	}
 
+	// If invoice is fully paid, automatically update linked Deal to Won
+	if newStatus == "Paid" {
+		SyncDealOnInvoiceFullPaymentTx(ctx, tx, in.InvoiceID, existing.InvoiceNumber, recordedByID)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("failed to commit payment transaction: %w", err)
 	}

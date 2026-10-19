@@ -74,7 +74,12 @@ func doJSON(t *testing.T, client *http.Client, method, url string, body interfac
 
 	var resMap map[string]interface{}
 	if len(respBytes) > 0 {
-		_ = json.Unmarshal(respBytes, &resMap)
+		if err := json.Unmarshal(respBytes, &resMap); err != nil {
+			var arr []interface{}
+			if errArr := json.Unmarshal(respBytes, &arr); errArr == nil {
+				resMap = map[string]interface{}{"items": arr}
+			}
+		}
 	}
 	return resp.StatusCode, resMap
 }

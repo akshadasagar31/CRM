@@ -23,6 +23,7 @@ import {
   downloadPdfFile,
   printPdfBlob,
 } from "@/lib/api";
+import { getCleanCustomerName } from "@/lib/titleUtils";
 import {
   Search,
   Plus,
@@ -245,6 +246,16 @@ export default function InvoicesPage() {
       setIsSendingEmail(null);
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isDrawerOpen) {
+        setIsDrawerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDrawerOpen]);
 
   useEffect(() => {
     if (isPrintModalOpen && printInvoice) {
@@ -967,7 +978,7 @@ export default function InvoicesPage() {
                           </span>
                         </td>
                         <td style={{ padding: "12px 16px" }}>
-                          <div style={{ fontWeight: 600, color: "#0F172A" }}>{ord.title}</div>
+                          <div style={{ fontWeight: 600, color: "#0F172A" }}>{getCleanCustomerName(ord.customer, ord.title)}</div>
                           <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
                             {ord.customer?.name} {ord.customer?.company ? `• ${ord.customer.company}` : ""}
                           </div>
@@ -1573,110 +1584,711 @@ export default function InvoicesPage() {
       </div>
 
       {/* ======================================================== */}
-      {/* INVOICE DETAIL DRAWER                                    */}
+      {/* INVOICE DETAIL CENTERED MODAL                            */}
       {/* ======================================================== */}
       {isDrawerOpen && selectedInvoice && (
         <div
           id="invoice-detail-drawer-overlay"
-          onClick={() => setIsDrawerOpen(false)}
           style={{
             position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.4)",
+            inset: 0,
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
             zIndex: 1000,
             display: "flex",
-            justifyContent: "flex-end",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.5rem",
+            animation: "fadeIn 0.2s ease-out",
           }}
         >
           <div
             id="invoice-detail-drawer"
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: "600px",
-              maxWidth: "100%",
-              height: "100%",
+              width: "100%",
+              maxWidth: "1000px",
+              maxHeight: "90vh",
               backgroundColor: "#FFFFFF",
-              boxShadow: "-4px 0 24px rgba(0,0,0,0.15)",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
               display: "flex",
               flexDirection: "column",
-              animation: "slideInRight 0.2s ease-out",
+              overflow: "hidden",
+              border: "1px solid #E2E8F0",
             }}
           >
-            {/* Drawer Header */}
+            {/* Modal Header */}
             <div
               style={{
-                padding: "18px 24px",
+                padding: "16px 24px",
                 borderBottom: "1px solid #E2E8F0",
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "flex-start",
+                alignItems: "center",
+                backgroundColor: "#F8FAFC",
+                flexShrink: 0,
               }}
             >
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span
-                    style={{
-                      fontSize: "1.125rem",
-                      fontWeight: 800,
-                      color: "#0F766E",
-                      backgroundColor: "#CCFBF1",
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                    }}
-                  >
-                    {selectedInvoice.invoice_number}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      fontWeight: 700,
-                      padding: "3px 8px",
-                      borderRadius: "999px",
-                      backgroundColor: STATUS_COLORS[selectedInvoice.status]?.bg || "#F1F5F9",
-                      color: STATUS_COLORS[selectedInvoice.status]?.text || "#475569",
-                      border: `1px solid ${STATUS_COLORS[selectedInvoice.status]?.border || "#CBD5E1"}`,
-                    }}
-                  >
-                    {selectedInvoice.status}
-                  </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div
+                  style={{
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "10px",
+                    backgroundColor: "#CCFBF1",
+                    color: "#0F766E",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Receipt size={20} />
                 </div>
-                <h2 style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A", margin: "6px 0 2px 0" }}>
-                  {selectedInvoice.customer?.name || selectedInvoice.customer_name}
-                </h2>
-                {(selectedInvoice.customer?.company || selectedInvoice.customer_company) && (
-                  <p style={{ fontSize: "0.75rem", color: "#64748B", margin: 0 }}>
-                    {selectedInvoice.customer?.company || selectedInvoice.customer_company}
-                  </p>
-                )}
+                <div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                    <span
+                      style={{
+                        fontSize: "0.8125rem",
+                        fontWeight: 800,
+                        color: "#0F766E",
+                        backgroundColor: "#CCFBF1",
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                      }}
+                    >
+                      {selectedInvoice.invoice_number}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.6875rem",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        backgroundColor: STATUS_COLORS[selectedInvoice.status]?.bg || "#F1F5F9",
+                        color: STATUS_COLORS[selectedInvoice.status]?.text || "#475569",
+                        border: `1px solid ${STATUS_COLORS[selectedInvoice.status]?.border || "#CBD5E1"}`,
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {selectedInvoice.status}
+                    </span>
+                  </div>
+                  <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
+                    {selectedInvoice.customer?.name || selectedInvoice.customer_name}
+                  </h2>
+                  {(selectedInvoice.customer?.company || selectedInvoice.customer_company) && (
+                    <span style={{ fontSize: "0.75rem", color: "#64748B" }}>
+                      {selectedInvoice.customer?.company || selectedInvoice.customer_company}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <button
-                  id="btn-drawer-print"
-                  onClick={() => handleOpenPrintModal(selectedInvoice)}
-                  title="Print Tax Invoice"
+                  onClick={() => setIsDrawerOpen(false)}
+                  title="Close modal (Esc)"
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "4px",
-                    padding: "6px 12px",
+                    padding: "6px",
                     borderRadius: "6px",
-                    backgroundColor: "#0F766E",
-                    color: "#FFFFFF",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
                     border: "none",
+                    backgroundColor: "transparent",
+                    color: "#64748B",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body (Internally Scrollable) */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* 2-Column Overview Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: "16px", alignItems: "start" }}>
+                {/* Left Column: Customer & Sales Lineage */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {/* Customer & Billing Snapshot */}
+                  <div
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      border: "1px solid #E2E8F0",
+                      borderRadius: "10px",
+                      padding: "14px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}
+                  >
+                    <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                      Customer & Billing Info
+                    </span>
+                    <div style={{ fontWeight: 700, color: "#0F172A", fontSize: "0.875rem" }}>
+                      {selectedInvoice.customer?.name || selectedInvoice.customer_name}
+                    </div>
+                    {(selectedInvoice.customer?.company || selectedInvoice.customer_company) && (
+                      <div style={{ fontSize: "0.75rem", color: "#475569" }}>
+                        {selectedInvoice.customer?.company || selectedInvoice.customer_company}
+                      </div>
+                    )}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "4px", fontSize: "0.75rem" }}>
+                      <div>
+                        <span style={{ color: "#64748B" }}>GSTIN: </span>
+                        <strong style={{ color: "#0F172A" }}>{selectedInvoice.customer_gstin || "Unregistered"}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: "#64748B" }}>Place of Supply: </span>
+                        <strong style={{ color: "#0F172A" }}>{selectedInvoice.place_of_supply || "Not specified"}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sales Origin & Lineage Card */}
+                  <div
+                    style={{
+                      padding: "12px 14px",
+                      backgroundColor: "#F8FAFC",
+                      borderRadius: "10px",
+                      border: "1px solid #E2E8F0",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Layers size={13} color="#0D9488" />
+                        Sales Origin & Lineage
+                      </span>
+                      <span style={{ fontSize: "0.6875rem", color: "#64748B" }}>End-to-End Tracking</span>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "0.75rem" }}>
+                      {/* Originating Lead */}
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                        <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Originating Lead</div>
+                        {selectedInvoice.lead_number || selectedInvoice.deal?.lead_number ? (
+                          <div
+                            onClick={() => router.push(`/leads?search=${encodeURIComponent(selectedInvoice.lead_number || selectedInvoice.deal?.lead_number || "")}`)}
+                            style={{ fontWeight: 700, color: "#0D9488", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <UserIcon size={12} />
+                            {selectedInvoice.lead_number || selectedInvoice.deal?.lead_number}
+                          </div>
+                        ) : (
+                          <div style={{ color: "#94A3B8" }}>—</div>
+                        )}
+                      </div>
+
+                      {/* Linked Deal */}
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                        <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Linked Deal</div>
+                        {selectedInvoice.deal ? (
+                          <div
+                            onClick={() => router.push("/deals")}
+                            style={{ fontWeight: 700, color: "#0284C7", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <Briefcase size={12} />
+                            {selectedInvoice.deal.deal_number}
+                          </div>
+                        ) : (
+                          <div style={{ color: "#94A3B8" }}>—</div>
+                        )}
+                      </div>
+
+                      {/* Accepted Quotation */}
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                        <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Quotation</div>
+                        {selectedInvoice.quotation ? (
+                          <div
+                            onClick={() => router.push("/quotations")}
+                            style={{ fontWeight: 700, color: "#7C3AED", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <FileText size={12} />
+                            {selectedInvoice.quotation.quotation_number}
+                          </div>
+                        ) : (
+                          <div style={{ color: "#94A3B8" }}>—</div>
+                        )}
+                      </div>
+
+                      {/* Linked Order */}
+                      <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                        <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Linked Order</div>
+                        {selectedInvoice.order ? (
+                          <div
+                            onClick={() => router.push("/orders")}
+                            style={{ fontWeight: 700, color: "#1D4ED8", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
+                          >
+                            <PackageCheck size={12} />
+                            {selectedInvoice.order.order_number}
+                          </div>
+                        ) : (
+                          <div style={{ color: "#94A3B8" }}>—</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Financial Summary & Dates */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {/* Financial Balance Summary Card */}
+                  <div
+                    style={{
+                      padding: "14px 16px",
+                      borderRadius: "10px",
+                      border: "1px solid #E2E8F0",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr 1fr",
+                      gap: "10px",
+                      backgroundColor: "#F8FAFC",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
+                        Grand Total
+                      </div>
+                      <div style={{ fontSize: "1.0625rem", fontWeight: 800, color: "#0F172A", marginTop: "2px" }}>
+                        {formatINR(selectedInvoice.grand_total)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#15803D", textTransform: "uppercase" }}>
+                        Amount Paid
+                      </div>
+                      <div style={{ fontSize: "1.0625rem", fontWeight: 800, color: "#15803D", marginTop: "2px" }}>
+                        {formatINR(selectedInvoice.amount_paid)}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#D97706", textTransform: "uppercase" }}>
+                        Balance Due
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "1.0625rem",
+                          fontWeight: 800,
+                          color: selectedInvoice.remaining_balance > 0 ? "#DC2626" : "#15803D",
+                          marginTop: "2px",
+                        }}
+                      >
+                        {formatINR(selectedInvoice.remaining_balance)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dates & Payment Terms Card */}
+                  <div
+                    style={{
+                      backgroundColor: "#FFFFFF",
+                      border: "1px solid #E2E8F0",
+                      borderRadius: "10px",
+                      padding: "14px",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "10px",
+                      fontSize: "0.75rem",
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: "#64748B", display: "block" }}>Invoice Date:</span>
+                      <strong style={{ color: "#0F172A" }}>
+                        {selectedInvoice.invoice_date || new Date(selectedInvoice.created_at).toLocaleDateString()}
+                      </strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "#64748B", display: "block" }}>Due Date:</span>
+                      <strong style={{ color: selectedInvoice.due_date && new Date(selectedInvoice.due_date) < new Date() && selectedInvoice.remaining_balance > 0 ? "#DC2626" : "#0F172A" }}>
+                        {selectedInvoice.due_date || "Immediate"}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Drawer Tabs */}
+              <div
+                style={{
+                  display: "flex",
+                  borderBottom: "1px solid #E2E8F0",
+                  backgroundColor: "#F8FAFC",
+                  borderRadius: "8px 8px 0 0",
+                  padding: "0 12px",
+                }}
+              >
+                {[
+                  { id: "items", label: "Line Items & Taxes" },
+                  { id: "payments", label: `Payments (${selectedInvoice.payments?.length || 0})` },
+                  { id: "gst", label: "GST & Billing Details" },
+                  { id: "notes", label: "Notes & Terms" },
+                ].map((tb) => (
+                  <button
+                    key={tb.id}
+                    onClick={() => setDrawerTab(tb.id as any)}
+                    style={{
+                      padding: "10px 16px",
+                      fontSize: "0.8125rem",
+                      fontWeight: drawerTab === tb.id ? 700 : 500,
+                      color: drawerTab === tb.id ? "#0D9488" : "#64748B",
+                      borderBottom: drawerTab === tb.id ? "2px solid #0D9488" : "2px solid transparent",
+                      background: "none",
+                      borderTop: "none",
+                      borderLeft: "none",
+                      borderRight: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {tb.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Drawer Tab Content */}
+              <div>
+                {drawerTab === "items" && (
+                  <div>
+                    <div style={{ border: "1px solid #E2E8F0", borderRadius: "8px", overflow: "hidden" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.75rem" }}>
+                        <thead>
+                          <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+                            <th style={{ padding: "8px 10px", textAlign: "left" }}>Item & Description</th>
+                            <th style={{ padding: "8px 10px", textAlign: "center" }}>HSN/SAC</th>
+                            <th style={{ padding: "8px 10px", textAlign: "center" }}>Qty</th>
+                            <th style={{ padding: "8px 10px", textAlign: "right" }}>Rate</th>
+                            <th style={{ padding: "8px 10px", textAlign: "center" }}>GST %</th>
+                            <th style={{ padding: "8px 10px", textAlign: "right" }}>Tax Amt</th>
+                            <th style={{ padding: "8px 10px", textAlign: "right" }}>Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedInvoice.items?.map((it, idx) => (
+                            <tr key={it.id || idx} style={{ borderBottom: "1px solid #F1F5F9" }}>
+                              <td style={{ padding: "8px 10px" }}>
+                                <div style={{ fontWeight: 600, color: "#0F172A" }}>{it.product_name || it.name}</div>
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "center", color: "#64748B" }}>
+                                {it.hsn_sac || "—"}
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "center", fontWeight: 600 }}>{it.quantity}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "right" }}>{formatINR(it.unit_price)}</td>
+                              <td style={{ padding: "8px 10px", textAlign: "center", color: "#0F766E", fontWeight: 600 }}>{it.gst_rate}%</td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", color: "#64748B" }}>
+                                {formatINR((it.cgst_amount || 0) + (it.sgst_amount || 0) + (it.igst_amount || 0))}
+                              </td>
+                              <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700, color: "#0F172A" }}>
+                                {formatINR(it.total_amount ?? it.line_total ?? 0)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Financial Breakdown */}
+                    <div
+                      style={{
+                        marginTop: "16px",
+                        padding: "14px 18px",
+                        backgroundColor: "#F8FAFC",
+                        borderRadius: "8px",
+                        border: "1px solid #E2E8F0",
+                        fontSize: "0.8125rem",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                        <span style={{ color: "#64748B" }}>Subtotal (Taxable):</span>
+                        <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.subtotal)}</strong>
+                      </div>
+
+                      {selectedInvoice.discount_amount > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                          <span style={{ color: "#64748B" }}>Discount:</span>
+                          <strong style={{ color: "#DC2626" }}>-{formatINR(selectedInvoice.discount_amount)}</strong>
+                        </div>
+                      )}
+
+                      {selectedInvoice.cgst_amount > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                          <span style={{ color: "#64748B" }}>CGST:</span>
+                          <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.cgst_amount)}</strong>
+                        </div>
+                      )}
+
+                      {selectedInvoice.sgst_amount > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                          <span style={{ color: "#64748B" }}>SGST:</span>
+                          <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.sgst_amount)}</strong>
+                        </div>
+                      )}
+
+                      {selectedInvoice.igst_amount > 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                          <span style={{ color: "#64748B" }}>IGST:</span>
+                          <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.igst_amount)}</strong>
+                        </div>
+                      )}
+
+                      {selectedInvoice.round_off !== 0 && (
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                          <span style={{ color: "#64748B" }}>Round Off:</span>
+                          <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.round_off)}</strong>
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          paddingTop: "8px",
+                          marginTop: "8px",
+                          borderTop: "2px solid #CBD5E1",
+                          fontSize: "0.9375rem",
+                        }}
+                      >
+                        <strong style={{ color: "#0F172A" }}>Grand Total:</strong>
+                        <strong style={{ color: "#0F766E", fontSize: "1rem" }}>
+                          {formatINR(selectedInvoice.grand_total)}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {drawerTab === "payments" && (
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
+                      <h4 style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#475569", margin: 0 }}>
+                        Payment History Audit Trail
+                      </h4>
+                      <button
+                        onClick={handleOpenPaymentModal}
+                        style={{
+                          padding: "5px 12px",
+                          borderRadius: "6px",
+                          backgroundColor: "#15803D",
+                          color: "#FFFFFF",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        + Record Payment
+                      </button>
+                    </div>
+
+                    {!selectedInvoice.payments || selectedInvoice.payments.length === 0 ? (
+                      <div style={{ padding: "40px 0", textAlign: "center", color: "#64748B" }}>
+                        <CreditCard size={32} style={{ color: "#CBD5E1", margin: "0 auto 8px" }} />
+                        <p style={{ margin: 0, fontSize: "0.8125rem" }}>No payments recorded yet for this invoice.</p>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                        {selectedInvoice.payments.map((p) => (
+                          <div
+                            key={p.id}
+                            style={{
+                              padding: "12px 16px",
+                              backgroundColor: "#F8FAFC",
+                              border: "1px solid #E2E8F0",
+                              borderRadius: "8px",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontWeight: 700, color: "#15803D", fontSize: "0.9375rem" }}>
+                                {formatINR(p.amount)}
+                              </div>
+                              <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
+                                {p.payment_method} • {p.payment_date}
+                                {p.reference_number && ` • Ref: ${p.reference_number}`}
+                              </div>
+                              {p.notes && (
+                                <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "4px" }}>
+                                  <em>{p.notes}</em>
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              style={{
+                                fontSize: "0.6875rem",
+                                fontWeight: 700,
+                                color: "#15803D",
+                                backgroundColor: "#DCFCE7",
+                                padding: "2px 8px",
+                                borderRadius: "999px",
+                              }}
+                            >
+                              Recorded
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {drawerTab === "gst" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "0.8125rem" }}>
+                    {/* Customer GST Snapshot */}
+                    <div style={{ padding: "14px 18px", backgroundColor: "#F8FAFC", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                      <div style={{ fontWeight: 700, color: "#0F172A", marginBottom: "8px" }}>Customer Billing Info</div>
+                      <div style={{ color: "#64748B" }}>Customer: <strong style={{ color: "#1E293B" }}>{selectedInvoice.customer?.name || selectedInvoice.customer_name}</strong></div>
+                      <div style={{ color: "#64748B", marginTop: "4px" }}>GSTIN: <strong style={{ color: "#1E293B" }}>{selectedInvoice.customer_gstin || "Unregistered"}</strong></div>
+                      <div style={{ color: "#64748B", marginTop: "4px" }}>Place of Supply: <strong style={{ color: "#1E293B" }}>{selectedInvoice.place_of_supply || "Not specified"}</strong></div>
+                      {selectedInvoice.customer_address && (
+                        <div style={{ color: "#64748B", marginTop: "4px" }}>Address: {selectedInvoice.customer_address}</div>
+                      )}
+                    </div>
+
+                    {/* Company Profile Snapshot */}
+                    <div style={{ padding: "14px 18px", backgroundColor: "#F8FAFC", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                      <div style={{ fontWeight: 700, color: "#0F172A", marginBottom: "8px" }}>Issuer Company Snapshot</div>
+                      <div style={{ color: "#64748B" }}>Company: <strong style={{ color: "#1E293B" }}>{selectedInvoice.company_name || companyProfile?.company_name}</strong></div>
+                      <div style={{ color: "#64748B", marginTop: "4px" }}>GSTIN: <strong style={{ color: "#1E293B" }}>{selectedInvoice.company_gstin || companyProfile?.gst_number || "Not set"}</strong></div>
+                      <div style={{ color: "#64748B", marginTop: "4px" }}>PAN: <strong style={{ color: "#1E293B" }}>{selectedInvoice.company_pan || companyProfile?.pan_number || "Not set"}</strong></div>
+                      <div style={{ color: "#64748B", marginTop: "4px" }}>State: {selectedInvoice.company_state || companyProfile?.state || "Not set"}</div>
+                    </div>
+                  </div>
+                )}
+
+                {drawerTab === "notes" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "0.8125rem" }}>
+                    <div>
+                      <label style={{ display: "block", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                        Invoice Notes
+                      </label>
+                      <div style={{ padding: "10px 14px", backgroundColor: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0", minHeight: "60px", whiteSpace: "pre-wrap" }}>
+                        {selectedInvoice.notes || "No notes provided."}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: "block", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
+                        Terms & Conditions
+                      </label>
+                      <div style={{ padding: "10px 14px", backgroundColor: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0", minHeight: "60px", whiteSpace: "pre-wrap" }}>
+                        {selectedInvoice.terms_conditions || "Standard payment terms apply."}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Fixed Footer */}
+            <div
+              style={{
+                padding: "14px 24px",
+                borderTop: "1px solid #E2E8F0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                backgroundColor: "#F8FAFC",
+                gap: "10px",
+                flexShrink: 0,
+              }}
+            >
+              {/* Left: Close & Delete */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => setIsDrawerOpen(false)}
+                  style={{
+                    padding: "8px 16px",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    color: "#475569",
+                    backgroundColor: "#FFFFFF",
+                    border: "1px solid #CBD5E1",
+                    borderRadius: "8px",
                     cursor: "pointer",
                   }}
                 >
-                  <Printer size={13} /> Print
+                  Close
                 </button>
 
-                {/* Email in Drawer */}
                 <button
+                  type="button"
+                  onClick={() => handleDeleteInvoice(selectedInvoice.id)}
+                  title="Delete Invoice"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 14px",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    color: "#DC2626",
+                    backgroundColor: "#FEF2F2",
+                    border: "1px solid #FCA5A5",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>Delete</span>
+                </button>
+              </div>
+
+              {/* Right: Actions */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B" }}>Status:</label>
+                  <select
+                    value={selectedInvoice.status}
+                    disabled={isUpdatingStatus}
+                    onChange={(e) => handleChangeStatus(selectedInvoice.id, e.target.value)}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      fontSize: "0.8125rem",
+                      fontWeight: 700,
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {ALL_STATUSES.map((st) => (
+                      <option key={st} value={st}>
+                        {st}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  id="btn-drawer-record-payment"
+                  type="button"
+                  onClick={handleOpenPaymentModal}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 14px",
+                    borderRadius: "8px",
+                    backgroundColor: "#15803D",
+                    color: "#FFFFFF",
+                    fontSize: "0.8125rem",
+                    fontWeight: 700,
+                    border: "none",
+                    cursor: "pointer",
+                    boxShadow: "0 1px 3px rgba(21, 128, 61, 0.2)",
+                  }}
+                >
+                  <DollarSign size={14} /> Record Payment
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => handleSendEmail(selectedInvoice)}
                   disabled={isSendingEmail === selectedInvoice.id}
                   title="Send Tax Invoice PDF to Customer Email"
@@ -1684,510 +2296,41 @@ export default function InvoicesPage() {
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "6px",
-                    padding: "6px 12px",
-                    borderRadius: "6px",
+                    padding: "8px 14px",
+                    borderRadius: "8px",
                     backgroundColor: "#2563EB",
                     color: "#FFFFFF",
-                    fontSize: "0.75rem",
+                    fontSize: "0.8125rem",
                     fontWeight: 600,
                     border: "none",
                     cursor: isSendingEmail === selectedInvoice.id ? "wait" : "pointer",
                   }}
                 >
-                  <Mail size={13} /> {isSendingEmail === selectedInvoice.id ? "Sending..." : "Email PDF"}
+                  <Mail size={14} /> {isSendingEmail === selectedInvoice.id ? "Sending..." : "Email PDF"}
                 </button>
 
                 <button
-                  onClick={() => handleDeleteInvoice(selectedInvoice.id)}
-                  title="Delete Invoice"
+                  id="btn-drawer-print"
+                  type="button"
+                  onClick={() => handleOpenPrintModal(selectedInvoice)}
+                  title="Print Tax Invoice"
                   style={{
-                    padding: "6px",
-                    borderRadius: "6px",
-                    border: "1px solid #FCA5A5",
-                    backgroundColor: "#FEF2F2",
-                    color: "#DC2626",
-                    cursor: "pointer",
-                  }}
-                >
-                  <Trash2 size={15} />
-                </button>
-
-                <button
-                  onClick={() => setIsDrawerOpen(false)}
-                  style={{
-                    padding: "6px",
-                    borderRadius: "6px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "8px 14px",
+                    borderRadius: "8px",
+                    backgroundColor: "#0F766E",
+                    color: "#FFFFFF",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
                     border: "none",
-                    backgroundColor: "#F1F5F9",
-                    color: "#64748B",
                     cursor: "pointer",
                   }}
                 >
-                  <X size={18} />
+                  <Printer size={14} /> Print / PDF
                 </button>
               </div>
-            </div>
-
-            {/* Quick Status & Payment Action Bar */}
-            <div
-              style={{
-                padding: "12px 24px",
-                backgroundColor: "#F8FAFC",
-                borderBottom: "1px solid #E2E8F0",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "12px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <label style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B" }}>Status:</label>
-                <select
-                  value={selectedInvoice.status}
-                  disabled={isUpdatingStatus}
-                  onChange={(e) => handleChangeStatus(selectedInvoice.id, e.target.value)}
-                  style={{
-                    padding: "5px 10px",
-                    borderRadius: "6px",
-                    fontSize: "0.8125rem",
-                    fontWeight: 700,
-                    border: "1px solid #CBD5E1",
-                    backgroundColor: "#FFFFFF",
-                    cursor: "pointer",
-                  }}
-                >
-                  {ALL_STATUSES.map((st) => (
-                    <option key={st} value={st}>
-                      {st}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                id="btn-drawer-record-payment"
-                onClick={handleOpenPaymentModal}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "6px 14px",
-                  borderRadius: "6px",
-                  backgroundColor: "#15803D",
-                  color: "#FFFFFF",
-                  fontSize: "0.8125rem",
-                  fontWeight: 700,
-                  border: "none",
-                  cursor: "pointer",
-                  boxShadow: "0 1px 3px rgba(21, 128, 61, 0.2)",
-                }}
-              >
-                <DollarSign size={14} /> Record Payment
-              </button>
-            </div>
-
-            {/* Financial Balance Summary Card */}
-            <div
-              style={{
-                padding: "14px 24px",
-                borderBottom: "1px solid #E2E8F0",
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: "12px",
-                backgroundColor: "#FFFFFF",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase" }}>
-                  Grand Total
-                </div>
-                <div style={{ fontSize: "1.125rem", fontWeight: 800, color: "#0F172A", marginTop: "2px" }}>
-                  {formatINR(selectedInvoice.grand_total)}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#15803D", textTransform: "uppercase" }}>
-                  Amount Paid
-                </div>
-                <div style={{ fontSize: "1.125rem", fontWeight: 800, color: "#15803D", marginTop: "2px" }}>
-                  {formatINR(selectedInvoice.amount_paid)}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#D97706", textTransform: "uppercase" }}>
-                  Remaining Balance
-                </div>
-                <div
-                  style={{
-                    fontSize: "1.125rem",
-                    fontWeight: 800,
-                    color: selectedInvoice.remaining_balance > 0 ? "#DC2626" : "#15803D",
-                    marginTop: "2px",
-                  }}
-                >
-                  {formatINR(selectedInvoice.remaining_balance)}
-                </div>
-              </div>
-            </div>
-
-            {/* Sales Origin & Lineage Card in Invoice Drawer */}
-            <div
-              style={{
-                margin: "12px 24px",
-                padding: "12px 16px",
-                backgroundColor: "#F8FAFC",
-                borderRadius: "8px",
-                border: "1px solid #E2E8F0",
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: "6px" }}>
-                  <Layers size={14} color="#0D9488" />
-                  Sales Origin & Lineage
-                </span>
-                <span style={{ fontSize: "0.6875rem", color: "#64748B" }}>End-to-End Tracking</span>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "8px", fontSize: "0.75rem" }}>
-                {/* Originating Lead */}
-                <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
-                  <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Originating Lead</div>
-                  {selectedInvoice.lead_number || selectedInvoice.deal?.lead_number ? (
-                    <div
-                      onClick={() => router.push(`/leads?search=${encodeURIComponent(selectedInvoice.lead_number || selectedInvoice.deal?.lead_number || "")}`)}
-                      style={{ fontWeight: 700, color: "#0D9488", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
-                    >
-                      <UserIcon size={12} />
-                      {selectedInvoice.lead_number || selectedInvoice.deal?.lead_number}
-                    </div>
-                  ) : (
-                    <div style={{ color: "#94A3B8" }}>—</div>
-                  )}
-                </div>
-
-                {/* Linked Deal */}
-                <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
-                  <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Linked Deal</div>
-                  {selectedInvoice.deal ? (
-                    <div
-                      onClick={() => router.push("/deals")}
-                      style={{ fontWeight: 700, color: "#0284C7", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
-                    >
-                      <Briefcase size={12} />
-                      {selectedInvoice.deal.deal_number}
-                    </div>
-                  ) : (
-                    <div style={{ color: "#94A3B8" }}>—</div>
-                  )}
-                </div>
-
-                {/* Accepted Quotation */}
-                <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
-                  <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Quotation</div>
-                  {selectedInvoice.quotation ? (
-                    <div
-                      onClick={() => router.push("/quotations")}
-                      style={{ fontWeight: 700, color: "#7C3AED", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
-                    >
-                      <FileText size={12} />
-                      {selectedInvoice.quotation.quotation_number}
-                    </div>
-                  ) : (
-                    <div style={{ color: "#94A3B8" }}>—</div>
-                  )}
-                </div>
-
-                {/* Linked Order */}
-                <div style={{ backgroundColor: "#FFFFFF", padding: "8px 10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
-                  <div style={{ color: "#64748B", fontSize: "0.6875rem", marginBottom: "2px" }}>Linked Order</div>
-                  {selectedInvoice.order ? (
-                    <div
-                      onClick={() => router.push("/orders")}
-                      style={{ fontWeight: 700, color: "#1D4ED8", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}
-                    >
-                      <PackageCheck size={12} />
-                      {selectedInvoice.order.order_number}
-                    </div>
-                  ) : (
-                    <div style={{ color: "#94A3B8" }}>—</div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Drawer Tabs */}
-            <div
-              style={{
-                display: "flex",
-                borderBottom: "1px solid #E2E8F0",
-                backgroundColor: "#F8FAFC",
-                padding: "0 24px",
-              }}
-            >
-              {[
-                { id: "items", label: "Line Items & Taxes" },
-                { id: "payments", label: `Payments (${selectedInvoice.payments?.length || 0})` },
-                { id: "gst", label: "GST & Billing Details" },
-                { id: "notes", label: "Notes & Terms" },
-              ].map((tb) => (
-                <button
-                  key={tb.id}
-                  onClick={() => setDrawerTab(tb.id as any)}
-                  style={{
-                    padding: "10px 16px",
-                    fontSize: "0.8125rem",
-                    fontWeight: drawerTab === tb.id ? 700 : 500,
-                    color: drawerTab === tb.id ? "#0D9488" : "#64748B",
-                    borderBottom: drawerTab === tb.id ? "2px solid #0D9488" : "2px solid transparent",
-                    background: "none",
-                    borderTop: "none",
-                    borderLeft: "none",
-                    borderRight: "none",
-                    cursor: "pointer",
-                  }}
-                >
-                  {tb.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Drawer Tab Content */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
-              {drawerTab === "items" && (
-                <div>
-                  <h4 style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#475569", margin: "0 0 10px 0" }}>
-                    Invoice Line Items
-                  </h4>
-                  <div style={{ border: "1px solid #E2E8F0", borderRadius: "8px", overflow: "hidden" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.75rem" }}>
-                      <thead>
-                        <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
-                          <th style={{ padding: "8px 10px", textAlign: "left" }}>Item</th>
-                          <th style={{ padding: "8px 10px", textAlign: "center" }}>Qty</th>
-                          <th style={{ padding: "8px 10px", textAlign: "right" }}>Rate</th>
-                          <th style={{ padding: "8px 10px", textAlign: "center" }}>GST</th>
-                          <th style={{ padding: "8px 10px", textAlign: "right" }}>Tax</th>
-                          <th style={{ padding: "8px 10px", textAlign: "right" }}>Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedInvoice.items?.map((it, idx) => (
-                          <tr key={it.id || idx} style={{ borderBottom: "1px solid #F1F5F9" }}>
-                            <td style={{ padding: "8px 10px" }}>
-                              <div style={{ fontWeight: 600, color: "#0F172A" }}>{it.product_name || it.name}</div>
-                              {it.hsn_sac && (
-                                <div style={{ fontSize: "0.6875rem", color: "#64748B" }}>HSN/SAC: {it.hsn_sac}</div>
-                              )}
-                            </td>
-                            <td style={{ padding: "8px 10px", textAlign: "center" }}>{it.quantity}</td>
-                            <td style={{ padding: "8px 10px", textAlign: "right" }}>{formatINR(it.unit_price)}</td>
-                            <td style={{ padding: "8px 10px", textAlign: "center" }}>{it.gst_rate}%</td>
-                            <td style={{ padding: "8px 10px", textAlign: "right" }}>
-                              {formatINR((it.cgst_amount || 0) + (it.sgst_amount || 0) + (it.igst_amount || 0))}
-                            </td>
-                            <td style={{ padding: "8px 10px", textAlign: "right", fontWeight: 700 }}>
-                              {formatINR(it.total_amount ?? it.line_total ?? 0)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Financial Breakdown */}
-                  <div
-                    style={{
-                      marginTop: "16px",
-                      padding: "14px 18px",
-                      backgroundColor: "#F8FAFC",
-                      borderRadius: "8px",
-                      border: "1px solid #E2E8F0",
-                      fontSize: "0.8125rem",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                      <span style={{ color: "#64748B" }}>Subtotal:</span>
-                      <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.subtotal)}</strong>
-                    </div>
-
-                    {selectedInvoice.discount_amount > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                        <span style={{ color: "#64748B" }}>Discount:</span>
-                        <strong style={{ color: "#DC2626" }}>-{formatINR(selectedInvoice.discount_amount)}</strong>
-                      </div>
-                    )}
-
-                    {selectedInvoice.cgst_amount > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                        <span style={{ color: "#64748B" }}>CGST:</span>
-                        <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.cgst_amount)}</strong>
-                      </div>
-                    )}
-
-                    {selectedInvoice.sgst_amount > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                        <span style={{ color: "#64748B" }}>SGST:</span>
-                        <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.sgst_amount)}</strong>
-                      </div>
-                    )}
-
-                    {selectedInvoice.igst_amount > 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                        <span style={{ color: "#64748B" }}>IGST:</span>
-                        <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.igst_amount)}</strong>
-                      </div>
-                    )}
-
-                    {selectedInvoice.round_off !== 0 && (
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                        <span style={{ color: "#64748B" }}>Round Off:</span>
-                        <strong style={{ color: "#1E293B" }}>{formatINR(selectedInvoice.round_off)}</strong>
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        paddingTop: "8px",
-                        marginTop: "8px",
-                        borderTop: "2px solid #CBD5E1",
-                        fontSize: "0.9375rem",
-                      }}
-                    >
-                      <strong style={{ color: "#0F172A" }}>Grand Total:</strong>
-                      <strong style={{ color: "#0F766E", fontSize: "1rem" }}>
-                        {formatINR(selectedInvoice.grand_total)}
-                      </strong>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {drawerTab === "payments" && (
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px" }}>
-                    <h4 style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#475569", margin: 0 }}>
-                      Payment History Audit Trail
-                    </h4>
-                    <button
-                      onClick={handleOpenPaymentModal}
-                      style={{
-                        padding: "5px 12px",
-                        borderRadius: "6px",
-                        backgroundColor: "#15803D",
-                        color: "#FFFFFF",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      + Record Payment
-                    </button>
-                  </div>
-
-                  {!selectedInvoice.payments || selectedInvoice.payments.length === 0 ? (
-                    <div style={{ padding: "40px 0", textAlign: "center", color: "#64748B" }}>
-                      <CreditCard size={32} style={{ color: "#CBD5E1", margin: "0 auto 8px" }} />
-                      <p style={{ margin: 0, fontSize: "0.8125rem" }}>No payments recorded yet for this invoice.</p>
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {selectedInvoice.payments.map((p) => (
-                        <div
-                          key={p.id}
-                          style={{
-                            padding: "12px 16px",
-                            backgroundColor: "#F8FAFC",
-                            border: "1px solid #E2E8F0",
-                            borderRadius: "8px",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <div>
-                            <div style={{ fontWeight: 700, color: "#15803D", fontSize: "0.9375rem" }}>
-                              {formatINR(p.amount)}
-                            </div>
-                            <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
-                              {p.payment_method} • {p.payment_date}
-                              {p.reference_number && ` • Ref: ${p.reference_number}`}
-                            </div>
-                            {p.notes && (
-                              <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "4px" }}>
-                                <em>{p.notes}</em>
-                              </div>
-                            )}
-                          </div>
-                          <span
-                            style={{
-                              fontSize: "0.6875rem",
-                              fontWeight: 700,
-                              color: "#15803D",
-                              backgroundColor: "#DCFCE7",
-                              padding: "2px 8px",
-                              borderRadius: "999px",
-                            }}
-                          >
-                            Recorded
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {drawerTab === "gst" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "0.8125rem" }}>
-                  {/* Customer GST Snapshot */}
-                  <div style={{ padding: "14px 18px", backgroundColor: "#F8FAFC", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-                    <div style={{ fontWeight: 700, color: "#0F172A", marginBottom: "8px" }}>Customer Billing Info</div>
-                    <div style={{ color: "#64748B" }}>Customer: <strong style={{ color: "#1E293B" }}>{selectedInvoice.customer?.name || selectedInvoice.customer_name}</strong></div>
-                    <div style={{ color: "#64748B", marginTop: "4px" }}>GSTIN: <strong style={{ color: "#1E293B" }}>{selectedInvoice.customer_gstin || "Unregistered"}</strong></div>
-                    <div style={{ color: "#64748B", marginTop: "4px" }}>Place of Supply: <strong style={{ color: "#1E293B" }}>{selectedInvoice.place_of_supply || "Not specified"}</strong></div>
-                    {selectedInvoice.customer_address && (
-                      <div style={{ color: "#64748B", marginTop: "4px" }}>Address: {selectedInvoice.customer_address}</div>
-                    )}
-                  </div>
-
-                  {/* Company Profile Snapshot */}
-                  <div style={{ padding: "14px 18px", backgroundColor: "#F8FAFC", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-                    <div style={{ fontWeight: 700, color: "#0F172A", marginBottom: "8px" }}>Issuer Company Snapshot</div>
-                    <div style={{ color: "#64748B" }}>Company: <strong style={{ color: "#1E293B" }}>{selectedInvoice.company_name || companyProfile?.company_name}</strong></div>
-                    <div style={{ color: "#64748B", marginTop: "4px" }}>GSTIN: <strong style={{ color: "#1E293B" }}>{selectedInvoice.company_gstin || companyProfile?.gst_number || "Not set"}</strong></div>
-                    <div style={{ color: "#64748B", marginTop: "4px" }}>PAN: <strong style={{ color: "#1E293B" }}>{selectedInvoice.company_pan || companyProfile?.pan_number || "Not set"}</strong></div>
-                    <div style={{ color: "#64748B", marginTop: "4px" }}>State: {selectedInvoice.company_state || companyProfile?.state || "Not set"}</div>
-                  </div>
-                </div>
-              )}
-
-              {drawerTab === "notes" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "0.8125rem" }}>
-                  <div>
-                    <label style={{ display: "block", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
-                      Invoice Notes
-                    </label>
-                    <div style={{ padding: "10px 14px", backgroundColor: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0", minHeight: "60px", whiteSpace: "pre-wrap" }}>
-                      {selectedInvoice.notes || "No notes provided."}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: "block", fontWeight: 700, color: "#475569", marginBottom: "6px" }}>
-                      Terms & Conditions
-                    </label>
-                    <div style={{ padding: "10px 14px", backgroundColor: "#F8FAFC", borderRadius: "6px", border: "1px solid #E2E8F0", minHeight: "60px", whiteSpace: "pre-wrap" }}>
-                      {selectedInvoice.terms_conditions || "Standard payment terms apply."}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -2546,7 +2689,7 @@ export default function InvoicesPage() {
                       <option value="">-- Choose an Order --</option>
                       {ordersList.map((ord) => (
                         <option key={ord.id} value={ord.id}>
-                          {ord.order_number} - {ord.title} ({ord.customer?.name}) - {formatINR(ord.total_amount)} [{ord.stage}]
+                          {ord.order_number} - {getCleanCustomerName(ord.customer, ord.title)} - {formatINR(ord.total_amount)} [{ord.stage}]
                         </option>
                       ))}
                     </select>
@@ -2615,7 +2758,7 @@ export default function InvoicesPage() {
                       <option value="">-- Choose an Accepted Quotation --</option>
                       {quotesList.map((q) => (
                         <option key={q.id} value={q.id}>
-                          {q.quotation_number} - {q.title} ({q.customer?.name}) - {formatINR(q.total_amount)}
+                          {q.quotation_number} - {getCleanCustomerName(q.customer, q.title)} - {formatINR(q.total_amount)}
                         </option>
                       ))}
                     </select>

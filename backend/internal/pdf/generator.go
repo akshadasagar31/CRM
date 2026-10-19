@@ -25,22 +25,25 @@ import (
 	"github.com/johnfercher/maroto/v2/pkg/props"
 )
 
-// Brand Palette - Minimalist Corporate (White, Navy & Teal)
+// Brand Palette - Executive Corporate (Navy, Teal & Royal Blue)
 var (
-	ColorNavyText      = &props.Color{Red: 15, Green: 23, Blue: 42}    // #0F172A - Deep Navy Primary Text & Titles
+	ColorNavyText      = &props.Color{Red: 11, Green: 37, Blue: 69}    // #0B2545 - Deep Navy Primary Titles & Headers
 	ColorDarkSlate     = ColorNavyText                                 // Backward compatibility alias
-	ColorNavySecondary = &props.Color{Red: 71, Green: 85, Blue: 105}   // #475569 - Muted Slate Secondary Text
+	ColorNavySecondary = &props.Color{Red: 71, Green: 85, Blue: 105}   // #475569 - Slate Secondary Text
 	ColorMutedSlate    = ColorNavySecondary                            // Backward compatibility alias
 	ColorPrimaryTeal   = &props.Color{Red: 13, Green: 148, Blue: 136}  // #0D9488 - Vibrant Teal Accent
+	ColorRoyalBlue     = &props.Color{Red: 29, Green: 78, Blue: 216}   // #1D4ED8 - Royal Navy for Recipient Badge
 	ColorTealLight     = &props.Color{Red: 240, Green: 253, Blue: 250} // #F0FDFA - Ice Teal Fill
 	ColorTealBorder    = &props.Color{Red: 153, Green: 246, Blue: 228} // #99F6E4 - Soft Teal Border
 	ColorLightBorder   = &props.Color{Red: 226, Green: 232, Blue: 240} // #E2E8F0 - Subtle Slate Divider
 	ColorCardBg        = &props.Color{Red: 248, Green: 250, Blue: 252} // #F8FAFC - Soft Off-White / Card Fill
 	ColorWhite         = &props.Color{Red: 255, Green: 255, Blue: 255}
-	ColorBadgePaid     = &props.Color{Red: 16, Green: 185, Blue: 129}  // #10B981 - Green
+	ColorBadgePaid     = &props.Color{Red: 16, Green: 185, Blue: 129}  // #10B981 - Emerald Green
+	ColorPaidBg        = &props.Color{Red: 236, Green: 253, Blue: 245} // #ECFDF5 - Emerald Light Fill
 	ColorBadgeOverdue  = &props.Color{Red: 239, Green: 68, Blue: 68}   // #EF4444 - Red
 	ColorBadgePending  = &props.Color{Red: 245, Green: 158, Blue: 11}  // #F59E0B - Amber
-	ColorHeaderBg      = &props.Color{Red: 248, Green: 250, Blue: 252} // #F8FAFC - Table Header Fill
+	ColorHeaderBg      = &props.Color{Red: 11, Green: 37, Blue: 69}    // #0B2545 - Table Header Solid Deep Navy
+	ColorSubHeaderBg   = &props.Color{Red: 240, Green: 253, Blue: 250} // #F0FDFA - Light Subheader Background
 )
 
 const (
@@ -55,8 +58,14 @@ func buildMarotoInstance() (core.Maroto, string) {
 		WithPageSize(pagesize.A4).
 		WithLeftMargin(10).
 		WithRightMargin(10).
-		WithTopMargin(10).
-		WithBottomMargin(10)
+		WithTopMargin(8).
+		WithBottomMargin(10).
+		WithPageNumber(props.PageNumber{
+			Pattern: "Page {current} of {total}",
+			Place:   props.RightBottom,
+			Size:    7,
+			Color:   ColorNavySecondary,
+		})
 
 	// Check if Windows Arial font exists
 	arialPath := "C:\\Windows\\Fonts\\arial.ttf"
@@ -114,14 +123,13 @@ func formatCurrency(val float64, currency string, activeFont string) string {
 }
 
 func formatNumber(val float64) string {
-	// Standard two decimal formatting
 	sign := ""
 	if val < 0 {
 		sign = "-"
 		val = -val
 	}
 	intPart := int64(val)
-	fracPart := int64((val - float64(intPart)) * 100 + 0.5)
+	fracPart := int64((val-float64(intPart))*100 + 0.5)
 	if fracPart >= 100 {
 		intPart++
 		fracPart -= 100
@@ -129,7 +137,6 @@ func formatNumber(val float64) string {
 
 	intStr := fmt.Sprintf("%d", intPart)
 	if len(intStr) > 3 {
-		// Format Indian number system: last 3 digits, then groups of 2
 		last3 := intStr[len(intStr)-3:]
 		rest := intStr[:len(intStr)-3]
 		var parts []string
@@ -155,12 +162,25 @@ func parseImageExtension(mimeType string) extension.Type {
 	return extension.Jpg
 }
 
+func parseTermsLines(terms string) []string {
+	terms = strings.ReplaceAll(terms, "\r\n", "\n")
+	parts := strings.Split(terms, "\n")
+	var result []string
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
 func NumberToWordsINR(val float64) string {
 	if val < 0 {
 		val = -val
 	}
 	intPart := int64(val)
-	paise := int64((val - float64(intPart))*100 + 0.5)
+	paise := int64((val-float64(intPart))*100 + 0.5)
 
 	if intPart == 0 && paise == 0 {
 		return "Zero Rupees Only"
@@ -239,13 +259,13 @@ func GenerateQuotationPDF(quote *models.Quotation, comp *models.CompanyProfile, 
 
 	m, fontName := buildMarotoInstance()
 
-	compName := "CRM Enterprise Solutions"
-	compAddr := "101 Cyber City, Tech Park, Pune 411001"
-	compGstin := "27AAACB2233M1Z2"
-	compPan := "AAACB2233M"
+	compName := "InCraax AI Automation Pvt Ltd"
+	compAddr := "2nd Floor, Snehadeep Building, Ram Nagar-Road, Warje, Pune, 411058"
+	compGstin := "27ABCDE1234F1Z5"
+	compPan := "ABCDE1234F"
 	compState := "Maharashtra"
-	compEmail := "sales@bizcopilot.com"
-	compPhone := "+91 98765 43210"
+	compEmail := "sales@incraax.com"
+	compPhone := "+91 9172001627"
 
 	if quote.CompanyName != nil && *quote.CompanyName != "" {
 		compName = *quote.CompanyName
@@ -290,9 +310,10 @@ func GenerateQuotationPDF(quote *models.Quotation, comp *models.CompanyProfile, 
 	custName := "Valued Customer"
 	custCompany := ""
 	custAddr := "Registered Address"
-	custState := "Maharashtra"
+	custState := compState
 	custGstin := "Unregistered"
-	custContact := ""
+	custPhone := ""
+	custEmail := ""
 
 	if quote.Customer != nil {
 		if quote.Customer.Name != "" {
@@ -313,14 +334,12 @@ func GenerateQuotationPDF(quote *models.Quotation, comp *models.CompanyProfile, 
 		if quote.Customer.GSTIN != nil && *quote.Customer.GSTIN != "" {
 			custGstin = *quote.Customer.GSTIN
 		}
-		var contacts []string
 		if quote.Customer.Phone != nil && *quote.Customer.Phone != "" {
-			contacts = append(contacts, *quote.Customer.Phone)
+			custPhone = *quote.Customer.Phone
 		}
 		if quote.Customer.Email != nil && *quote.Customer.Email != "" {
-			contacts = append(contacts, *quote.Customer.Email)
+			custEmail = *quote.Customer.Email
 		}
-		custContact = strings.Join(contacts, " | ")
 	}
 	if quote.CustomerState != nil && *quote.CustomerState != "" {
 		custState = *quote.CustomerState
@@ -329,89 +348,11 @@ func GenerateQuotationPDF(quote *models.Quotation, comp *models.CompanyProfile, 
 		custGstin = *quote.CustomerGSTIN
 	}
 
-	// 1. HEADER SECTION (Brand Logo / Name + Document Title)
-	hasLogo := len(logoBytes) > 0
-	if hasLogo {
-		ext := parseImageExtension(logoMime)
-		m.AddRows(
-			row.New(16).Add(
-				col.New(4).Add(
-					image.NewFromBytes(logoBytes, ext, props.Rect{Percent: 90, Center: false}),
-				),
-				col.New(8).Add(
-					text.New("COMMERCIAL QUOTATION", props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   14,
-						Align:  align.Right,
-						Color:  ColorNavyText,
-					}),
-					text.New(fmt.Sprintf("Quotation #%s", quote.QuotationNumber), props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   10,
-						Align:  align.Right,
-						Top:    5.5,
-						Color:  ColorPrimaryTeal,
-					}),
-				),
-			),
-		)
-	} else {
-		m.AddRows(
-			row.New(15).Add(
-				col.New(6).Add(
-					text.New(compName, props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   14,
-						Color:  ColorNavyText,
-					}),
-				),
-				col.New(6).Add(
-					text.New("COMMERCIAL QUOTATION", props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   14,
-						Align:  align.Right,
-						Color:  ColorNavyText,
-					}),
-					text.New(fmt.Sprintf("Quotation #%s", quote.QuotationNumber), props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   10,
-						Align:  align.Right,
-						Top:    5.5,
-						Color:  ColorPrimaryTeal,
-					}),
-				),
-			),
-		)
-	}
-
-	// Thin Teal Divider Line
-	m.AddRows(
-		row.New(2).Add(
-			col.New(12).Add(
-				line.New(props.Line{Color: ColorPrimaryTeal, Thickness: 0.8}),
-			),
-		),
-	)
-
-	// Meta Details Sub-header (Date, Valid Until, Deal/Lead, Status, Place of Supply)
+	// 1. TOP HEADER (3 Columns: Logo/Company | Centered Title + Teal Pill | Date/Due/Supply Metadata)
 	dateStr := quote.CreatedAt.Format("02-Jan-2006")
 	validUntilStr := "30 Days from issue"
 	if quote.ValidUntil != nil {
 		validUntilStr = quote.ValidUntil.Format("02-Jan-2006")
-	}
-
-	dealRef := "-"
-	if quote.Deal != nil && quote.Deal.Name != "" {
-		dealRef = quote.Deal.Name
-	}
-	leadRef := "-"
-	if quote.LeadNumber != nil && *quote.LeadNumber != "" {
-		leadRef = *quote.LeadNumber
 	}
 
 	posType := "Intra-State (CGST + SGST)"
@@ -419,28 +360,78 @@ func GenerateQuotationPDF(quote *models.Quotation, comp *models.CompanyProfile, 
 		posType = "Inter-State (IGST)"
 	}
 
+	hasLogo := len(logoBytes) > 0
+	ext := extension.Png
+	if hasLogo {
+		ext = parseImageExtension(logoMime)
+	}
+
+	pillCardStyle := &props.Cell{
+		BackgroundColor: ColorPrimaryTeal,
+		BorderColor:     ColorPrimaryTeal,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
+
+	// Header row
+	var logoComponents []core.Component
+	if hasLogo {
+		logoComponents = append(logoComponents, image.NewFromBytes(logoBytes, ext, props.Rect{Percent: 90, Center: false}))
+	} else {
+		logoComponents = append(logoComponents,
+			text.New(compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 11, Color: ColorNavyText, Top: 1}),
+			text.New("Smart Automation. Smarter Business.", props.Text{Family: fontName, Style: fontstyle.Italic, Size: 6.5, Color: ColorNavySecondary, Top: 5.5}),
+		)
+	}
+
 	m.AddRows(
-		row.New(12).Add(
-			col.New(3).Add(
-				text.New("DATE", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary}),
-				text.New(dateStr, props.Text{Family: fontName, Size: 8.5, Top: 3.5, Color: ColorNavyText}),
+		row.New(16).Add(
+			// Left: Logo & Company
+			col.New(4).Add(logoComponents...),
+			// Center: Title & Pill
+			col.New(4).Add(
+				text.New("COMMERCIAL QUOTATION", props.Text{
+					Family: fontName,
+					Style:  fontstyle.Bold,
+					Size:   14,
+					Align:  align.Center,
+					Color:  ColorNavyText,
+				}),
 			),
-			col.New(3).Add(
-				text.New("VALID UNTIL", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary}),
-				text.New(validUntilStr, props.Text{Family: fontName, Size: 8.5, Top: 3.5, Color: ColorNavyText}),
+			// Right: Metadata Lines
+			col.New(4).Add(
+				text.New(fmt.Sprintf("Quotation Date    : %s", dateStr), props.Text{Family: fontName, Size: 6.5, Align: align.Right, Top: 1, Color: ColorNavyText}),
+				text.New(fmt.Sprintf("Valid Until           : %s", validUntilStr), props.Text{Family: fontName, Size: 6.5, Align: align.Right, Top: 5, Color: ColorNavyText}),
+				text.New(fmt.Sprintf("Place of Supply   : %s - %s", custState, posType), props.Text{Family: fontName, Size: 6.5, Align: align.Right, Top: 9, Color: ColorNavyText}),
 			),
-			col.New(3).Add(
-				text.New("DEAL / LEAD REF", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary}),
-				text.New(fmt.Sprintf("%s (%s)", dealRef, leadRef), props.Text{Family: fontName, Size: 8.5, Top: 3.5, Color: ColorNavyText}),
+		),
+		// Sub-row for centered pill badge
+		row.New(6).Add(
+			col.New(4),
+			col.New(4).WithStyle(pillCardStyle).Add(
+				text.New(fmt.Sprintf("Quotation #%s", quote.QuotationNumber), props.Text{
+					Family: fontName,
+					Style:  fontstyle.Bold,
+					Size:   8,
+					Align:  align.Center,
+					Top:    1.2,
+					Color:  ColorWhite,
+				}),
 			),
-			col.New(3).Add(
-				text.New("PLACE OF SUPPLY", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary, Align: align.Right}),
-				text.New(fmt.Sprintf("%s - %s", custState, posType), props.Text{Family: fontName, Size: 8, Top: 3.5, Color: ColorNavyText, Style: fontstyle.Bold, Align: align.Right}),
+			col.New(4),
+		),
+	)
+
+	// Thin Teal Divider Line
+	m.AddRows(
+		row.New(3).Add(
+			col.New(12).Add(
+				line.New(props.Line{Color: ColorPrimaryTeal, Thickness: 0.8}),
 			),
 		),
 	)
 
-	// 2. PARTY CARDS (Billed By vs Quotation To)
+	// 2. PARTY CARDS (Billed By Supplier vs Billed To Recipient)
 	cardStyle := &props.Cell{
 		BackgroundColor: ColorCardBg,
 		BorderColor:     ColorLightBorder,
@@ -448,49 +439,91 @@ func GenerateQuotationPDF(quote *models.Quotation, comp *models.CompanyProfile, 
 		BorderThickness: 0.35,
 	}
 
-	m.AddRows(
-		row.New(26).Add(
-			col.New(6).WithStyle(cardStyle).Add(
-				text.New("ISSUED BY (ORGANIZATION)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
-				text.New(compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 9, Top: 6, Left: 2, Color: ColorNavyText}),
-				text.New(compAddr, props.Text{Family: fontName, Size: 7, Top: 10.5, Left: 2, Color: ColorNavySecondary}),
-				text.New(fmt.Sprintf("State: %s  |  GSTIN: %s  |  PAN: %s", compState, compGstin, compPan), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 15, Left: 2, Color: ColorNavyText}),
-				text.New(fmt.Sprintf("Contact: %s  |  %s", compPhone, compEmail), props.Text{Family: fontName, Size: 7, Top: 19.5, Left: 2, Color: ColorNavySecondary}),
-			),
-			col.New(6).WithStyle(cardStyle).Add(
-				text.New("QUOTATION TO (CLIENT)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
-				text.New(custName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 9, Top: 6, Left: 2, Color: ColorNavyText}),
-				text.New(fmt.Sprintf("%s (%s)", custCompany, custAddr), props.Text{Family: fontName, Size: 7, Top: 10.5, Left: 2, Color: ColorNavySecondary}),
-				text.New(fmt.Sprintf("State: %s  |  GSTIN: %s", custState, custGstin), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 15, Left: 2, Color: ColorNavyText}),
-				text.New(fmt.Sprintf("Contact: %s", custContact), props.Text{Family: fontName, Size: 7, Top: 19.5, Left: 2, Color: ColorNavySecondary}),
-			),
-		),
-	)
+	badgeSupplierStyle := &props.Cell{
+		BackgroundColor: ColorPrimaryTeal,
+		BorderColor:     ColorPrimaryTeal,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
 
-	// Spacing before table
-	m.AddRows(row.New(3).Add(col.New(12)))
+	badgeRecipientStyle := &props.Cell{
+		BackgroundColor: ColorRoyalBlue,
+		BorderColor:     ColorRoyalBlue,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
 
-	// 3. LINE ITEMS TABLE HEADER - Clean Horizontal Dividers
-	thStyle := &props.Cell{
-		BackgroundColor: ColorHeaderBg,
-		BorderColor:     ColorLightBorder,
-		BorderType:      border.Bottom,
-		BorderThickness: 0.75,
+	custLine2 := custAddr
+	if custCompany != "" {
+		if custAddr != "" && custAddr != "Registered Address" {
+			custLine2 = fmt.Sprintf("%s - %s", custCompany, custAddr)
+		} else {
+			custLine2 = custCompany
+		}
+	} else if custAddr == "Registered Address" {
+		custLine2 = "(Registered Address)"
+	}
+
+	contactSupplier := fmt.Sprintf("Contact  :  %s   |   %s", compPhone, compEmail)
+	contactRecipient := "Contact  :  -"
+	if custPhone != "" && custEmail != "" {
+		contactRecipient = fmt.Sprintf("Contact  :  %s   |   %s", custPhone, custEmail)
+	} else if custPhone != "" {
+		contactRecipient = fmt.Sprintf("Contact  :  %s", custPhone)
+	} else if custEmail != "" {
+		contactRecipient = fmt.Sprintf("Contact  :  %s", custEmail)
 	}
 
 	m.AddRows(
-		row.New(6.5).Add(
-			col.New(1).WithStyle(thStyle).Add(text.New("#", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.5, Color: ColorNavyText})),
-			col.New(4).WithStyle(thStyle).Add(text.New("ITEM DESCRIPTION", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.5, Color: ColorNavyText})),
-			col.New(1).WithStyle(thStyle).Add(text.New("HSN/SAC", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.5, Color: ColorNavyText})),
-			col.New(1).WithStyle(thStyle).Add(text.New("QTY", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.5, Color: ColorNavyText})),
-			col.New(2).WithStyle(thStyle).Add(text.New("UNIT PRICE", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
-			col.New(1).WithStyle(thStyle).Add(text.New("GST %", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.5, Color: ColorNavyText})),
-			col.New(2).WithStyle(thStyle).Add(text.New("TOTAL", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
+		// Card Badge Header Bars
+		row.New(5.5).Add(
+			col.New(6).WithStyle(badgeSupplierStyle).Add(
+				text.New("BILLED BY (SUPPLIER)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 1.2, Left: 2, Color: ColorWhite}),
+			),
+			col.New(6).WithStyle(badgeRecipientStyle).Add(
+				text.New("BILLED TO (RECIPIENT)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 1.2, Left: 2, Color: ColorWhite}),
+			),
+		),
+		// Card Body Content
+		row.New(23).Add(
+			col.New(6).WithStyle(cardStyle).Add(
+				text.New(compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Top: 2, Left: 2, Color: ColorNavyText}),
+				text.New(compAddr, props.Text{Family: fontName, Size: 6.5, Top: 6.5, Left: 2, Color: ColorNavySecondary}),
+				text.New(fmt.Sprintf("GSTIN : %s       PAN : %s", compGstin, compPan), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Top: 11, Left: 2, Color: ColorNavyText}),
+				text.New(contactSupplier, props.Text{Family: fontName, Size: 6.5, Top: 15.5, Left: 2, Color: ColorNavySecondary}),
+			),
+			col.New(6).WithStyle(cardStyle).Add(
+				text.New(custName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Top: 2, Left: 2, Color: ColorNavyText}),
+				text.New(custLine2, props.Text{Family: fontName, Size: 6.5, Top: 6.5, Left: 2, Color: ColorNavySecondary}),
+				text.New(fmt.Sprintf("GSTIN : %s", custGstin), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Top: 11, Left: 2, Color: ColorNavyText}),
+				text.New(contactRecipient, props.Text{Family: fontName, Size: 6.5, Top: 15.5, Left: 2, Color: ColorNavySecondary}),
+			),
 		),
 	)
 
-	// 4. LINE ITEMS TABLE ROWS - Clean Horizontal Dividers, no vertical borders
+	m.AddRows(row.New(3).Add(col.New(12)))
+
+	// 3. LINE ITEMS TABLE HEADER - Solid Deep Navy Background (#0B2545)
+	thStyle := &props.Cell{
+		BackgroundColor: ColorHeaderBg,
+		BorderColor:     ColorHeaderBg,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
+
+	m.AddRows(
+		row.New(7).Add(
+			col.New(1).WithStyle(thStyle).Add(text.New("#", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.8, Color: ColorWhite})),
+			col.New(4).WithStyle(thStyle).Add(text.New("Item Description", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.8, Color: ColorWhite})),
+			col.New(1).WithStyle(thStyle).Add(text.New("HSN/SAC", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.8, Color: ColorWhite})),
+			col.New(1).WithStyle(thStyle).Add(text.New("Quantity", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.8, Color: ColorWhite})),
+			col.New(2).WithStyle(thStyle).Add(text.New("Unit Price (₹)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.8, Color: ColorWhite})),
+			col.New(1).WithStyle(thStyle).Add(text.New("GST %", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.8, Color: ColorWhite})),
+			col.New(2).WithStyle(thStyle).Add(text.New("Total (₹)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.8, Color: ColorWhite})),
+		),
+	)
+
+	// 4. LINE ITEMS TABLE ROWS
 	trBorder := &props.Cell{
 		BorderColor:     ColorLightBorder,
 		BorderType:      border.Bottom,
@@ -521,18 +554,16 @@ func GenerateQuotationPDF(quote *models.Quotation, comp *models.CompanyProfile, 
 				col.New(1).WithStyle(cStyle).Add(text.New(fmt.Sprintf("%.1f", item.Quantity), props.Text{Family: fontName, Size: 7.5, Align: align.Center, Top: 1.5, Color: ColorNavySecondary})),
 				col.New(2).WithStyle(cStyle).Add(text.New(formatCurrency(item.UnitPrice, quote.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
 				col.New(1).WithStyle(cStyle).Add(text.New(fmt.Sprintf("%.0f%%", item.GSTRate), props.Text{Family: fontName, Size: 7, Align: align.Center, Top: 1.5, Color: ColorNavySecondary})),
-				col.New(2).WithStyle(cStyle).Add(text.New(formatCurrency(item.LineTotal, quote.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
+				col.New(2).WithStyle(cStyle).Add(text.New(formatCurrency(item.LineTotal, quote.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
 			),
 		)
 	}
 
 	m.AddRows(row.New(3).Add(col.New(12)))
 
-	// 5. TAX BREAKDOWN & TOTALS (Side-by-side or stacked)
-	// Left side: GST Summary Table (6 cols)
-	// Right side: Financial Totals Block (6 cols)
+	// 5. TAX BREAKDOWN & FINANCIAL SUMMARY (Side-by-Side Matching Reference)
 	taxTableBg := &props.Cell{
-		BackgroundColor: ColorHeaderBg,
+		BackgroundColor: ColorSubHeaderBg,
 		BorderColor:     ColorLightBorder,
 		BorderType:      border.Bottom,
 		BorderThickness: 0.5,
@@ -541,134 +572,151 @@ func GenerateQuotationPDF(quote *models.Quotation, comp *models.CompanyProfile, 
 	m.AddRows(
 		row.New(5).Add(
 			col.New(6).WithStyle(taxTableBg).Add(
-				text.New("STATUTORY GST TAX BREAKDOWN", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1, Color: ColorPrimaryTeal}),
+				text.New("GST TAX BREAKDOWN", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.2, Color: ColorPrimaryTeal}),
 			),
 			col.New(6).WithStyle(taxTableBg).Add(
-				text.New("FINANCIAL SUMMARY & TOTALS", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1, Color: ColorPrimaryTeal}),
+				text.New("QUOTATION SUMMARY", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.2, Color: ColorPrimaryTeal}),
 			),
 		),
 	)
 
-	// Detail lines
 	taxableAmt := quote.TaxableAmount
 	if taxableAmt == 0 {
 		taxableAmt = quote.Subtotal - quote.DiscountAmount
 	}
 
-	gstRow1Left := fmt.Sprintf("Taxable Value: %s", formatCurrency(taxableAmt, quote.Currency, fontName))
-	gstRow2Left := ""
-	gstRow3Left := ""
-
+	// 4-Column GST Sub-Table Headers & Values
+	cgstHeader := "CGST (9%)"
+	sgstHeader := "SGST (9%)"
+	cgstVal := formatCurrency(quote.CGSTAmount, quote.Currency, fontName)
+	sgstVal := formatCurrency(quote.SGSTAmount, quote.Currency, fontName)
 	if quote.IsInterState {
-		gstRow2Left = fmt.Sprintf("IGST: %s", formatCurrency(quote.IGSTAmount, quote.Currency, fontName))
-		gstRow3Left = fmt.Sprintf("Total Tax: %s", formatCurrency(quote.TotalGSTAmount, quote.Currency, fontName))
-	} else {
-		gstRow2Left = fmt.Sprintf("CGST: %s  |  SGST: %s", formatCurrency(quote.CGSTAmount, quote.Currency, fontName), formatCurrency(quote.SGSTAmount, quote.Currency, fontName))
-		gstRow3Left = fmt.Sprintf("Total Tax: %s", formatCurrency(quote.TotalGSTAmount, quote.Currency, fontName))
+		cgstHeader = "IGST (18%)"
+		sgstHeader = "-"
+		cgstVal = formatCurrency(quote.IGSTAmount, quote.Currency, fontName)
+		sgstVal = "-"
+	}
+
+	subThStyle := &props.Cell{
+		BackgroundColor: ColorCardBg,
+		BorderColor:     ColorLightBorder,
+		BorderType:      border.Full,
+		BorderThickness: 0.35,
 	}
 
 	m.AddRows(
+		// Sub-table header row
 		row.New(5).Add(
-			col.New(6).WithStyle(trBorder).Add(
-				text.New(gstRow1Left, props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavyText}),
-			),
-			col.New(3).WithStyle(trBorder).Add(
-				text.New("Subtotal", props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavySecondary}),
-			),
-			col.New(3).WithStyle(trBorder).Add(
-				text.New(formatCurrency(quote.Subtotal, quote.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1.2, Color: ColorNavyText}),
-			),
+			col.New(2).WithStyle(subThStyle).Add(text.New("Taxable Value", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(1).WithStyle(subThStyle).Add(text.New(cgstHeader, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(1).WithStyle(subThStyle).Add(text.New(sgstHeader, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(2).WithStyle(subThStyle).Add(text.New("Total GST", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(3).WithStyle(trBorder).Add(text.New("Taxable Amount", props.Text{Family: fontName, Size: 7, Left: 2, Top: 1, Color: ColorNavySecondary})),
+			col.New(3).WithStyle(trBorder).Add(text.New(formatCurrency(taxableAmt, quote.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1, Color: ColorNavyText})),
 		),
+		// Sub-table values row
 		row.New(5).Add(
-			col.New(6).WithStyle(trBorder).Add(
-				text.New(gstRow2Left, props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavyText}),
-			),
-			col.New(3).WithStyle(trBorder).Add(
-				text.New("Taxable Amount", props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavySecondary}),
-			),
-			col.New(3).WithStyle(trBorder).Add(
-				text.New(formatCurrency(taxableAmt, quote.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1.2, Color: ColorNavyText}),
-			),
+			col.New(2).WithStyle(subThStyle).Add(text.New(formatCurrency(taxableAmt, quote.Currency, fontName), props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(1).WithStyle(subThStyle).Add(text.New(cgstVal, props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(1).WithStyle(subThStyle).Add(text.New(sgstVal, props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(2).WithStyle(subThStyle).Add(text.New(formatCurrency(quote.TotalGSTAmount, quote.Currency, fontName), props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(3).WithStyle(trBorder).Add(text.New("Total GST Tax", props.Text{Family: fontName, Size: 7, Left: 2, Top: 1, Color: ColorNavySecondary})),
+			col.New(3).WithStyle(trBorder).Add(text.New(formatCurrency(quote.TotalGSTAmount, quote.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1, Color: ColorNavyText})),
 		),
-		row.New(5).Add(
-			col.New(6).WithStyle(trBorder).Add(
-				text.New(gstRow3Left, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavyText}),
+		// Total Tax & Grand Total
+		row.New(6).Add(
+			col.New(3).WithStyle(trBorder).Add(
+				text.New("Total Tax", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Left: 2, Top: 1.5, Color: ColorNavyText}),
 			),
 			col.New(3).WithStyle(trBorder).Add(
-				text.New("Total GST Tax", props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavySecondary}),
+				text.New(formatCurrency(quote.TotalGSTAmount, quote.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText}),
 			),
 			col.New(3).WithStyle(trBorder).Add(
-				text.New(formatCurrency(quote.TotalGSTAmount, quote.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1.2, Color: ColorNavyText}),
+				text.New("Grand Total", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Left: 2, Top: 1.5, Color: ColorNavyText}),
+			),
+			col.New(3).WithStyle(trBorder).Add(
+				text.New(formatCurrency(quote.TotalAmount, quote.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 9.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText}),
 			),
 		),
 	)
 
-	// Round off if present
-	if quote.RoundOffAmount != 0 {
-		m.AddRows(
-			row.New(5).Add(
-				col.New(6).WithStyle(trBorder).Add(text.New("", props.Text{})),
-				col.New(3).WithStyle(trBorder).Add(
-					text.New("Round Off", props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavySecondary}),
-				),
-				col.New(3).WithStyle(trBorder).Add(
-					text.New(formatCurrency(quote.RoundOffAmount, quote.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1.2, Color: ColorNavyText}),
-				),
-			),
-		)
-	}
-
-	// Grand Total Highlighted Card - Elegant Teal Accent Card
-	grandTotalStyle := &props.Cell{
-		BackgroundColor: ColorCardBg,
-		BorderColor:     ColorPrimaryTeal,
+	// Emerald Highlighted Total Payable Card
+	emeraldCardStyle := &props.Cell{
+		BackgroundColor: ColorPaidBg,
+		BorderColor:     ColorBadgePaid,
 		BorderType:      border.Full,
-		BorderThickness: 0.75,
+		BorderThickness: 0.5,
 	}
 
 	m.AddRows(
-		row.New(7).Add(
-			col.New(6).WithStyle(grandTotalStyle).Add(
-				text.New("Terms: Prices valid for 30 days. Delivery as agreed.", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Italic, Left: 2, Top: 2, Color: ColorNavySecondary}),
+		row.New(6.5).Add(
+			col.New(3).WithStyle(trBorder).Add(
+				text.New("Total Payable", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Left: 2, Top: 1.5, Color: ColorNavyText}),
 			),
-			col.New(3).WithStyle(grandTotalStyle).Add(
-				text.New("GRAND TOTAL", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Left: 2, Top: 2, Color: ColorNavyText}),
+			col.New(3).WithStyle(trBorder).Add(
+				text.New(formatCurrency(quote.TotalAmount, quote.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText}),
 			),
-			col.New(3).WithStyle(grandTotalStyle).Add(
-				text.New(formatCurrency(quote.TotalAmount, quote.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 10.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorPrimaryTeal}),
+			col.New(6).WithStyle(emeraldCardStyle).Add(
+				text.New("[✓]  Total Payable", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8, Left: 3, Top: 1.5, Color: ColorBadgePaid}),
+				text.New(formatCurrency(quote.TotalAmount, quote.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 9.5, Align: align.Right, Right: 3, Top: 1.5, Color: ColorBadgePaid}),
 			),
 		),
 	)
 
 	m.AddRows(row.New(3).Add(col.New(12)))
 
-	// 6. BANK DETAILS & TERMS & SIGNATORY
-	termsStr := "1. Payment terms: 50% advance upon PO, balance before delivery.\n2. GST will be charged at prevailing government rates.\n3. Goods/services once supplied cannot be returned."
+	// 6. BANK DETAILS & TERMS & SIGNATORY (3 Columns)
+	termsStr := "1. Quotation is valid for 30 days from date of issue.\n2. Payment terms: 50% advance, 50% upon delivery.\n3. Goods & Services Tax (GST) as applicable by Indian Tax Law."
 	if quote.TermsAndConditions != nil && *quote.TermsAndConditions != "" {
 		termsStr = *quote.TermsAndConditions
 	}
 
+	termLines := parseTermsLines(termsStr)
+	var termComponents []core.Component
+	termComponents = append(termComponents, text.New("PAYMENT INSTRUCTIONS", props.Text{
+		Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal,
+	}))
+	topPos := 5.5
+	for idx, l := range termLines {
+		if idx >= 4 {
+			break
+		}
+		termComponents = append(termComponents, text.New(l, props.Text{
+			Family: fontName, Size: 6.5, Top: topPos, Left: 2, Color: ColorNavySecondary,
+		}))
+		topPos += 3.5
+	}
+
 	m.AddRows(
-		row.New(20).Add(
+		row.New(22).Add(
 			col.New(4).WithStyle(cardStyle).Add(
 				text.New("BANK & PAYMENT DETAILS", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
 				text.New("Bank: HDFC Bank Ltd.", props.Text{Family: fontName, Size: 7, Top: 5.5, Left: 2, Color: ColorNavyText}),
-				text.New("A/C No: 50200012345678", props.Text{Family: fontName, Size: 7, Top: 9, Left: 2, Color: ColorNavyText}),
+				text.New("A/c No: 50200012345678", props.Text{Family: fontName, Size: 7, Top: 9, Left: 2, Color: ColorNavyText}),
 				text.New("IFSC Code: HDFC0001234", props.Text{Family: fontName, Size: 7, Top: 12.5, Left: 2, Color: ColorNavyText}),
 				text.New("Branch: Cyber City Branch, Pune", props.Text{Family: fontName, Size: 7, Top: 16, Left: 2, Color: ColorNavySecondary}),
 			),
-			col.New(5).WithStyle(cardStyle).Add(
-				text.New("TERMS & CONDITIONS", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
-				text.New(termsStr, props.Text{Family: fontName, Size: 6.5, Top: 5.5, Left: 2, Color: ColorNavySecondary}),
-			),
+			col.New(5).WithStyle(cardStyle).Add(termComponents...),
 			col.New(3).WithStyle(cardStyle).Add(
-				text.New("FOR "+compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 2, Color: ColorNavyText}),
-				text.New("Authorized Signatory", props.Text{Family: fontName, Size: 7, Align: align.Center, Top: 15, Color: ColorNavySecondary}),
+				text.New("For "+compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 2, Color: ColorNavyText}),
+				// Signature Graphic / Line
+				text.New("~ Achyut / Auth ~", props.Text{Family: fontName, Style: fontstyle.Italic, Size: 7.5, Align: align.Center, Top: 10, Color: ColorNavySecondary}),
+				text.New("Authorized Signatory", props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 16.5, Color: ColorNavySecondary}),
 			),
 		),
 	)
 
-	// Document Generation
+	// 7. BOTTOM TRUST BADGES FOOTER STRIP
+	m.AddRows(
+		row.New(4).Add(col.New(12)),
+		row.New(5).Add(
+			col.New(3).Add(text.New("[✓] 100% Secure Payments", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Color: ColorPrimaryTeal, Top: 1})),
+			col.New(3).Add(text.New("[⚡] Fast & Reliable Service", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Color: ColorPrimaryTeal, Top: 1})),
+			col.New(3).Add(text.New("[☎] Dedicated Support", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Color: ColorPrimaryTeal, Top: 1})),
+			col.New(3).Add(text.New("Thank you for your business!", props.Text{Family: fontName, Style: fontstyle.Italic, Size: 7, Color: ColorNavyText, Align: align.Right, Top: 1})),
+		),
+	)
+
 	doc, err := m.Generate()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate quotation PDF: %w", err)
@@ -688,13 +736,13 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 
 	m, fontName := buildMarotoInstance()
 
-	compName := "CRM Enterprise Solutions"
-	compAddr := "101 Cyber City, Tech Park, Pune 411001"
-	compGstin := "27AAACB2233M1Z2"
-	compPan := "AAACB2233M"
+	compName := "InCraax AI Automation Pvt Ltd"
+	compAddr := "2nd Floor, Snehadeep Building, Ram Nagar-Road, Warje, Pune, 411058"
+	compGstin := "27ABCDE1234F1Z5"
+	compPan := "ABCDE1234F"
 	compState := "Maharashtra"
-	compEmail := "billing@bizcopilot.com"
-	compPhone := "+91 98765 43210"
+	compEmail := "akshadasagar31@gmail.com"
+	compPhone := "+91 9172001627"
 
 	if inv.CompanyName != nil && *inv.CompanyName != "" {
 		compName = *inv.CompanyName
@@ -736,12 +784,13 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 	}
 
 	// Customer Info
-	custName := "Valued Customer"
+	custName := "prerna sagar"
 	custCompany := ""
 	custAddr := "Registered Address"
-	custState := "Maharashtra"
+	custState := compState
 	custGstin := "Unregistered"
-	custContact := ""
+	custPhone := "8237133807"
+	custEmail := "akshadasagar24@gmail.com"
 
 	if inv.Customer != nil {
 		if inv.Customer.Name != "" {
@@ -762,14 +811,12 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 		if inv.Customer.GSTIN != nil && *inv.Customer.GSTIN != "" {
 			custGstin = *inv.Customer.GSTIN
 		}
-		var contacts []string
 		if inv.Customer.Phone != nil && *inv.Customer.Phone != "" {
-			contacts = append(contacts, *inv.Customer.Phone)
+			custPhone = *inv.Customer.Phone
 		}
 		if inv.Customer.Email != nil && *inv.Customer.Email != "" {
-			contacts = append(contacts, *inv.Customer.Email)
+			custEmail = *inv.Customer.Email
 		}
-		custContact = strings.Join(contacts, " | ")
 	}
 	if inv.CustomerState != nil && *inv.CustomerState != "" {
 		custState = *inv.CustomerState
@@ -778,76 +825,7 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 		custGstin = *inv.CustomerGSTIN
 	}
 
-	// 1. HEADER SECTION (Logo + Title)
-	hasLogo := len(logoBytes) > 0
-	if hasLogo {
-		ext := parseImageExtension(logoMime)
-		m.AddRows(
-			row.New(16).Add(
-				col.New(4).Add(
-					image.NewFromBytes(logoBytes, ext, props.Rect{Percent: 90, Center: false}),
-				),
-				col.New(8).Add(
-					text.New("TAX INVOICE", props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   14,
-						Align:  align.Right,
-						Color:  ColorNavyText,
-					}),
-					text.New(fmt.Sprintf("Invoice #%s", inv.InvoiceNumber), props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   10,
-						Align:  align.Right,
-						Top:    5.5,
-						Color:  ColorPrimaryTeal,
-					}),
-				),
-			),
-		)
-	} else {
-		m.AddRows(
-			row.New(15).Add(
-				col.New(6).Add(
-					text.New(compName, props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   14,
-						Color:  ColorNavyText,
-					}),
-				),
-				col.New(6).Add(
-					text.New("TAX INVOICE", props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   14,
-						Align:  align.Right,
-						Color:  ColorNavyText,
-					}),
-					text.New(fmt.Sprintf("Invoice #%s", inv.InvoiceNumber), props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   10,
-						Align:  align.Right,
-						Top:    5.5,
-						Color:  ColorPrimaryTeal,
-					}),
-				),
-			),
-		)
-	}
-
-	// Thin Teal Divider Line
-	m.AddRows(
-		row.New(2).Add(
-			col.New(12).Add(
-				line.New(props.Line{Color: ColorPrimaryTeal, Thickness: 0.8}),
-			),
-		),
-	)
-
-	// Meta Details (Invoice Date, Due Date, Status Badge, Place of Supply)
+	// 1. TOP HEADER (3 Columns: Logo & Tagline | Centered TAX INVOICE + Teal Pill | Date/Due/Supply Metadata)
 	dateStr := inv.InvoiceDate.Format("02-Jan-2006")
 	dueDateStr := "-"
 	if inv.DueDate != nil {
@@ -859,40 +837,77 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 		posType = "Inter-State (IGST)"
 	}
 
-	statusColor := ColorPrimaryTeal
-	statusText := strings.ToUpper(inv.Status)
-	if strings.EqualFold(inv.Status, "paid") {
-		statusColor = ColorBadgePaid
-	} else if strings.EqualFold(inv.Status, "overdue") {
-		statusColor = ColorBadgeOverdue
-	} else if strings.EqualFold(inv.Status, "partially_paid") || strings.EqualFold(inv.Status, "partially paid") {
-		statusColor = ColorBadgePending
-		statusText = "PARTIALLY PAID"
+	hasLogo := len(logoBytes) > 0
+	ext := extension.Png
+	if hasLogo {
+		ext = parseImageExtension(logoMime)
+	}
+
+	pillCardStyle := &props.Cell{
+		BackgroundColor: ColorPrimaryTeal,
+		BorderColor:     ColorPrimaryTeal,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
+
+	var logoComponents []core.Component
+	if hasLogo {
+		logoComponents = append(logoComponents, image.NewFromBytes(logoBytes, ext, props.Rect{Percent: 90, Center: false}))
+	} else {
+		logoComponents = append(logoComponents,
+			text.New(compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 11, Color: ColorNavyText, Top: 1}),
+			text.New("Smart Automation. Smarter Business.", props.Text{Family: fontName, Style: fontstyle.Italic, Size: 6.5, Color: ColorNavySecondary, Top: 5.5}),
+		)
 	}
 
 	m.AddRows(
-		row.New(12).Add(
-			col.New(3).Add(
-				text.New("INVOICE DATE", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary}),
-				text.New(dateStr, props.Text{Family: fontName, Size: 8.5, Top: 3.5, Color: ColorNavyText}),
+		row.New(16).Add(
+			// Left: Logo & Company Name
+			col.New(4).Add(logoComponents...),
+			// Center: Title
+			col.New(4).Add(
+				text.New("TAX INVOICE", props.Text{
+					Family: fontName,
+					Style:  fontstyle.Bold,
+					Size:   14,
+					Align:  align.Center,
+					Color:  ColorNavyText,
+				}),
 			),
-			col.New(3).Add(
-				text.New("PAYMENT DUE DATE", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary}),
-				text.New(dueDateStr, props.Text{Family: fontName, Size: 8.5, Top: 3.5, Color: ColorNavyText}),
+			// Right: Metadata Lines
+			col.New(4).Add(
+				text.New(fmt.Sprintf("Invoice Date       : %s", dateStr), props.Text{Family: fontName, Size: 6.5, Align: align.Right, Top: 1, Color: ColorNavyText}),
+				text.New(fmt.Sprintf("Payment Due Date: %s", dueDateStr), props.Text{Family: fontName, Size: 6.5, Align: align.Right, Top: 5, Color: ColorNavyText}),
+				text.New(fmt.Sprintf("Place of Supply   : %s - %s", custState, posType), props.Text{Family: fontName, Size: 6.5, Align: align.Right, Top: 9, Color: ColorNavyText}),
 			),
-			col.New(3).Add(
-				text.New("PAYMENT STATUS", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary}),
-				text.New(statusText, props.Text{Family: fontName, Size: 8.5, Top: 3.5, Style: fontstyle.Bold, Color: statusColor}),
+		),
+		// Sub-row for centered pill badge
+		row.New(6).Add(
+			col.New(4),
+			col.New(4).WithStyle(pillCardStyle).Add(
+				text.New(fmt.Sprintf("Invoice #%s", inv.InvoiceNumber), props.Text{
+					Family: fontName,
+					Style:  fontstyle.Bold,
+					Size:   8,
+					Align:  align.Center,
+					Top:    1.2,
+					Color:  ColorWhite,
+				}),
 			),
-			col.New(3).Add(
-				text.New("PLACE OF SUPPLY", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary, Align: align.Right}),
-				text.New(fmt.Sprintf("%s - %s", custState, posType), props.Text{Family: fontName, Size: 8, Top: 3.5, Color: ColorNavyText, Style: fontstyle.Bold, Align: align.Right}),
+			col.New(4),
+		),
+	)
+
+	// Thin Teal Divider Line
+	m.AddRows(
+		row.New(3).Add(
+			col.New(12).Add(
+				line.New(props.Line{Color: ColorPrimaryTeal, Thickness: 0.8}),
 			),
 		),
 	)
 
-	// 2. PARTY CARDS (Billed By vs Billed To)
-	// 2. PARTY CARDS (Billed By vs Billed To)
+	// 2. PARTY CARDS (Billed By Supplier vs Billed To Recipient)
 	cardStyle := &props.Cell{
 		BackgroundColor: ColorCardBg,
 		BorderColor:     ColorLightBorder,
@@ -900,48 +915,91 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 		BorderThickness: 0.35,
 	}
 
+	badgeSupplierStyle := &props.Cell{
+		BackgroundColor: ColorPrimaryTeal,
+		BorderColor:     ColorPrimaryTeal,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
+
+	badgeRecipientStyle := &props.Cell{
+		BackgroundColor: ColorRoyalBlue,
+		BorderColor:     ColorRoyalBlue,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
+
+	custLine2 := custAddr
+	if custCompany != "" {
+		if custAddr != "" && custAddr != "Registered Address" {
+			custLine2 = fmt.Sprintf("%s - %s", custCompany, custAddr)
+		} else {
+			custLine2 = custCompany
+		}
+	} else if custAddr == "Registered Address" {
+		custLine2 = "(Registered Address)"
+	}
+
+	contactSupplier := fmt.Sprintf("Contact  :  %s   |   %s", compPhone, compEmail)
+	contactRecipient := "Contact  :  -"
+	if custPhone != "" && custEmail != "" {
+		contactRecipient = fmt.Sprintf("Contact  :  %s   |   %s", custPhone, custEmail)
+	} else if custPhone != "" {
+		contactRecipient = fmt.Sprintf("Contact  :  %s", custPhone)
+	} else if custEmail != "" {
+		contactRecipient = fmt.Sprintf("Contact  :  %s", custEmail)
+	}
+
 	m.AddRows(
-		row.New(26).Add(
+		// Card Badge Header Bars
+		row.New(5.5).Add(
+			col.New(6).WithStyle(badgeSupplierStyle).Add(
+				text.New("BILLED BY (SUPPLIER)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 1.2, Left: 2, Color: ColorWhite}),
+			),
+			col.New(6).WithStyle(badgeRecipientStyle).Add(
+				text.New("BILLED TO (RECIPIENT)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 1.2, Left: 2, Color: ColorWhite}),
+			),
+		),
+		// Card Body Content
+		row.New(23).Add(
 			col.New(6).WithStyle(cardStyle).Add(
-				text.New("BILLED BY (SUPPLIER)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
-				text.New(compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 9, Top: 6, Left: 2, Color: ColorNavyText}),
-				text.New(compAddr, props.Text{Family: fontName, Size: 7, Top: 10.5, Left: 2, Color: ColorNavySecondary}),
-				text.New(fmt.Sprintf("State: %s  |  GSTIN: %s  |  PAN: %s", compState, compGstin, compPan), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 15, Left: 2, Color: ColorNavyText}),
-				text.New(fmt.Sprintf("Contact: %s  |  %s", compPhone, compEmail), props.Text{Family: fontName, Size: 7, Top: 19.5, Left: 2, Color: ColorNavySecondary}),
+				text.New(compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Top: 2, Left: 2, Color: ColorNavyText}),
+				text.New(compAddr, props.Text{Family: fontName, Size: 6.5, Top: 6.5, Left: 2, Color: ColorNavySecondary}),
+				text.New(fmt.Sprintf("GSTIN : %s       PAN : %s", compGstin, compPan), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Top: 11, Left: 2, Color: ColorNavyText}),
+				text.New(contactSupplier, props.Text{Family: fontName, Size: 6.5, Top: 15.5, Left: 2, Color: ColorNavySecondary}),
 			),
 			col.New(6).WithStyle(cardStyle).Add(
-				text.New("BILLED TO (RECIPIENT)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
-				text.New(custName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 9, Top: 6, Left: 2, Color: ColorNavyText}),
-				text.New(fmt.Sprintf("%s (%s)", custCompany, custAddr), props.Text{Family: fontName, Size: 7, Top: 10.5, Left: 2, Color: ColorNavySecondary}),
-				text.New(fmt.Sprintf("State: %s  |  GSTIN: %s", custState, custGstin), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 15, Left: 2, Color: ColorNavyText}),
-				text.New(fmt.Sprintf("Contact: %s", custContact), props.Text{Family: fontName, Size: 7, Top: 19.5, Left: 2, Color: ColorNavySecondary}),
+				text.New(custName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Top: 2, Left: 2, Color: ColorNavyText}),
+				text.New(custLine2, props.Text{Family: fontName, Size: 6.5, Top: 6.5, Left: 2, Color: ColorNavySecondary}),
+				text.New(fmt.Sprintf("GSTIN : %s", custGstin), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Top: 11, Left: 2, Color: ColorNavyText}),
+				text.New(contactRecipient, props.Text{Family: fontName, Size: 6.5, Top: 15.5, Left: 2, Color: ColorNavySecondary}),
 			),
 		),
 	)
 
 	m.AddRows(row.New(3).Add(col.New(12)))
 
-	// 3. INVOICE LINE ITEMS TABLE HEADER - Clean Horizontal Dividers
+	// 3. INVOICE LINE ITEMS TABLE HEADER - Solid Deep Navy Background (#0B2545)
 	thStyle := &props.Cell{
 		BackgroundColor: ColorHeaderBg,
-		BorderColor:     ColorLightBorder,
-		BorderType:      border.Bottom,
-		BorderThickness: 0.75,
+		BorderColor:     ColorHeaderBg,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
 	}
 
 	m.AddRows(
-		row.New(6.5).Add(
-			col.New(1).WithStyle(thStyle).Add(text.New("#", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.5, Color: ColorNavyText})),
-			col.New(4).WithStyle(thStyle).Add(text.New("ITEM DESCRIPTION", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.5, Color: ColorNavyText})),
-			col.New(1).WithStyle(thStyle).Add(text.New("HSN/SAC", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.5, Color: ColorNavyText})),
-			col.New(1).WithStyle(thStyle).Add(text.New("QTY", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.5, Color: ColorNavyText})),
-			col.New(2).WithStyle(thStyle).Add(text.New("UNIT PRICE", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
-			col.New(1).WithStyle(thStyle).Add(text.New("GST %", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.5, Color: ColorNavyText})),
-			col.New(2).WithStyle(thStyle).Add(text.New("TOTAL", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
+		row.New(7).Add(
+			col.New(1).WithStyle(thStyle).Add(text.New("#", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.8, Color: ColorWhite})),
+			col.New(4).WithStyle(thStyle).Add(text.New("Item Description", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.8, Color: ColorWhite})),
+			col.New(1).WithStyle(thStyle).Add(text.New("HSN/SAC", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.8, Color: ColorWhite})),
+			col.New(1).WithStyle(thStyle).Add(text.New("Quantity", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.8, Color: ColorWhite})),
+			col.New(2).WithStyle(thStyle).Add(text.New("Unit Price (₹)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.8, Color: ColorWhite})),
+			col.New(1).WithStyle(thStyle).Add(text.New("GST %", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 1.8, Color: ColorWhite})),
+			col.New(2).WithStyle(thStyle).Add(text.New("Total (₹)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.8, Color: ColorWhite})),
 		),
 	)
 
-	// 4. LINE ITEMS TABLE ROWS - Subtle bottom dividers, no vertical borders
+	// 4. LINE ITEMS TABLE ROWS
 	trBorder := &props.Cell{
 		BorderColor:     ColorLightBorder,
 		BorderType:      border.Bottom,
@@ -994,9 +1052,9 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 
 	m.AddRows(row.New(3).Add(col.New(12)))
 
-	// 5. TAX BREAKDOWN & FINANCIAL TOTALS - Clean Horizontal Dividers
+	// 5. TAX BREAKDOWN & FINANCIAL SUMMARY (Side-by-Side Matching Reference)
 	taxTableBg := &props.Cell{
-		BackgroundColor: ColorHeaderBg,
+		BackgroundColor: ColorSubHeaderBg,
 		BorderColor:     ColorLightBorder,
 		BorderType:      border.Bottom,
 		BorderThickness: 0.5,
@@ -1005,10 +1063,10 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 	m.AddRows(
 		row.New(5).Add(
 			col.New(6).WithStyle(taxTableBg).Add(
-				text.New("STATUTORY GST TAX BREAKDOWN", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1, Color: ColorPrimaryTeal}),
+				text.New("GST TAX BREAKDOWN", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.2, Color: ColorPrimaryTeal}),
 			),
 			col.New(6).WithStyle(taxTableBg).Add(
-				text.New("INVOICE SUMMARY & BALANCES", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1, Color: ColorPrimaryTeal}),
+				text.New("INVOICE SUMMARY", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.2, Color: ColorPrimaryTeal}),
 			),
 		),
 	)
@@ -1018,58 +1076,68 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 		taxableAmt = inv.Subtotal - inv.DiscountAmount
 	}
 
-	gstRow1Left := fmt.Sprintf("Taxable Value: %s", formatCurrency(taxableAmt, inv.Currency, fontName))
-	gstRow2Left := ""
-	gstRow3Left := ""
-
+	cgstHeader := "CGST (9%)"
+	sgstHeader := "SGST (9%)"
+	cgstVal := formatCurrency(inv.CGSTAmount, inv.Currency, fontName)
+	sgstVal := formatCurrency(inv.SGSTAmount, inv.Currency, fontName)
 	if inv.IsInterState {
-		gstRow2Left = fmt.Sprintf("IGST: %s", formatCurrency(inv.IGSTAmount, inv.Currency, fontName))
-		gstRow3Left = fmt.Sprintf("Total Tax: %s", formatCurrency(inv.TotalTax, inv.Currency, fontName))
-	} else {
-		gstRow2Left = fmt.Sprintf("CGST: %s  |  SGST: %s", formatCurrency(inv.CGSTAmount, inv.Currency, fontName), formatCurrency(inv.SGSTAmount, inv.Currency, fontName))
-		gstRow3Left = fmt.Sprintf("Total Tax: %s", formatCurrency(inv.TotalTax, inv.Currency, fontName))
+		cgstHeader = "IGST (18%)"
+		sgstHeader = "-"
+		cgstVal = formatCurrency(inv.IGSTAmount, inv.Currency, fontName)
+		sgstVal = "-"
+	}
+
+	subThStyle := &props.Cell{
+		BackgroundColor: ColorCardBg,
+		BorderColor:     ColorLightBorder,
+		BorderType:      border.Full,
+		BorderThickness: 0.35,
 	}
 
 	m.AddRows(
+		// Sub-table header row
 		row.New(5).Add(
-			col.New(6).WithStyle(trBorder).Add(
-				text.New(gstRow1Left, props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavyText}),
+			col.New(2).WithStyle(subThStyle).Add(text.New("Taxable Value", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(1).WithStyle(subThStyle).Add(text.New(cgstHeader, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(1).WithStyle(subThStyle).Add(text.New(sgstHeader, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(2).WithStyle(subThStyle).Add(text.New("Total GST", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(3).WithStyle(trBorder).Add(text.New("Taxable Amount", props.Text{Family: fontName, Size: 7, Left: 2, Top: 1, Color: ColorNavySecondary})),
+			col.New(3).WithStyle(trBorder).Add(text.New(formatCurrency(taxableAmt, inv.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1, Color: ColorNavyText})),
+		),
+		// Sub-table values row
+		row.New(5).Add(
+			col.New(2).WithStyle(subThStyle).Add(text.New(formatCurrency(taxableAmt, inv.Currency, fontName), props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(1).WithStyle(subThStyle).Add(text.New(cgstVal, props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(1).WithStyle(subThStyle).Add(text.New(sgstVal, props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(2).WithStyle(subThStyle).Add(text.New(formatCurrency(inv.TotalTax, inv.Currency, fontName), props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 1, Color: ColorNavyText})),
+			col.New(3).WithStyle(trBorder).Add(text.New("Total GST Tax", props.Text{Family: fontName, Size: 7, Left: 2, Top: 1, Color: ColorNavySecondary})),
+			col.New(3).WithStyle(trBorder).Add(text.New(formatCurrency(inv.TotalTax, inv.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1, Color: ColorNavyText})),
+		),
+		// Total Tax & Grand Total
+		row.New(6).Add(
+			col.New(3).WithStyle(trBorder).Add(
+				text.New("Total Tax", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Left: 2, Top: 1.5, Color: ColorNavyText}),
 			),
 			col.New(3).WithStyle(trBorder).Add(
-				text.New("Taxable Amount", props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavySecondary}),
+				text.New(formatCurrency(inv.TotalTax, inv.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText}),
 			),
 			col.New(3).WithStyle(trBorder).Add(
-				text.New(formatCurrency(taxableAmt, inv.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1.2, Color: ColorNavyText}),
+				text.New("Grand Total", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Left: 2, Top: 1.5, Color: ColorNavyText}),
+			),
+			col.New(3).WithStyle(trBorder).Add(
+				text.New(formatCurrency(inv.GrandTotal, inv.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 9.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText}),
 			),
 		),
+		// Amount Paid
 		row.New(5).Add(
-			col.New(6).WithStyle(trBorder).Add(
-				text.New(gstRow2Left, props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavyText}),
+			col.New(3).WithStyle(trBorder).Add(
+				text.New("Amount Paid", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.2, Color: ColorBadgePaid}),
 			),
 			col.New(3).WithStyle(trBorder).Add(
-				text.New("Total GST Tax", props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavySecondary}),
+				text.New(formatCurrency(inv.AmountPaid, inv.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.2, Color: ColorBadgePaid}),
 			),
 			col.New(3).WithStyle(trBorder).Add(
-				text.New(formatCurrency(inv.TotalTax, inv.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1.2, Color: ColorNavyText}),
-			),
-		),
-		row.New(5).Add(
-			col.New(6).WithStyle(trBorder).Add(
-				text.New(gstRow3Left, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavyText}),
-			),
-			col.New(3).WithStyle(trBorder).Add(
-				text.New("Grand Total", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8, Left: 2, Top: 1.2, Color: ColorNavyText}),
-			),
-			col.New(3).WithStyle(trBorder).Add(
-				text.New(formatCurrency(inv.GrandTotal, inv.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Align: align.Right, Right: 2, Top: 1.2, Color: ColorPrimaryTeal}),
-			),
-		),
-		row.New(5).Add(
-			col.New(6).WithStyle(trBorder).Add(
-				text.New(fmt.Sprintf("Amount Paid: %s", formatCurrency(inv.AmountPaid, inv.Currency, fontName)), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Left: 2, Top: 1.2, Color: ColorBadgePaid}),
-			),
-			col.New(3).WithStyle(trBorder).Add(
-				text.New("Amount Paid", props.Text{Family: fontName, Size: 7.5, Left: 2, Top: 1.2, Color: ColorNavySecondary}),
+				text.New("Amount Paid", props.Text{Family: fontName, Size: 7, Left: 2, Top: 1.2, Color: ColorNavySecondary}),
 			),
 			col.New(3).WithStyle(trBorder).Add(
 				text.New(formatCurrency(inv.AmountPaid, inv.Currency, fontName), props.Text{Family: fontName, Size: 7.5, Align: align.Right, Right: 2, Top: 1.2, Color: ColorBadgePaid}),
@@ -1077,28 +1145,32 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 		),
 	)
 
-	grandTotalStyle := &props.Cell{
-		BackgroundColor: ColorCardBg,
-		BorderColor:     ColorPrimaryTeal,
+	// Emerald Highlighted Balance Due Card
+	emeraldCardStyle := &props.Cell{
+		BackgroundColor: ColorPaidBg,
+		BorderColor:     ColorBadgePaid,
 		BorderType:      border.Full,
-		BorderThickness: 0.75,
+		BorderThickness: 0.5,
 	}
 
+	balanceText := formatCurrency(inv.RemainingBalance, inv.Currency, fontName)
+
 	m.AddRows(
-		row.New(6).Add(
-			col.New(6).WithStyle(grandTotalStyle).Add(
-				text.New(fmt.Sprintf("Balance Due: %s", formatCurrency(inv.RemainingBalance, inv.Currency, fontName)), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Left: 2, Top: 1.5, Color: ColorBadgeOverdue}),
+		row.New(6.5).Add(
+			col.New(3).WithStyle(trBorder).Add(
+				text.New("Balance Due", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Left: 2, Top: 1.5, Color: ColorNavyText}),
 			),
-			col.New(3).WithStyle(grandTotalStyle).Add(
-				text.New("BALANCE DUE", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Left: 2, Top: 1.5, Color: ColorNavyText}),
+			col.New(3).WithStyle(trBorder).Add(
+				text.New(balanceText, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText}),
 			),
-			col.New(3).WithStyle(grandTotalStyle).Add(
-				text.New(formatCurrency(inv.RemainingBalance, inv.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 10, Align: align.Right, Right: 2, Top: 1.5, Color: ColorBadgeOverdue}),
+			col.New(6).WithStyle(emeraldCardStyle).Add(
+				text.New("[✓]  Balance Due", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8, Left: 3, Top: 1.5, Color: ColorBadgePaid}),
+				text.New(balanceText, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 9.5, Align: align.Right, Right: 3, Top: 1.5, Color: ColorBadgePaid}),
 			),
 		),
 	)
 
-	// 6. PAYMENTS MINI-LEDGER (If payments recorded) - Clean Horizontal Dividers
+	// 6. RECORDED PAYMENTS AUDIT TRAIL
 	if len(inv.Payments) > 0 {
 		m.AddRows(row.New(2).Add(col.New(12)))
 		m.AddRows(
@@ -1108,10 +1180,10 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 				),
 			),
 			row.New(5).Add(
-				col.New(3).WithStyle(thStyle).Add(text.New("DATE", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1, Color: ColorNavyText})),
-				col.New(3).WithStyle(thStyle).Add(text.New("METHOD", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1, Color: ColorNavyText})),
-				col.New(3).WithStyle(thStyle).Add(text.New("REFERENCE #", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1, Color: ColorNavyText})),
-				col.New(3).WithStyle(thStyle).Add(text.New("AMOUNT PAID", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1, Color: ColorNavyText})),
+				col.New(3).WithStyle(subThStyle).Add(text.New("Date", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.2, Color: ColorNavyText})),
+				col.New(3).WithStyle(subThStyle).Add(text.New("Method", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.2, Color: ColorNavyText})),
+				col.New(3).WithStyle(subThStyle).Add(text.New("Reference #", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.2, Color: ColorNavyText})),
+				col.New(3).WithStyle(subThStyle).Add(text.New("Amount Paid", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.2, Color: ColorNavyText})),
 			),
 		)
 
@@ -1133,29 +1205,55 @@ func GenerateInvoicePDF(inv *models.Invoice, comp *models.CompanyProfile, logoBy
 
 	m.AddRows(row.New(3).Add(col.New(12)))
 
-	// 7. BANK DETAILS & TERMS & SIGNATORY
+	// 7. BANK DETAILS & TERMS & SIGNATORY (3 Columns)
 	termsStr := "1. Please pay by the due date to avoid service interruption.\n2. Remit payments via NEFT/RTGS to the bank account listed.\n3. Include the invoice number in the payment reference."
 	if inv.TermsAndConditions != nil && *inv.TermsAndConditions != "" {
 		termsStr = *inv.TermsAndConditions
 	}
 
+	instructionLines := parseTermsLines(termsStr)
+	var instructionComponents []core.Component
+	instructionComponents = append(instructionComponents, text.New("PAYMENT INSTRUCTIONS", props.Text{
+		Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal,
+	}))
+	topPos := 5.5
+	for idx, l := range instructionLines {
+		if idx >= 4 {
+			break
+		}
+		instructionComponents = append(instructionComponents, text.New(l, props.Text{
+			Family: fontName, Size: 6.5, Top: topPos, Left: 2, Color: ColorNavySecondary,
+		}))
+		topPos += 3.5
+	}
+
 	m.AddRows(
-		row.New(20).Add(
+		row.New(22).Add(
 			col.New(4).WithStyle(cardStyle).Add(
 				text.New("BANK & PAYMENT DETAILS", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
 				text.New("Bank: HDFC Bank Ltd.", props.Text{Family: fontName, Size: 7, Top: 5.5, Left: 2, Color: ColorNavyText}),
-				text.New("A/C No: 50200012345678", props.Text{Family: fontName, Size: 7, Top: 9, Left: 2, Color: ColorNavyText}),
+				text.New("A/c No: 50200012345678", props.Text{Family: fontName, Size: 7, Top: 9, Left: 2, Color: ColorNavyText}),
 				text.New("IFSC Code: HDFC0001234", props.Text{Family: fontName, Size: 7, Top: 12.5, Left: 2, Color: ColorNavyText}),
 				text.New("Branch: Cyber City Branch, Pune", props.Text{Family: fontName, Size: 7, Top: 16, Left: 2, Color: ColorNavySecondary}),
 			),
-			col.New(5).WithStyle(cardStyle).Add(
-				text.New("PAYMENT INSTRUCTIONS", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
-				text.New(termsStr, props.Text{Family: fontName, Size: 6.5, Top: 5.5, Left: 2, Color: ColorNavySecondary}),
-			),
+			col.New(5).WithStyle(cardStyle).Add(instructionComponents...),
 			col.New(3).WithStyle(cardStyle).Add(
-				text.New("FOR "+compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 2, Color: ColorNavyText}),
-				text.New("Authorized Signatory", props.Text{Family: fontName, Size: 7, Align: align.Center, Top: 15, Color: ColorNavySecondary}),
+				text.New("For "+compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Center, Top: 2, Color: ColorNavyText}),
+				// Signature Graphic / Line
+				text.New("~ Achyut / Auth ~", props.Text{Family: fontName, Style: fontstyle.Italic, Size: 7.5, Align: align.Center, Top: 10, Color: ColorNavySecondary}),
+				text.New("Authorized Signatory", props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 16.5, Color: ColorNavySecondary}),
 			),
+		),
+	)
+
+	// 8. BOTTOM TRUST BADGES FOOTER STRIP
+	m.AddRows(
+		row.New(4).Add(col.New(12)),
+		row.New(5).Add(
+			col.New(3).Add(text.New("[✓] 100% Secure Payments", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Color: ColorPrimaryTeal, Top: 1})),
+			col.New(3).Add(text.New("[⚡] Fast & Reliable Service", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Color: ColorPrimaryTeal, Top: 1})),
+			col.New(3).Add(text.New("[☎] Dedicated Support", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Color: ColorPrimaryTeal, Top: 1})),
+			col.New(3).Add(text.New("Thank you for your business!", props.Text{Family: fontName, Style: fontstyle.Italic, Size: 7, Color: ColorNavyText, Align: align.Right, Top: 1})),
 		),
 	)
 
@@ -1178,13 +1276,13 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 
 	m, fontName := buildMarotoInstance()
 
-	compName := "CRM Enterprise Solutions"
-	compAddr := "101 Cyber City, Tech Park, Pune 411001"
-	compGstin := "27AAACB2233M1Z2"
+	compName := "InCraax AI Automation Pvt Ltd"
+	compAddr := "2nd Floor, Snehadeep Building, Ram Nagar-Road, Warje, Pune, 411058"
+	compGstin := "27ABCDE1234F1Z5"
 	compPan := "AAACB2233M"
 	compState := "Maharashtra"
-	compEmail := "billing@bizcopilot.com"
-	compPhone := "+91 98765 43210"
+	compEmail := "billing@incraax.com"
+	compPhone := "+91 9172001627"
 
 	if receipt.Invoice != nil {
 		if receipt.Invoice.CompanyName != nil && *receipt.Invoice.CompanyName != "" {
@@ -1228,6 +1326,7 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 		}
 	}
 	_ = compAddr
+	_ = compGstin
 	_ = compPan
 	_ = compEmail
 	_ = compPhone
@@ -1279,98 +1378,72 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 		recordedBy = receipt.Payment.Recorder.Name
 	}
 
-	// 1. HEADER SECTION
 	hasLogo := len(logoBytes) > 0
+	ext := extension.Png
 	if hasLogo {
-		ext := parseImageExtension(logoMime)
-		m.AddRows(
-			row.New(16).Add(
-				col.New(4).Add(
-					image.NewFromBytes(logoBytes, ext, props.Rect{Percent: 90, Center: false}),
-				),
-				col.New(8).Add(
-					text.New("OFFICIAL PAYMENT RECEIPT", props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   14,
-						Align:  align.Right,
-						Color:  ColorNavyText,
-					}),
-					text.New(fmt.Sprintf("Voucher #%s", voucherNum), props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   10,
-						Align:  align.Right,
-						Top:    5.5,
-						Color:  ColorPrimaryTeal,
-					}),
-				),
-			),
-		)
+		ext = parseImageExtension(logoMime)
+	}
+
+	pillCardStyle := &props.Cell{
+		BackgroundColor: ColorPrimaryTeal,
+		BorderColor:     ColorPrimaryTeal,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
+
+	var logoComponents []core.Component
+	if hasLogo {
+		logoComponents = append(logoComponents, image.NewFromBytes(logoBytes, ext, props.Rect{Percent: 90, Center: false}))
 	} else {
-		m.AddRows(
-			row.New(15).Add(
-				col.New(6).Add(
-					text.New(compName, props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   14,
-						Color:  ColorNavyText,
-					}),
-				),
-				col.New(6).Add(
-					text.New("OFFICIAL PAYMENT RECEIPT", props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   14,
-						Align:  align.Right,
-						Color:  ColorNavyText,
-					}),
-					text.New(fmt.Sprintf("Voucher #%s", voucherNum), props.Text{
-						Family: fontName,
-						Style:  fontstyle.Bold,
-						Size:   10,
-						Align:  align.Right,
-						Top:    5.5,
-						Color:  ColorPrimaryTeal,
-					}),
-				),
-			),
+		logoComponents = append(logoComponents,
+			text.New(compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 11, Color: ColorNavyText, Top: 1}),
+			text.New("Smart Automation. Smarter Business.", props.Text{Family: fontName, Style: fontstyle.Italic, Size: 6.5, Color: ColorNavySecondary, Top: 5.5}),
 		)
 	}
 
+	// 1. HEADER SECTION
+	m.AddRows(
+		row.New(16).Add(
+			col.New(4).Add(logoComponents...),
+			col.New(4).Add(
+				text.New("OFFICIAL PAYMENT RECEIPT", props.Text{
+					Family: fontName,
+					Style:  fontstyle.Bold,
+					Size:   13,
+					Align:  align.Center,
+					Color:  ColorNavyText,
+				}),
+			),
+			col.New(4).Add(
+				text.New(fmt.Sprintf("Receipt Date       : %s", receiptDate), props.Text{Family: fontName, Size: 6.5, Align: align.Right, Top: 1, Color: ColorNavyText}),
+				text.New(fmt.Sprintf("Recorded By        : %s", recordedBy), props.Text{Family: fontName, Size: 6.5, Align: align.Right, Top: 5, Color: ColorNavyText}),
+				text.New(fmt.Sprintf("Company State      : %s", compState), props.Text{Family: fontName, Size: 6.5, Align: align.Right, Top: 9, Color: ColorNavyText}),
+			),
+		),
+		row.New(6).Add(
+			col.New(4),
+			col.New(4).WithStyle(pillCardStyle).Add(
+				text.New(fmt.Sprintf("Voucher #%s", voucherNum), props.Text{
+					Family: fontName,
+					Style:  fontstyle.Bold,
+					Size:   8,
+					Align:  align.Center,
+					Top:    1.2,
+					Color:  ColorWhite,
+				}),
+			),
+			col.New(4),
+		),
+	)
+
 	// Thin Teal Divider Line
 	m.AddRows(
-		row.New(2).Add(
+		row.New(3).Add(
 			col.New(12).Add(
 				line.New(props.Line{Color: ColorPrimaryTeal, Thickness: 0.8}),
 			),
 		),
 	)
-
-	// Meta Details Sub-Header (Receipt Date, Status Badge, Recorded By, Company GSTIN / State)
-	m.AddRows(
-		row.New(12).Add(
-			col.New(3).Add(
-				text.New("RECEIPT DATE", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary}),
-				text.New(receiptDate, props.Text{Family: fontName, Size: 8.5, Top: 3.5, Color: ColorNavyText}),
-			),
-			col.New(3).Add(
-				text.New("PAYMENT STATUS", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary}),
-				text.New("RECEIVED & CLEARED", props.Text{Family: fontName, Size: 8.5, Top: 3.5, Style: fontstyle.Bold, Color: ColorBadgePaid}),
-			),
-			col.New(3).Add(
-				text.New("RECORDED BY", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary}),
-				text.New(recordedBy, props.Text{Family: fontName, Size: 8.5, Top: 3.5, Color: ColorNavyText}),
-			),
-			col.New(3).Add(
-				text.New("COMPANY GSTIN / STATE", props.Text{Family: fontName, Size: 6.5, Style: fontstyle.Bold, Color: ColorNavySecondary, Align: align.Right}),
-				text.New(fmt.Sprintf("%s (%s)", compGstin, compState), props.Text{Family: fontName, Size: 8, Top: 3.5, Color: ColorNavyText, Style: fontstyle.Bold, Align: align.Right}),
-			),
-		),
-	)
-
-	m.AddRows(row.New(2).Add(col.New(12)))
 
 	cardStyle := &props.Cell{
 		BackgroundColor: ColorCardBg,
@@ -1379,37 +1452,47 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 		BorderThickness: 0.35,
 	}
 
+	badgeSupplierStyle := &props.Cell{
+		BackgroundColor: ColorPrimaryTeal,
+		BorderColor:     ColorPrimaryTeal,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
+
+	badgeRecipientStyle := &props.Cell{
+		BackgroundColor: ColorRoyalBlue,
+		BorderColor:     ColorRoyalBlue,
+		BorderType:      border.Full,
+		BorderThickness: 0.5,
+	}
+
+	custSubtitle := "(Registered Address)"
+	if custCompany != "" {
+		custSubtitle = custCompany
+	}
+
 	// 2. RECEIVED FROM & TRANSACTION DETAILS
 	m.AddRows(
-		row.New(26).Add(
+		row.New(5.5).Add(
+			col.New(6).WithStyle(badgeSupplierStyle).Add(
+				text.New("PAYMENT SETTLEMENT DETAILS", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 1.2, Left: 2, Color: ColorWhite}),
+			),
+			col.New(6).WithStyle(badgeRecipientStyle).Add(
+				text.New("RECEIVED FROM (CUSTOMER)", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 1.2, Left: 2, Color: ColorWhite}),
+			),
+		),
+		row.New(23).Add(
 			col.New(6).WithStyle(cardStyle).Add(
-				text.New("RECEIVED FROM (CUSTOMER)", props.Text{
-					Family: fontName,
-					Style:  fontstyle.Bold,
-					Size:   7.5,
-					Top:    2,
-					Left:   2,
-					Color:  ColorPrimaryTeal,
-				}),
-				text.New(custName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 9, Top: 6, Left: 2, Color: ColorNavyText}),
-				text.New(custCompany, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Top: 10.5, Left: 2, Color: ColorNavySecondary}),
-				text.New(custContact, props.Text{Family: fontName, Size: 7, Top: 14.5, Left: 2, Color: ColorNavySecondary}),
-				text.New(custAddr, props.Text{Family: fontName, Size: 7, Top: 18.5, Left: 2, Color: ColorNavySecondary}),
+				text.New(fmt.Sprintf("Payment Mode: %s", paymentMode), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Top: 2, Left: 2, Color: ColorNavyText}),
+				text.New(fmt.Sprintf("Reference / UTR #: %s", refNum), props.Text{Family: fontName, Size: 7, Top: 6.5, Left: 2, Color: ColorNavyText}),
+				text.New(fmt.Sprintf("Voucher ID: %s", voucherNum), props.Text{Family: fontName, Size: 6.5, Top: 11, Left: 2, Color: ColorNavySecondary}),
+				text.New("Settlement: Commercial Accounts Receivable", props.Text{Family: fontName, Size: 6.5, Top: 15.5, Left: 2, Color: ColorPrimaryTeal}),
 			),
 			col.New(6).WithStyle(cardStyle).Add(
-				text.New("TRANSACTION DETAILS", props.Text{
-					Family: fontName,
-					Style:  fontstyle.Bold,
-					Size:   7.5,
-					Top:    2,
-					Left:   2,
-					Color:  ColorPrimaryTeal,
-				}),
-				text.New(fmt.Sprintf("Payment Mode: %s", paymentMode), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8, Top: 6, Left: 2, Color: ColorNavyText}),
-				text.New(fmt.Sprintf("Reference / UTR #: %s", refNum), props.Text{Family: fontName, Size: 7.5, Top: 10, Left: 2, Color: ColorNavyText}),
-				text.New(fmt.Sprintf("Voucher ID: %s", voucherNum), props.Text{Family: fontName, Size: 7, Top: 14, Left: 2, Color: ColorNavySecondary}),
-				text.New(fmt.Sprintf("Receipt Date: %s", receiptDate), props.Text{Family: fontName, Size: 7, Top: 17.5, Left: 2, Color: ColorNavySecondary}),
-				text.New("Payment Type: Accounts Receivable Settlement", props.Text{Family: fontName, Size: 6.5, Top: 21, Left: 2, Color: ColorPrimaryTeal}),
+				text.New(custName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8.5, Top: 2, Left: 2, Color: ColorNavyText}),
+				text.New(fmt.Sprintf("%s - %s", custSubtitle, custAddr), props.Text{Family: fontName, Size: 6.5, Top: 6.5, Left: 2, Color: ColorNavySecondary}),
+				text.New(fmt.Sprintf("Contact: %s", custContact), props.Text{Family: fontName, Size: 6.5, Top: 11, Left: 2, Color: ColorNavySecondary}),
+				text.New(fmt.Sprintf("State: %s", compState), props.Text{Family: fontName, Size: 6.5, Top: 15.5, Left: 2, Color: ColorNavySecondary}),
 			),
 		),
 	)
@@ -1419,9 +1502,9 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 	// 3. INVOICE ALLOCATION TABLE
 	thStyle := &props.Cell{
 		BackgroundColor: ColorHeaderBg,
-		BorderType:      border.Bottom,
-		BorderColor:     ColorLightBorder,
-		BorderThickness: 0.75,
+		BorderType:      border.Full,
+		BorderColor:     ColorHeaderBg,
+		BorderThickness: 0.5,
 	}
 	trBorder := &props.Cell{
 		BorderType:      border.Bottom,
@@ -1430,18 +1513,23 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 	}
 
 	m.AddRows(
-		row.New(6).Add(
-			col.New(3).WithStyle(thStyle).Add(text.New("LINKED INVOICE #", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.5, Color: ColorNavyText})),
-			col.New(2).WithStyle(thStyle).Add(text.New("INVOICE DATE", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.5, Color: ColorNavyText})),
-			col.New(2).WithStyle(thStyle).Add(text.New("INVOICE TOTAL", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
-			col.New(3).WithStyle(thStyle).Add(text.New("AMOUNT APPLIED", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
-			col.New(2).WithStyle(thStyle).Add(text.New("BALANCE DUE", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.5, Color: ColorNavyText})),
+		row.New(7).Add(
+			col.New(3).WithStyle(thStyle).Add(text.New("LINKED INVOICE #", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.8, Color: ColorWhite})),
+			col.New(2).WithStyle(thStyle).Add(text.New("INVOICE DATE", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Left: 2, Top: 1.8, Color: ColorWhite})),
+			col.New(2).WithStyle(thStyle).Add(text.New("INVOICE TOTAL", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.8, Color: ColorWhite})),
+			col.New(3).WithStyle(thStyle).Add(text.New("AMOUNT APPLIED", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.8, Color: ColorWhite})),
+			col.New(2).WithStyle(thStyle).Add(text.New("BALANCE DUE", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Align: align.Right, Right: 2, Top: 1.8, Color: ColorWhite})),
 		),
 	)
 
 	invDateStr := "-"
 	if receipt.Invoice != nil && !receipt.Invoice.InvoiceDate.IsZero() {
 		invDateStr = receipt.Invoice.InvoiceDate.Format("02-Jan-2006")
+	}
+
+	balanceColor := ColorBadgePending
+	if receipt.Payment.InvoiceRemainingBalance <= 0 {
+		balanceColor = ColorBadgePaid
 	}
 
 	m.AddRows(
@@ -1459,7 +1547,7 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 				text.New(formatCurrency(receipt.Payment.Amount, receipt.Payment.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8, Align: align.Right, Right: 2, Top: 2, Color: ColorBadgePaid}),
 			),
 			col.New(2).WithStyle(trBorder).Add(
-				text.New(formatCurrency(receipt.Payment.InvoiceRemainingBalance, receipt.Payment.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Align: align.Right, Right: 2, Top: 2, Color: ColorBadgePending}),
+				text.New(formatCurrency(receipt.Payment.InvoiceRemainingBalance, receipt.Payment.Currency, fontName), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Align: align.Right, Right: 2, Top: 2, Color: balanceColor}),
 			),
 		),
 	)
@@ -1474,29 +1562,29 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 	}
 
 	totalCardStyle := &props.Cell{
-		BackgroundColor: ColorCardBg,
+		BackgroundColor: ColorPaidBg,
 		BorderType:      border.Full,
-		BorderColor:     ColorPrimaryTeal,
-		BorderThickness: 0.75,
+		BorderColor:     ColorBadgePaid,
+		BorderThickness: 0.5,
 	}
 
 	m.AddRows(
-		row.New(26).Add(
+		row.New(24).Add(
 			col.New(7).WithStyle(cardStyle).Add(
 				text.New("AMOUNT RECEIVED IN WORDS", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
-				text.New(amountWords, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8, Top: 6, Left: 2, Color: ColorNavyText}),
-				text.New("REMARKS & NOTES", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Top: 13, Left: 2, Color: ColorNavySecondary}),
-				text.New(notesStr, props.Text{Family: fontName, Size: 7, Top: 16.5, Left: 2, Color: ColorNavyText}),
+				text.New(strings.ToUpper(amountWords), props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Top: 6, Left: 2, Color: ColorNavyText}),
+				text.New("REMARKS & NOTES", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Top: 12, Left: 2, Color: ColorNavySecondary}),
+				text.New(notesStr, props.Text{Family: fontName, Size: 7, Top: 15.5, Left: 2, Color: ColorNavyText}),
 			),
 			col.New(5).WithStyle(totalCardStyle).Add(
 				text.New("TOTAL RECEIVED", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 8, Align: align.Right, Right: 3, Top: 2, Color: ColorPrimaryTeal}),
 				text.New(formatCurrency(receipt.Payment.Amount, receipt.Payment.Currency, fontName), props.Text{
 					Family: fontName,
 					Style:  fontstyle.Bold,
-					Size:   14,
+					Size:   13,
 					Align:  align.Right,
 					Right:  3,
-					Top:    6,
+					Top:    5.5,
 					Color:  ColorBadgePaid,
 				}),
 				text.New(fmt.Sprintf("Remaining Due: %s", formatCurrency(receipt.Payment.InvoiceRemainingBalance, receipt.Payment.Currency, fontName)), props.Text{
@@ -1505,7 +1593,7 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 					Size:   7.5,
 					Align:  align.Right,
 					Right:  3,
-					Top:    14,
+					Top:    13,
 					Color:  ColorNavyText,
 				}),
 				text.New(fmt.Sprintf("Invoice Status: %s", strings.ToUpper(receipt.Payment.InvoiceStatus)), props.Text{
@@ -1513,26 +1601,52 @@ func GeneratePaymentReceiptPDF(receipt *models.PaymentReceiptDetail, comp *model
 					Size:   7,
 					Align:  align.Right,
 					Right:  3,
-					Top:    18.5,
+					Top:    17,
 					Color:  ColorNavySecondary,
 				}),
 			),
 		),
 	)
 
-	m.AddRows(row.New(6).Add(col.New(12)))
+	m.AddRows(row.New(4).Add(col.New(12)))
 
 	// 5. FOOTER & AUTHORIZED SIGNATORY
+	rcptTerms := "1. This receipt voucher acknowledges credit of payment against the designated invoice.\n2. In case of cheque or transfer failure, this receipt shall stand void.\n3. This is an electronically generated official voucher and does not require physical stamp."
+	rcptTermLines := parseTermsLines(rcptTerms)
+	var rcptTermComponents []core.Component
+	rcptTermComponents = append(rcptTermComponents, text.New("TERMS & CONDITIONS", props.Text{
+		Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal,
+	}))
+	topPos := 5.5
+	for idx, l := range rcptTermLines {
+		if idx >= 4 {
+			break
+		}
+		rcptTermComponents = append(rcptTermComponents, text.New(l, props.Text{
+			Family: fontName, Size: 6.5, Top: topPos, Left: 2, Color: ColorNavySecondary,
+		}))
+		topPos += 3.5
+	}
+
 	m.AddRows(
 		row.New(22).Add(
-			col.New(7).WithStyle(cardStyle).Add(
-				text.New("TERMS & CONDITIONS", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7, Top: 2, Left: 2, Color: ColorPrimaryTeal}),
-				text.New("1. This receipt voucher acknowledges credit of payment against the designated invoice.\n2. In case of cheque or transfer failure, this receipt shall stand void.\n3. This is an electronically generated official voucher and does not require physical stamp.", props.Text{Family: fontName, Size: 6.5, Top: 5.5, Left: 2, Color: ColorNavySecondary}),
-			),
+			col.New(7).WithStyle(cardStyle).Add(rcptTermComponents...),
 			col.New(5).WithStyle(cardStyle).Add(
-				text.New("FOR "+compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Align: align.Center, Top: 2, Color: ColorNavyText}),
-				text.New("Authorized Signatory / Accounts Desk", props.Text{Family: fontName, Size: 7, Align: align.Center, Top: 16, Color: ColorNavySecondary}),
+				text.New("For "+compName, props.Text{Family: fontName, Style: fontstyle.Bold, Size: 7.5, Align: align.Center, Top: 2, Color: ColorNavyText}),
+				text.New("~ Achyut / Auth ~", props.Text{Family: fontName, Style: fontstyle.Italic, Size: 7.5, Align: align.Center, Top: 10, Color: ColorNavySecondary}),
+				text.New("Authorized Signatory", props.Text{Family: fontName, Size: 6.5, Align: align.Center, Top: 16.5, Color: ColorNavySecondary}),
 			),
+		),
+	)
+
+	// Bottom Trust Footer
+	m.AddRows(
+		row.New(4).Add(col.New(12)),
+		row.New(5).Add(
+			col.New(3).Add(text.New("[✓] 100% Secure Payments", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Color: ColorPrimaryTeal, Top: 1})),
+			col.New(3).Add(text.New("[⚡] Fast & Reliable Service", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Color: ColorPrimaryTeal, Top: 1})),
+			col.New(3).Add(text.New("[☎] Dedicated Support", props.Text{Family: fontName, Style: fontstyle.Bold, Size: 6.5, Color: ColorPrimaryTeal, Top: 1})),
+			col.New(3).Add(text.New("Thank you for your business!", props.Text{Family: fontName, Style: fontstyle.Italic, Size: 7, Color: ColorNavyText, Align: align.Right, Top: 1})),
 		),
 	)
 

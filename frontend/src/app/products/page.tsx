@@ -168,6 +168,24 @@ export default function ProductsPage() {
     }
   }, [router]);
 
+  // Global Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (inspectingProduct) {
+          setInspectingProduct(null);
+        } else if (isAddModalOpen) {
+          setIsAddModalOpen(false);
+          setEditingProduct(null);
+        } else if (deletingProduct) {
+          setDeletingProduct(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [inspectingProduct, isAddModalOpen, deletingProduct]);
+
   const isAdminOrManager = useMemo(() => {
     const userToEvaluate = currentUser || (typeof window !== "undefined" ? getStoredUser() : null);
     if (!userToEvaluate) return false;
@@ -514,6 +532,7 @@ export default function ProductsPage() {
       />
 
       {/* Main Content Workspace */}
+      {/* Main Content Workspace */}
       <main
         style={{
           flex: 1,
@@ -521,49 +540,47 @@ export default function ProductsPage() {
           flexDirection: "column",
           minWidth: 0,
           height: "100vh",
-          overflowY: "auto",
+          overflow: "hidden",
           backgroundColor: "#F8FAFC",
         }}
       >
         {/* Clean Page Header */}
         <header
           style={{
-            position: "sticky",
-            top: 0,
             zIndex: 30,
-            backgroundColor: "rgba(255, 255, 255, 0.96)",
-            backdropFilter: "blur(12px)",
+            backgroundColor: "#FFFFFF",
             borderBottom: "1px solid #E2E8F0",
-            padding: "1rem 2rem",
+            padding: "0.55rem 1.25rem",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             flexWrap: "wrap",
-            gap: "1rem",
+            gap: "0.75rem",
+            flexShrink: 0,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div
               style={{
-                width: "44px",
-                height: "44px",
-                borderRadius: "12px",
+                width: "32px",
+                height: "32px",
+                borderRadius: "8px",
                 background: "linear-gradient(135deg, #0D9488 0%, #2563EB 100%)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 color: "#FFFFFF",
-                boxShadow: "0 2px 8px rgba(13, 148, 136, 0.25)",
+                boxShadow: "0 2px 6px rgba(13, 148, 136, 0.2)",
                 flexShrink: 0,
               }}
             >
-              <Package size={22} />
+              <Package size={17} />
             </div>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <h1
                   style={{
-                    fontSize: "1.25rem",
+                    fontSize: "1.125rem",
                     fontWeight: 800,
                     color: "#0F172A",
                     letterSpacing: "-0.02em",
@@ -574,7 +591,7 @@ export default function ProductsPage() {
                 </h1>
                 <span
                   style={{
-                    padding: "2px 8px",
+                    padding: "1px 7px",
                     borderRadius: "999px",
                     fontSize: "0.6875rem",
                     fontWeight: 700,
@@ -585,37 +602,27 @@ export default function ProductsPage() {
                   {totalCount} Items
                 </span>
               </div>
-              <p
-                style={{
-                  fontSize: "0.75rem",
-                  color: "#64748B",
-                  margin: "2px 0 0 0",
-                  fontWeight: 400,
-                }}
-              >
-                Manage standard products, subscriptions, software licenses, and services for quotation building.
-              </p>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {!isAdminOrManager && (
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "6px",
-                  borderRadius: "8px",
+                  gap: "5px",
+                  borderRadius: "6px",
                   border: "1px solid #FDE68A",
                   backgroundColor: "#FFFBEB",
-                  padding: "6px 12px",
-                  fontSize: "0.75rem",
+                  padding: "4px 8px",
+                  fontSize: "0.6875rem",
                   fontWeight: 600,
                   color: "#92400E",
                 }}
               >
-                <Shield size={14} color="#D97706" />
-                <span>View Only (Admin / Manager can manage catalog)</span>
+                <Shield size={12} color="#D97706" />
+                <span>View Only</span>
               </div>
             )}
 
@@ -626,22 +633,22 @@ export default function ProductsPage() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "6px",
-                  padding: "0.55rem 1rem",
-                  borderRadius: "8px",
+                  gap: "5px",
+                  padding: "0.42rem 0.85rem",
+                  borderRadius: "6px",
                   border: "none",
                   backgroundColor: "#0D9488",
                   color: "#FFFFFF",
-                  fontSize: "0.8125rem",
+                  fontSize: "0.75rem",
                   fontWeight: 700,
                   cursor: "pointer",
-                  boxShadow: "0 2px 6px rgba(13, 148, 136, 0.3)",
+                  boxShadow: "0 2px 4px rgba(13, 148, 136, 0.25)",
                   transition: "background-color 0.15s ease",
                 }}
                 onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#0F766E")}
                 onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#0D9488")}
               >
-                <Plus size={16} />
+                <Plus size={14} />
                 <span>Add Product</span>
               </button>
             )}
@@ -649,213 +656,199 @@ export default function ProductsPage() {
         </header>
 
         {/* Content Wrapper */}
-        <div style={{ padding: "1.75rem 2rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          {/* 4 Clean Modern KPI Cards */}
+        <div style={{ padding: "0.65rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.55rem", flex: 1, minHeight: 0, overflow: "hidden" }}>
+          {/* 4 Slim Modern KPI Cards */}
           <section
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: "1rem",
+              gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+              gap: "0.5rem",
+              flexShrink: 0,
             }}
           >
             {/* Card 1: Total Products */}
             <div
               style={{
                 backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                padding: "1.25rem",
+                borderRadius: "8px",
+                padding: "0.45rem 0.75rem",
                 border: "1px solid #E2E8F0",
-                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
                 display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.5rem",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              <div>
+                <span style={{ fontSize: "0.625rem", fontWeight: 700, color: "#64748B", letterSpacing: "0.04em", textTransform: "uppercase" }}>
                   Total Products
                 </span>
-                <span
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    backgroundColor: "#EEF2FF",
-                    color: "#4F46E5",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Package size={16} />
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                <span style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0F172A", letterSpacing: "-0.02em" }}>
+                <div style={{ fontSize: "1.125rem", fontWeight: 800, color: "#0F172A", lineHeight: 1.1 }}>
                   {totalCount}
-                </span>
-                <span style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 500 }}>
-                  in price book
-                </span>
+                </div>
               </div>
+              <span
+                style={{
+                  width: "26px",
+                  height: "26px",
+                  borderRadius: "6px",
+                  backgroundColor: "#EEF2FF",
+                  color: "#4F46E5",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Package size={13} />
+              </span>
             </div>
 
             {/* Card 2: Active Products */}
             <div
               style={{
                 backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                padding: "1.25rem",
+                borderRadius: "8px",
+                padding: "0.45rem 0.75rem",
                 border: "1px solid #E2E8F0",
-                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
                 display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.5rem",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              <div>
+                <span style={{ fontSize: "0.625rem", fontWeight: 700, color: "#059669", letterSpacing: "0.04em", textTransform: "uppercase" }}>
                   Active Products
                 </span>
-                <span
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    backgroundColor: "#ECFDF5",
-                    color: "#059669",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <CheckCircle2 size={16} />
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                <span style={{ fontSize: "1.75rem", fontWeight: 800, color: "#047857", letterSpacing: "-0.02em" }}>
+                <div style={{ fontSize: "1.125rem", fontWeight: 800, color: "#047857", lineHeight: 1.1 }}>
                   {activeCount}
-                </span>
-                <span style={{ fontSize: "0.75rem", color: "#059669", fontWeight: 500 }}>
-                  ready for quotes
-                </span>
+                </div>
               </div>
+              <span
+                style={{
+                  width: "26px",
+                  height: "26px",
+                  borderRadius: "6px",
+                  backgroundColor: "#ECFDF5",
+                  color: "#059669",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <CheckCircle2 size={13} />
+              </span>
             </div>
 
             {/* Card 3: Inactive / Archived */}
             <div
               style={{
                 backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                padding: "1.25rem",
+                borderRadius: "8px",
+                padding: "0.45rem 0.75rem",
                 border: "1px solid #E2E8F0",
-                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
                 display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.5rem",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                  Inactive / Archived
+              <div>
+                <span style={{ fontSize: "0.625rem", fontWeight: 700, color: "#64748B", letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                  Inactive
                 </span>
-                <span
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    backgroundColor: "#F1F5F9",
-                    color: "#64748B",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <ToggleLeft size={16} />
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                <span style={{ fontSize: "1.75rem", fontWeight: 800, color: "#475569", letterSpacing: "-0.02em" }}>
+                <div style={{ fontSize: "1.125rem", fontWeight: 800, color: "#475569", lineHeight: 1.1 }}>
                   {inactiveCount}
-                </span>
-                <span style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 500 }}>
-                  hidden from quotes
-                </span>
+                </div>
               </div>
+              <span
+                style={{
+                  width: "26px",
+                  height: "26px",
+                  borderRadius: "6px",
+                  backgroundColor: "#F1F5F9",
+                  color: "#64748B",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <ToggleLeft size={13} />
+              </span>
             </div>
 
             {/* Card 4: Categories */}
             <div
               style={{
                 backgroundColor: "#FFFFFF",
-                borderRadius: "12px",
-                padding: "1.25rem",
+                borderRadius: "8px",
+                padding: "0.45rem 0.75rem",
                 border: "1px solid #E2E8F0",
-                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
                 display: "flex",
-                flexDirection: "column",
-                gap: "0.75rem",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "0.5rem",
               }}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              <div>
+                <span style={{ fontSize: "0.625rem", fontWeight: 700, color: "#7C3AED", letterSpacing: "0.04em", textTransform: "uppercase" }}>
                   Categories
                 </span>
-                <span
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "8px",
-                    backgroundColor: "#F5F3FF",
-                    color: "#7C3AED",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Layers size={16} />
-                </span>
-              </div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: "6px" }}>
-                <span style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0F172A", letterSpacing: "-0.02em" }}>
+                <div style={{ fontSize: "1.125rem", fontWeight: 800, color: "#0F172A", lineHeight: 1.1 }}>
                   {categories.length}
-                </span>
-                <span style={{ fontSize: "0.75rem", color: "#64748B", fontWeight: 500 }}>
-                  classifications
-                </span>
+                </div>
               </div>
+              <span
+                style={{
+                  width: "26px",
+                  height: "26px",
+                  borderRadius: "6px",
+                  backgroundColor: "#F5F3FF",
+                  color: "#7C3AED",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Layers size={13} />
+              </span>
             </div>
           </section>
 
-          {/* Unified Toolbar */}
+          {/* Unified Compact Toolbar */}
           <section
             style={{
               backgroundColor: "#FFFFFF",
-              borderRadius: "12px",
-              padding: "0.875rem 1.25rem",
+              borderRadius: "8px",
+              padding: "0.45rem 0.75rem",
               border: "1px solid #E2E8F0",
-              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+              boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               flexWrap: "wrap",
-              gap: "1rem",
+              gap: "0.625rem",
+              flexShrink: 0,
             }}
           >
             {/* Search Box */}
             <div
               style={{
                 position: "relative",
-                flex: "1 1 260px",
-                maxWidth: "420px",
+                flex: "1 1 240px",
+                maxWidth: "380px",
                 display: "flex",
                 alignItems: "center",
               }}
             >
               <Search
-                size={16}
+                size={14}
                 color="#94A3B8"
-                style={{ position: "absolute", left: "12px", pointerEvents: "none" }}
+                style={{ position: "absolute", left: "10px", pointerEvents: "none" }}
               />
               <input
                 id="input-product-search"
@@ -867,11 +860,11 @@ export default function ProductsPage() {
                 }}
                 style={{
                   width: "100%",
-                  padding: "0.5rem 2rem 0.5rem 2.25rem",
-                  borderRadius: "8px",
+                  padding: "0.38rem 1.8rem 0.38rem 2rem",
+                  borderRadius: "6px",
                   border: "1px solid #CBD5E1",
                   backgroundColor: "#F8FAFC",
-                  fontSize: "0.8125rem",
+                  fontSize: "0.75rem",
                   color: "#0F172A",
                   outline: "none",
                 }}
@@ -883,7 +876,7 @@ export default function ProductsPage() {
                   }}
                   style={{
                     position: "absolute",
-                    right: "10px",
+                    right: "8px",
                     background: "none",
                     border: "none",
                     color: "#94A3B8",
@@ -891,16 +884,16 @@ export default function ProductsPage() {
                     padding: "2px",
                   }}
                 >
-                  <X size={14} />
+                  <X size={12} />
                 </button>
               )}
             </div>
 
             {/* Filter and Sort Controls */}
-            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.75rem" }}>
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
               {/* Category Dropdown */}
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B" }}>Category:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ fontSize: "0.6875rem", fontWeight: 600, color: "#64748B" }}>Cat:</span>
                 <select
                   id="select-filter-category"
                   value={selectedCategory}
@@ -908,11 +901,11 @@ export default function ProductsPage() {
                     setSelectedCategory(e.target.value);
                   }}
                   style={{
-                    padding: "0.45rem 0.75rem",
-                    borderRadius: "8px",
+                    padding: "0.35rem 0.6rem",
+                    borderRadius: "6px",
                     border: "1px solid #CBD5E1",
                     backgroundColor: "#FFFFFF",
-                    fontSize: "0.8125rem",
+                    fontSize: "0.75rem",
                     color: "#334155",
                     cursor: "pointer",
                     outline: "none",
@@ -928,8 +921,8 @@ export default function ProductsPage() {
               </div>
 
               {/* Status Dropdown */}
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B" }}>Status:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ fontSize: "0.6875rem", fontWeight: 600, color: "#64748B" }}>Status:</span>
                 <select
                   id="select-filter-status"
                   value={selectedStatus}
@@ -937,11 +930,11 @@ export default function ProductsPage() {
                     setSelectedStatus(e.target.value);
                   }}
                   style={{
-                    padding: "0.45rem 0.75rem",
-                    borderRadius: "8px",
+                    padding: "0.35rem 0.6rem",
+                    borderRadius: "6px",
                     border: "1px solid #CBD5E1",
                     backgroundColor: "#FFFFFF",
-                    fontSize: "0.8125rem",
+                    fontSize: "0.75rem",
                     color: "#334155",
                     cursor: "pointer",
                     outline: "none",
@@ -954,8 +947,8 @@ export default function ProductsPage() {
               </div>
 
               {/* Sort By Dropdown */}
-              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#64748B" }}>Sort:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ fontSize: "0.6875rem", fontWeight: 600, color: "#64748B" }}>Sort:</span>
                 <select
                   id="select-sort-by"
                   value={`${sortBy}-${sortOrder}`}
@@ -965,11 +958,11 @@ export default function ProductsPage() {
                     setSortOrder(order as "asc" | "desc");
                   }}
                   style={{
-                    padding: "0.45rem 0.75rem",
-                    borderRadius: "8px",
+                    padding: "0.35rem 0.6rem",
+                    borderRadius: "6px",
                     border: "1px solid #CBD5E1",
                     backgroundColor: "#FFFFFF",
-                    fontSize: "0.8125rem",
+                    fontSize: "0.75rem",
                     color: "#334155",
                     cursor: "pointer",
                     outline: "none",
@@ -979,8 +972,8 @@ export default function ProductsPage() {
                   <option value="created_at-asc">Oldest First</option>
                   <option value="name-asc">Name (A-Z)</option>
                   <option value="name-desc">Name (Z-A)</option>
-                  <option value="selling_price-asc">Price (Low to High)</option>
-                  <option value="selling_price-desc">Price (High to Low)</option>
+                  <option value="selling_price-asc">Price (Low-High)</option>
+                  <option value="selling_price-desc">Price (High-Low)</option>
                   <option value="sku-asc">SKU (A-Z)</option>
                 </select>
               </div>
@@ -994,12 +987,12 @@ export default function ProductsPage() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  padding: "0.45rem 0.75rem",
-                  borderRadius: "8px",
+                  padding: "0.35rem 0.6rem",
+                  borderRadius: "6px",
                   border: "1px solid #CBD5E1",
                   backgroundColor: "#FFFFFF",
                   color: "#475569",
-                  fontSize: "0.8125rem",
+                  fontSize: "0.75rem",
                   cursor: "pointer",
                   transition: "all 0.15s ease",
                 }}
@@ -1012,86 +1005,89 @@ export default function ProductsPage() {
                   e.currentTarget.style.color = "#475569";
                 }}
               >
-                <RefreshCw size={14} className={isLoading ? "spin-animation" : ""} />
-                <span style={{ marginLeft: "6px", fontWeight: 600 }}>Refresh</span>
+                <RefreshCw size={13} className={isLoading ? "spin-animation" : ""} />
+                <span style={{ marginLeft: "4px", fontWeight: 600 }}>Refresh</span>
               </button>
             </div>
           </section>
 
-          {/* Product Data Table */}
+          {/* Product Data Table with Sticky Header and Internal Scroll */}
           <section
             style={{
               backgroundColor: "#FFFFFF",
-              borderRadius: "12px",
+              borderRadius: "8px",
               border: "1px solid #E2E8F0",
-              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
+              boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
               overflow: "hidden",
+              flex: 1,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            <div style={{ overflowX: "auto" }}>
+            <div style={{ overflowY: "auto", overflowX: "auto", flex: 1, minHeight: 0 }}>
               <table
                 style={{
                   width: "100%",
                   borderCollapse: "collapse",
                   textAlign: "left",
-                  fontSize: "0.8125rem",
+                  fontSize: "0.75rem",
                 }}
               >
-                <thead>
+                <thead style={{ position: "sticky", top: 0, zIndex: 10, backgroundColor: "#F8FAFC" }}>
                   <tr
                     style={{
-                      backgroundColor: "#F8FAFC",
                       borderBottom: "1px solid #E2E8F0",
                       color: "#64748B",
                       fontWeight: 700,
                       fontSize: "0.6875rem",
                       textTransform: "uppercase",
-                      letterSpacing: "0.06em",
+                      letterSpacing: "0.05em",
                       whiteSpace: "nowrap",
                     }}
                   >
-                    <th style={{ padding: "0.875rem 1.25rem" }}>Product & Description</th>
-                    <th style={{ padding: "0.875rem 1rem" }}>SKU Code</th>
-                    <th style={{ padding: "0.875rem 1rem" }}>HSN / SAC</th>
-                    <th style={{ padding: "0.875rem 1rem" }}>Category</th>
-                    <th style={{ padding: "0.875rem 1rem" }}>Unit</th>
-                    <th style={{ padding: "0.875rem 1rem", textAlign: "right" }}>Selling Price</th>
-                    <th style={{ padding: "0.875rem 1rem", textAlign: "right" }}>Stock (Avail / On-Hand)</th>
-                    <th style={{ padding: "0.875rem 1rem", textAlign: "center" }}>Tax</th>
-                    <th style={{ padding: "0.875rem 1rem", textAlign: "center" }}>Status</th>
-                    <th style={{ padding: "0.875rem 1.25rem", textAlign: "right" }}>Actions</th>
+                    <th style={{ padding: "0.45rem 0.75rem" }}>Product & Description</th>
+                    <th style={{ padding: "0.45rem 0.6rem" }}>SKU Code</th>
+                    <th style={{ padding: "0.45rem 0.6rem" }}>HSN / SAC</th>
+                    <th style={{ padding: "0.45rem 0.6rem" }}>Category</th>
+                    <th style={{ padding: "0.45rem 0.6rem" }}>Unit</th>
+                    <th style={{ padding: "0.45rem 0.6rem", textAlign: "right" }}>Selling Price</th>
+                    <th style={{ padding: "0.45rem 0.6rem", textAlign: "right" }}>Stock (Avail / On-Hand)</th>
+                    <th style={{ padding: "0.45rem 0.6rem", textAlign: "center" }}>Tax</th>
+                    <th style={{ padding: "0.45rem 0.6rem", textAlign: "center" }}>Status</th>
+                    <th style={{ padding: "0.45rem 0.75rem", textAlign: "right" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {isLoading && products.length === 0 ? (
                     <tr>
-                      <td colSpan={10} style={{ padding: "3rem", textAlign: "center", color: "#64748B" }}>
-                        <RefreshCw size={24} style={{ animation: "spin 1s linear infinite", margin: "0 auto 8px" }} />
+                      <td colSpan={10} style={{ padding: "2.5rem", textAlign: "center", color: "#64748B" }}>
+                        <RefreshCw size={20} style={{ animation: "spin 1s linear infinite", margin: "0 auto 6px" }} />
                         <div style={{ fontWeight: 600 }}>Loading products...</div>
                       </td>
                     </tr>
                   ) : products.length === 0 ? (
                     <tr>
-                      <td colSpan={10} style={{ padding: "4rem 2rem", textAlign: "center" }}>
+                      <td colSpan={10} style={{ padding: "3rem 1.5rem", textAlign: "center" }}>
                         <div
                           style={{
-                            width: "56px",
-                            height: "56px",
-                            borderRadius: "16px",
+                            width: "44px",
+                            height: "44px",
+                            borderRadius: "12px",
                             backgroundColor: "#F1F5F9",
                             color: "#94A3B8",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            margin: "0 auto 1rem",
+                            margin: "0 auto 0.75rem",
                           }}
                         >
-                          <Package size={28} />
+                          <Package size={22} />
                         </div>
-                        <div style={{ fontSize: "1rem", fontWeight: 700, color: "#1E293B", marginBottom: "0.25rem" }}>
+                        <div style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#1E293B", marginBottom: "0.25rem" }}>
                           No products found
                         </div>
-                        <div style={{ fontSize: "0.8125rem", color: "#64748B", maxWidth: "360px", margin: "0 auto 1.25rem" }}>
+                        <div style={{ fontSize: "0.75rem", color: "#64748B", maxWidth: "340px", margin: "0 auto 1rem" }}>
                           {searchQuery || selectedCategory !== "all" || selectedStatus !== "all"
                             ? "Try adjusting your search criteria or resetting the active filters."
                             : "Your product price book is currently empty. Add your first product to get started."}
@@ -1102,18 +1098,18 @@ export default function ProductsPage() {
                             style={{
                               display: "inline-flex",
                               alignItems: "center",
-                              gap: "6px",
-                              padding: "0.55rem 1rem",
-                              borderRadius: "8px",
+                              gap: "5px",
+                              padding: "0.45rem 0.85rem",
+                              borderRadius: "6px",
                               border: "none",
                               backgroundColor: "#0D9488",
                               color: "#FFFFFF",
-                              fontSize: "0.8125rem",
+                              fontSize: "0.75rem",
                               fontWeight: 700,
                               cursor: "pointer",
                             }}
                           >
-                            <Plus size={16} />
+                            <Plus size={14} />
                             <span>Add First Product</span>
                           </button>
                         )}
@@ -1127,19 +1123,19 @@ export default function ProductsPage() {
                           key={p.id}
                           style={{
                             borderBottom: "1px solid #F1F5F9",
-                            transition: "background-color 0.15s ease",
+                            transition: "background-color 0.12s ease",
                           }}
                           onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
                           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#FFFFFF")}
                         >
                           {/* Product Name & Description */}
-                          <td style={{ padding: "0.875rem 1.25rem", verticalAlign: "middle" }}>
-                            <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                          <td style={{ padding: "0.4rem 0.75rem", verticalAlign: "middle" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                               <div
                                 style={{
-                                  width: "36px",
-                                  height: "36px",
-                                  borderRadius: "8px",
+                                  width: "28px",
+                                  height: "28px",
+                                  borderRadius: "6px",
                                   backgroundColor: "#F8FAFC",
                                   border: "1px solid #E2E8F0",
                                   display: "flex",
@@ -1147,32 +1143,32 @@ export default function ProductsPage() {
                                   justifyContent: "center",
                                   color: "#0D9488",
                                   flexShrink: 0,
-                                  marginTop: "2px",
                                 }}
                               >
-                                <Package size={18} />
+                                <Package size={14} />
                               </div>
-                              <div>
+                              <div style={{ minWidth: 0 }}>
                                 <div
                                   onClick={() => setInspectingProduct(p)}
                                   style={{
                                     fontWeight: 700,
                                     color: "#0F172A",
                                     cursor: "pointer",
-                                    lineHeight: 1.3,
+                                    lineHeight: 1.25,
+                                    fontSize: "0.8125rem",
+                                    whiteSpace: "nowrap",
                                   }}
                                   onMouseEnter={(e) => (e.currentTarget.style.color = "#0D9488")}
                                   onMouseLeave={(e) => (e.currentTarget.style.color = "#0F172A")}
                                 >
                                   {p.name}
                                 </div>
-                                {p.description ? (
+                                {p.description && (
                                   <div
                                     style={{
-                                      fontSize: "0.75rem",
+                                      fontSize: "0.6875rem",
                                       color: "#64748B",
-                                      marginTop: "2px",
-                                      maxWidth: "380px",
+                                      maxWidth: "340px",
                                       overflow: "hidden",
                                       textOverflow: "ellipsis",
                                       whiteSpace: "nowrap",
@@ -1180,24 +1176,20 @@ export default function ProductsPage() {
                                   >
                                     {p.description}
                                   </div>
-                                ) : (
-                                  <div style={{ fontSize: "0.75rem", color: "#94A3B8", fontStyle: "italic", marginTop: "2px" }}>
-                                    No description provided
-                                  </div>
                                 )}
                               </div>
                             </div>
                           </td>
 
                           {/* SKU Code */}
-                          <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "0.4rem 0.6rem", verticalAlign: "middle", whiteSpace: "nowrap" }}>
                             <span
                               style={{
                                 fontFamily: "'JetBrains Mono', monospace",
-                                fontSize: "0.75rem",
+                                fontSize: "0.6875rem",
                                 fontWeight: 600,
-                                padding: "3px 7px",
-                                borderRadius: "6px",
+                                padding: "2px 5px",
+                                borderRadius: "4px",
                                 backgroundColor: "#F1F5F9",
                                 color: "#334155",
                                 border: "1px solid #E2E8F0",
@@ -1208,7 +1200,7 @@ export default function ProductsPage() {
                           </td>
 
                           {/* HSN / SAC */}
-                          <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", whiteSpace: "nowrap", color: "#64748B", fontSize: "0.75rem" }}>
+                          <td style={{ padding: "0.4rem 0.6rem", verticalAlign: "middle", whiteSpace: "nowrap", color: "#64748B", fontSize: "0.6875rem" }}>
                             {p.hsn_sac ? (
                               <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 500 }}>
                                 {p.hsn_sac}
@@ -1219,13 +1211,13 @@ export default function ProductsPage() {
                           </td>
 
                           {/* Category Badge */}
-                          <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "0.4rem 0.6rem", verticalAlign: "middle", whiteSpace: "nowrap" }}>
                             <span
                               style={{
                                 display: "inline-block",
-                                fontSize: "0.6875rem",
+                                fontSize: "0.625rem",
                                 fontWeight: 700,
-                                padding: "2px 8px",
+                                padding: "1px 6px",
                                 borderRadius: "999px",
                                 ...getCategoryBadgeStyle(p.category),
                               }}
@@ -1235,16 +1227,16 @@ export default function ProductsPage() {
                           </td>
 
                           {/* Unit */}
-                          <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "0.4rem 0.6rem", verticalAlign: "middle", whiteSpace: "nowrap" }}>
                             <span
                               style={{
-                                fontSize: "0.75rem",
+                                fontSize: "0.6875rem",
                                 fontWeight: 500,
                                 color: "#475569",
                                 backgroundColor: "#F8FAFC",
                                 border: "1px solid #E2E8F0",
-                                padding: "2px 8px",
-                                borderRadius: "6px",
+                                padding: "1px 6px",
+                                borderRadius: "4px",
                               }}
                             >
                               {p.unit}
@@ -1252,32 +1244,32 @@ export default function ProductsPage() {
                           </td>
 
                           {/* Selling Price */}
-                          <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", textAlign: "right", whiteSpace: "nowrap" }}>
-                            <div style={{ fontSize: "0.875rem", fontWeight: 800, color: "#0F172A", letterSpacing: "-0.01em" }}>
+                          <td style={{ padding: "0.4rem 0.6rem", verticalAlign: "middle", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <div style={{ fontSize: "0.8125rem", fontWeight: 800, color: "#0F172A", letterSpacing: "-0.01em" }}>
                               {formatCurrency(p.selling_price, p.currency)}
                             </div>
-                            <div style={{ fontSize: "0.6875rem", color: "#94A3B8" }}>
+                            <div style={{ fontSize: "0.625rem", color: "#94A3B8" }}>
                               per {p.unit}
                             </div>
                           </td>
 
                           {/* Stock Level */}
-                          <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", textAlign: "right", whiteSpace: "nowrap" }}>
-                            <div style={{ fontSize: "0.875rem", fontWeight: 800, color: ((p.available_stock || 0) <= 0) ? "#DC2626" : ((p.available_stock || 0) <= (p.low_stock_threshold || 10)) ? "#D97706" : "#16A34A" }}>
+                          <td style={{ padding: "0.4rem 0.6rem", verticalAlign: "middle", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <div style={{ fontSize: "0.8125rem", fontWeight: 800, color: ((p.available_stock || 0) <= 0) ? "#DC2626" : ((p.available_stock || 0) <= (p.low_stock_threshold || 10)) ? "#D97706" : "#16A34A" }}>
                               {p.available_stock || 0} Avail
                             </div>
-                            <div style={{ fontSize: "0.6875rem", color: "#64748B" }}>
+                            <div style={{ fontSize: "0.625rem", color: "#64748B" }}>
                               {p.current_stock || 0} On-Hand ({p.reserved_stock || 0} Res)
                             </div>
                           </td>
 
                           {/* Tax Rate */}
-                          <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", textAlign: "center", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "0.4rem 0.6rem", verticalAlign: "middle", textAlign: "center", whiteSpace: "nowrap" }}>
                             <span
                               style={{
-                                fontSize: "0.6875rem",
+                                fontSize: "0.625rem",
                                 fontWeight: 700,
-                                padding: "2px 6px",
+                                padding: "1px 5px",
                                 borderRadius: "4px",
                                 backgroundColor: "#F8FAFC",
                                 border: "1px solid #E2E8F0",
@@ -1289,16 +1281,16 @@ export default function ProductsPage() {
                           </td>
 
                           {/* Status Badge & Quick Toggle */}
-                          <td style={{ padding: "0.875rem 1rem", verticalAlign: "middle", textAlign: "center", whiteSpace: "nowrap" }}>
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <td style={{ padding: "0.4rem 0.6rem", verticalAlign: "middle", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
                               <span
                                 style={{
                                   display: "inline-flex",
                                   alignItems: "center",
-                                  gap: "5px",
-                                  fontSize: "0.6875rem",
+                                  gap: "4px",
+                                  fontSize: "0.625rem",
                                   fontWeight: 700,
-                                  padding: "2px 8px",
+                                  padding: "1px 6px",
                                   borderRadius: "999px",
                                   backgroundColor: isActive ? "#ECFDF5" : "#F1F5F9",
                                   color: isActive ? "#047857" : "#64748B",
@@ -1307,8 +1299,8 @@ export default function ProductsPage() {
                               >
                                 <span
                                   style={{
-                                    width: "6px",
-                                    height: "6px",
+                                    width: "5px",
+                                    height: "5px",
                                     borderRadius: "50%",
                                     backgroundColor: isActive ? "#10B981" : "#94A3B8",
                                   }}
@@ -1325,20 +1317,20 @@ export default function ProductsPage() {
                                     border: "none",
                                     color: isActive ? "#10B981" : "#94A3B8",
                                     cursor: "pointer",
-                                    padding: "2px",
+                                    padding: "1px",
                                     display: "flex",
                                     alignItems: "center",
                                   }}
                                 >
-                                  {isActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                                  {isActive ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                                 </button>
                               )}
                             </div>
                           </td>
 
                           {/* Actions */}
-                          <td style={{ padding: "0.875rem 1.25rem", verticalAlign: "middle", textAlign: "right", whiteSpace: "nowrap" }}>
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <td style={{ padding: "0.4rem 0.75rem", verticalAlign: "middle", textAlign: "right", whiteSpace: "nowrap" }}>
+                            <div style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
                               {/* Inspect Button */}
                               <button
                                 onClick={() => setInspectingProduct(p)}
@@ -1347,9 +1339,9 @@ export default function ProductsPage() {
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "center",
-                                  width: "28px",
-                                  height: "28px",
-                                  borderRadius: "6px",
+                                  width: "24px",
+                                  height: "24px",
+                                  borderRadius: "4px",
                                   border: "1px solid #E2E8F0",
                                   backgroundColor: "#FFFFFF",
                                   color: "#475569",
@@ -1364,7 +1356,7 @@ export default function ProductsPage() {
                                   e.currentTarget.style.color = "#475569";
                                 }}
                               >
-                                <Eye size={14} />
+                                <Eye size={12} />
                               </button>
 
                               {/* Edit Button */}
@@ -1376,9 +1368,9 @@ export default function ProductsPage() {
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    width: "28px",
-                                    height: "28px",
-                                    borderRadius: "6px",
+                                    width: "24px",
+                                    height: "24px",
+                                    borderRadius: "4px",
                                     border: "1px solid #E2E8F0",
                                     backgroundColor: "#FFFFFF",
                                     color: "#0284C7",
@@ -1393,7 +1385,7 @@ export default function ProductsPage() {
                                     e.currentTarget.style.borderColor = "#E2E8F0";
                                   }}
                                 >
-                                  <Edit3 size={14} />
+                                  <Edit3 size={12} />
                                 </button>
                               )}
 
@@ -1406,9 +1398,9 @@ export default function ProductsPage() {
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    width: "28px",
-                                    height: "28px",
-                                    borderRadius: "6px",
+                                    width: "24px",
+                                    height: "24px",
+                                    borderRadius: "4px",
                                     border: "1px solid #E2E8F0",
                                     backgroundColor: "#FFFFFF",
                                     color: "#DC2626",
@@ -1423,7 +1415,7 @@ export default function ProductsPage() {
                                     e.currentTarget.style.borderColor = "#E2E8F0";
                                   }}
                                 >
-                                  <Trash2 size={14} />
+                                  <Trash2 size={12} />
                                 </button>
                               )}
                             </div>
@@ -1442,14 +1434,15 @@ export default function ProductsPage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                padding: "0.875rem 1.25rem",
+                padding: "0.4rem 0.85rem",
                 borderTop: "1px solid #E2E8F0",
                 backgroundColor: "#F8FAFC",
                 flexWrap: "wrap",
-                gap: "1rem",
+                gap: "0.5rem",
+                flexShrink: 0,
               }}
             >
-              <div style={{ fontSize: "0.8125rem", color: "#64748B" }}>
+              <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
                 {products.length !== totalCount
                   ? `Showing ${products.length} of ${totalCount} products`
                   : `Showing all ${products.length} products`}
@@ -1468,7 +1461,7 @@ export default function ProductsPage() {
             position: "fixed",
             inset: 0,
             zIndex: 9000,
-            backgroundColor: "rgba(15, 23, 42, 0.5)",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "center",
@@ -1477,13 +1470,15 @@ export default function ProductsPage() {
           }}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
               backgroundColor: "#FFFFFF",
               borderRadius: "16px",
               width: "100%",
-              maxWidth: "600px",
+              maxWidth: "760px",
               maxHeight: "90vh",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #E2E8F0",
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
@@ -1925,7 +1920,7 @@ export default function ProductsPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* SLIDE-OVER DETAIL INSPECTION DRAWER                                       */}
+      {/* CENTERED DETAIL INSPECTION MODAL                                          */}
       {/* ========================================================================= */}
       {inspectingProduct && (
         <div
@@ -1933,28 +1928,33 @@ export default function ProductsPage() {
             position: "fixed",
             inset: 0,
             zIndex: 9000,
-            backgroundColor: "rgba(15, 23, 42, 0.5)",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
             display: "flex",
-            justifyContent: "flex-end",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.5rem",
           }}
-          onClick={() => setInspectingProduct(null)}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              width: "100%",
-              maxWidth: "520px",
-              height: "100%",
+              width: "95vw",
+              maxWidth: "1000px",
+              maxHeight: "90vh",
               backgroundColor: "#FFFFFF",
-              boxShadow: "-10px 0 25px rgba(0, 0, 0, 0.15)",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #E2E8F0",
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
             }}
-            onClick={(e) => e.stopPropagation()}
           >
-            {/* Drawer Header */}
+            {/* Modal Header */}
             <div
               style={{
+                flexShrink: 0,
                 padding: "1.25rem 1.5rem",
                 borderBottom: "1px solid #E2E8F0",
                 display: "flex",
@@ -2124,68 +2124,88 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            {/* Drawer Footer */}
-            {isAdminOrManager && (
-              <div
+            {/* Modal Footer */}
+            <div
+              style={{
+                flexShrink: 0,
+                padding: "1rem 1.5rem",
+                borderTop: "1px solid #E2E8F0",
+                backgroundColor: "#F8FAFC",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setInspectingProduct(null)}
                 style={{
-                  padding: "1rem 1.5rem",
-                  borderTop: "1px solid #E2E8F0",
-                  backgroundColor: "#F8FAFC",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "10px",
+                  padding: "0.55rem 1.25rem",
+                  borderRadius: "8px",
+                  border: "1px solid #CBD5E1",
+                  backgroundColor: "#FFFFFF",
+                  color: "#475569",
+                  fontSize: "0.8125rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
                 }}
               >
-                <button
-                  onClick={() => {
-                    const p = inspectingProduct;
-                    setInspectingProduct(null);
-                    handleOpenEditModal(p);
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "0.55rem 1rem",
-                    borderRadius: "8px",
-                    border: "1px solid #CBD5E1",
-                    backgroundColor: "#FFFFFF",
-                    color: "#0F172A",
-                    fontSize: "0.8125rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  <Edit3 size={15} />
-                  <span>Edit Product</span>
-                </button>
+                Close
+              </button>
 
-                <button
-                  onClick={() => {
-                    const p = inspectingProduct;
-                    setInspectingProduct(null);
-                    setDeletingProduct(p);
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "0.55rem 1rem",
-                    borderRadius: "8px",
-                    border: "1px solid #FECDD3",
-                    backgroundColor: "#FEF2F2",
-                    color: "#DC2626",
-                    fontSize: "0.8125rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                  }}
-                >
-                  <Trash2 size={15} />
-                  <span>Archive</span>
-                </button>
-              </div>
-            )}
+              {isAdminOrManager && (
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <button
+                    onClick={() => {
+                      const p = inspectingProduct;
+                      setInspectingProduct(null);
+                      handleOpenEditModal(p);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "0.55rem 1rem",
+                      borderRadius: "8px",
+                      border: "1px solid #CBD5E1",
+                      backgroundColor: "#FFFFFF",
+                      color: "#0F172A",
+                      fontSize: "0.8125rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Edit3 size={15} />
+                    <span>Edit Product</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const p = inspectingProduct;
+                      setInspectingProduct(null);
+                      setDeletingProduct(p);
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "0.55rem 1rem",
+                      borderRadius: "8px",
+                      border: "1px solid #FECDD3",
+                      backgroundColor: "#FEF2F2",
+                      color: "#DC2626",
+                      fontSize: "0.8125rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <Trash2 size={15} />
+                    <span>Archive</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

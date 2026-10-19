@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar, { SidebarTab } from "@/components/Sidebar";
+import { getCleanCustomerName } from "@/lib/titleUtils";
 import {
   ordersApi,
   dealsApi,
@@ -133,6 +134,21 @@ export default function OrdersPage() {
       .catch(() => router.push("/login"));
   }, [router]);
 
+  // Global Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (isDrawerOpen) {
+          setIsDrawerOpen(false);
+        } else if (isCreateModalOpen) {
+          setIsCreateModalOpen(false);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDrawerOpen, isCreateModalOpen]);
+
   // Load orders
   const loadOrders = useCallback(async () => {
     try {
@@ -194,7 +210,7 @@ export default function OrdersPage() {
     if (id) {
       const matched = wonDeals.find((d) => d.id === id);
       if (matched) {
-        setCreateOrderTitle(`Order - ${matched.name}`);
+        setCreateOrderTitle(getCleanCustomerName(matched.customer, matched.name));
       }
     }
   };
@@ -790,11 +806,13 @@ export default function OrdersPage() {
                         {/* Title & Customer */}
                         <td style={{ padding: "14px 16px" }}>
                           <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#0F172A" }}>
-                            {ord.title}
+                            {getCleanCustomerName(ord.customer, ord.title)}
                           </div>
-                          <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
-                            {ord.customer?.name} {ord.customer?.company ? `• ${ord.customer.company}` : ""}
-                          </div>
+                          {ord.customer?.company && (
+                            <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
+                              {ord.customer.company}
+                            </div>
+                          )}
                         </td>
 
                         {/* Linked Deal / Quote / Lead */}
@@ -997,7 +1015,7 @@ export default function OrdersPage() {
         </main>
       </div>
 
-      {/* Slide-over Order Details Drawer */}
+      {/* Centered Order Details Modal */}
       {isDrawerOpen && (
         <div
           style={{
@@ -1005,33 +1023,36 @@ export default function OrdersPage() {
             inset: 0,
             zIndex: 1000,
             display: "flex",
-            justifyContent: "flex-end",
-            backgroundColor: "rgba(15, 23, 42, 0.4)",
-            backdropFilter: "blur(2px)",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            padding: "1.5rem",
           }}
-          onClick={() => setIsDrawerOpen(false)}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              width: "560px",
-              maxWidth: "100%",
-              height: "100%",
+              width: "95vw",
+              maxWidth: "1000px",
+              maxHeight: "90vh",
               backgroundColor: "#FFFFFF",
-              boxShadow: "-10px 0 25px rgba(0,0,0,0.1)",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #E2E8F0",
               display: "flex",
               flexDirection: "column",
-              animation: "slideInRight 0.2s ease-out",
+              overflow: "hidden",
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             {isDrawerLoading || !selectedOrder ? (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ padding: "60px 0", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <RefreshCw size={28} className="animate-spin" color="#0D9488" />
               </div>
             ) : (
               <>
-                {/* Drawer Header */}
-                <div style={{ padding: "20px 24px", borderBottom: "1px solid #E2E8F0" }}>
+                {/* Modal Header */}
+                <div style={{ flexShrink: 0, padding: "20px 24px", borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <span style={{ fontSize: "0.875rem", fontWeight: 800, color: "#0D9488", fontFamily: "monospace" }}>
@@ -1060,7 +1081,7 @@ export default function OrdersPage() {
                   </div>
 
                   <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "#0F172A", margin: "0 0 6px 0" }}>
-                    {selectedOrder.title}
+                    {getCleanCustomerName(selectedOrder.customer, selectedOrder.title)}
                   </h2>
 
                   <div style={{ fontSize: "0.8125rem", color: "#64748B" }}>
@@ -1534,15 +1555,16 @@ export default function OrdersPage() {
                   )}
                 </div>
 
-                {/* Drawer Footer */}
+                {/* Modal Footer */}
                 <div
                   style={{
+                    flexShrink: 0,
                     padding: "16px 24px",
                     borderTop: "1px solid #E2E8F0",
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    backgroundColor: "#FFFFFF",
+                    backgroundColor: "#F8FAFC",
                   }}
                 >
                   <button
@@ -1551,8 +1573,8 @@ export default function OrdersPage() {
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "6px",
-                      padding: "8px 12px",
-                      borderRadius: "6px",
+                      padding: "8px 14px",
+                      borderRadius: "8px",
                       border: "1px solid #FECACA",
                       backgroundColor: "#FEF2F2",
                       color: "#DC2626",
@@ -1568,8 +1590,8 @@ export default function OrdersPage() {
                   <button
                     onClick={() => setIsDrawerOpen(false)}
                     style={{
-                      padding: "8px 16px",
-                      borderRadius: "6px",
+                      padding: "8px 18px",
+                      borderRadius: "8px",
                       border: "1px solid #CBD5E1",
                       backgroundColor: "#FFFFFF",
                       color: "#475569",
@@ -1597,22 +1619,22 @@ export default function OrdersPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "rgba(15, 23, 42, 0.5)",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
             backdropFilter: "blur(4px)",
             padding: "16px",
           }}
-          onClick={() => setIsCreateModalOpen(false)}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              width: "500px",
-              maxWidth: "100%",
+              width: "100%",
+              maxWidth: "760px",
               backgroundColor: "#FFFFFF",
-              borderRadius: "12px",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #E2E8F0",
               overflow: "hidden",
             }}
-            onClick={(e) => e.stopPropagation()}
           >
             <div
               style={{
@@ -1658,7 +1680,7 @@ export default function OrdersPage() {
                   <option value="">-- Choose a Won Deal --</option>
                   {wonDeals.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.deal_number} • {d.name} ({formatCurrency(d.value, d.currency)})
+                      {d.deal_number} • {getCleanCustomerName(d.customer, d.name)} ({formatCurrency(d.value, d.currency)})
                     </option>
                   ))}
                 </select>

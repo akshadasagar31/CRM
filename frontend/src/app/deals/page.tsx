@@ -59,6 +59,7 @@ import {
   User,
 } from "@/lib/api";
 import Sidebar, { SidebarTab } from "@/components/Sidebar";
+import { getCleanCustomerName } from "@/lib/titleUtils";
 
 interface DealsPageProps {
   hideSidebar?: boolean;
@@ -204,6 +205,24 @@ export default function DealsPage({
 
     loadAllData();
   }, [hideSidebar, router]);
+
+  // Global Escape Key Listener for Modals
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (isDrawerOpen) {
+          setIsDrawerOpen(false);
+          setIsEditMode(false);
+        } else if (isNewDealModalOpen) {
+          setIsNewDealModalOpen(false);
+        } else if (isCustomizeStagesModalOpen) {
+          setIsCustomizeStagesModalOpen(false);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDrawerOpen, isNewDealModalOpen, isCustomizeStagesModalOpen]);
 
   // Load Pipelines, Customers, Deals
   const loadAllData = async () => {
@@ -1270,7 +1289,7 @@ export default function DealsPage({
                           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#FFFFFF")}
                         >
                           <td style={{ padding: "12px 16px" }}>
-                            <div style={{ fontWeight: 700, color: "#0F172A" }}>{deal.name}</div>
+                            <div style={{ fontWeight: 700, color: "#0F172A" }}>{getCleanCustomerName(deal.customer, deal.name)}</div>
                             <div style={{ fontSize: "0.75rem", color: "#64748B", display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
                               <span style={{ fontFamily: "monospace", fontWeight: 600 }}>#{deal.deal_number || deal.id}</span>
                               {deal.lead_number && (
@@ -1560,10 +1579,8 @@ export default function DealsPage({
                         </div>
                       ) : (
                         stageDeals.map((deal) => {
-                          const contactName =
-                            deal.customer?.name ||
-                            (deal.lead_number ? `Lead ${deal.lead_number}` : deal.name);
-                          const companyName = deal.customer?.company || deal.name;
+                          const contactName = getCleanCustomerName(deal.customer, deal.name, deal.lead_number ? `Lead ${deal.lead_number}` : undefined);
+                          const companyName = deal.customer?.company;
                           const isBeingDragged = draggedDealId === deal.id;
 
                           return (
@@ -1601,21 +1618,23 @@ export default function DealsPage({
                               </div>
 
                               {/* Secondary Subtitle: Company Name */}
-                              <div
-                                style={{
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: "6px",
-                                  fontSize: "0.75rem",
-                                  color: "#64748B",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                }}
-                              >
-                                <Building size={13} color="#94A3B8" style={{ flexShrink: 0 }} />
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{companyName}</span>
-                              </div>
+                              {companyName && (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "6px",
+                                    fontSize: "0.75rem",
+                                    color: "#64748B",
+                                    whiteSpace: "nowrap",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                  }}
+                                >
+                                  <Building size={13} color="#94A3B8" style={{ flexShrink: 0 }} />
+                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{companyName}</span>
+                                </div>
+                              )}
 
                               {/* Card Badges: Deal Number, Lead Badge, Deal Value */}
                               <div
@@ -1661,7 +1680,7 @@ export default function DealsPage({
       </div>
 
       {/* ========================================================================= */}
-      {/* DETAIL DRAWER: View Mode & Edit Mode with Full CRUD                       */}
+      {/* DETAIL MODAL: View Mode & Edit Mode with Full CRUD                         */}
       {/* ========================================================================= */}
       {isDrawerOpen && selectedDeal && (
         <div
@@ -1670,26 +1689,32 @@ export default function DealsPage({
             inset: 0,
             zIndex: 9000,
             display: "flex",
-            justifyContent: "flex-end",
-            backgroundColor: "rgba(15, 23, 42, 0.4)",
-            backdropFilter: "blur(2px)",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            padding: "1.5rem",
           }}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              width: "100%",
-              maxWidth: "580px",
+              width: "95vw",
+              maxWidth: "1000px",
               backgroundColor: "#FFFFFF",
-              height: "100%",
-              boxShadow: "-10px 0 30px rgba(0,0,0,0.15)",
+              maxHeight: "90vh",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
               display: "flex",
               flexDirection: "column",
-              borderLeft: "1px solid #E2E8F0",
+              borderRadius: "16px",
+              border: "1px solid #E2E8F0",
+              overflow: "hidden",
             }}
           >
-            {/* Drawer Header */}
+            {/* Modal Header */}
             <div
               style={{
+                flexShrink: 0,
                 padding: "16px 24px",
                 borderBottom: "1px solid #E2E8F0",
                 backgroundColor: "#F8FAFC",
@@ -1748,7 +1773,7 @@ export default function DealsPage({
                   )}
                 </div>
                 <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
-                  {selectedDeal.name}
+                  {getCleanCustomerName(selectedDeal.customer, selectedDeal.name, linkedLead?.name)}
                 </h2>
               </div>
 
@@ -2561,12 +2586,13 @@ export default function DealsPage({
               )}
             </div>
 
-            {/* Drawer Footer: Actions */}
+            {/* Modal Footer: Actions */}
             <div
               style={{
+                flexShrink: 0,
                 padding: "16px 24px",
                 borderTop: "1px solid #E2E8F0",
-                backgroundColor: "#FFFFFF",
+                backgroundColor: "#F8FAFC",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -2721,17 +2747,18 @@ export default function DealsPage({
             alignItems: "center",
             justifyContent: "center",
             padding: "16px",
-            backgroundColor: "rgba(15, 23, 42, 0.4)",
-            backdropFilter: "blur(2px)",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
           }}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
               width: "100%",
-              maxWidth: "520px",
+              maxWidth: "760px",
               backgroundColor: "#FFFFFF",
               borderRadius: "16px",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
               border: "1px solid #E2E8F0",
               overflow: "hidden",
             }}
@@ -2836,7 +2863,14 @@ export default function DealsPage({
                 {!isCreatingInlineCustomer ? (
                   <select
                     value={newDealCustomerId}
-                    onChange={(e) => setNewDealCustomerId(e.target.value ? Number(e.target.value) : "")}
+                    onChange={(e) => {
+                      const cid = e.target.value ? Number(e.target.value) : "";
+                      setNewDealCustomerId(cid);
+                      if (cid && !newDealName) {
+                        const sel = customers.find((c) => c.id === cid);
+                        if (sel) setNewDealName(sel.name);
+                      }
+                    }}
                     style={{
                       width: "100%",
                       padding: "8px 10px",
@@ -3115,17 +3149,18 @@ export default function DealsPage({
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: "rgba(15, 23, 42, 0.5)",
-            backdropFilter: "blur(3px)",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
             padding: "20px",
           }}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
               backgroundColor: "#FFFFFF",
               borderRadius: "16px",
               width: "100%",
-              maxWidth: "680px",
+              maxWidth: "760px",
               maxHeight: "90vh",
               display: "flex",
               flexDirection: "column",

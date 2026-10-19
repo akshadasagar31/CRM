@@ -377,6 +377,87 @@ func TestQuotationsModule(t *testing.T) {
 			t.Fatalf("Expected remaining balance to decrease after payment, but got %v", remBalAfter)
 		}
 		t.Logf("✓ Verified Invoice remaining_balance decreased to %v", remBalAfter)
+
+		// Verify Deal is STILL NOT "won" after partial payment
+		dealCode, dealRes := doJSON(t, client, "GET", fmt.Sprintf("%s/api/deals/%d", baseURL, dealID), nil, authHeaders)
+		if dealCode != http.StatusOK {
+			t.Fatalf("Failed to get deal after partial payment: %d", dealCode)
+		}
+		dealStatus := strings.ToLower(fmt.Sprintf("%v", dealRes["status"]))
+		if dealStatus == "won" {
+			t.Fatalf("Deal should not be Won after partial payment, got %s", dealStatus)
+		}
+		t.Logf("✓ Verified Deal status unchanged after partial payment: %s", dealStatus)
+
+		// Pay the remaining balance (4615.0) to achieve 100% full payment
+		fullPayRef := fmt.Sprintf("UTR-FULL-%d", time.Now().UnixNano()%100000000)
+		fullPayPayload := map[string]interface{}{
+			"invoice_id":       invoiceID,
+			"amount":           remBalAfter,
+			"payment_method":   "NEFT",
+			"reference_number": fullPayRef,
+			"notes":            "Final settlement payment",
+		}
+		fpCode, _ := doJSON(t, client, "POST", baseURL+"/api/payments", fullPayPayload, authHeaders)
+		if fpCode != http.StatusCreated && fpCode != http.StatusOK {
+			t.Fatalf("Failed to record final payment: %d", fpCode)
+		}
+
+		// Verify Invoice is now Paid with 0 remaining balance
+		invPaidCode, invPaidRes := doJSON(t, client, "GET", fmt.Sprintf("%s/api/invoices/%d", baseURL, invoiceID), nil, authHeaders)
+		if invPaidCode != http.StatusOK {
+			t.Fatalf("Failed to get invoice after full payment: %d", invPaidCode)
+		}
+		if invPaidRes["status"] != "Paid" {
+			t.Fatalf("Expected invoice status 'Paid', got %v", invPaidRes["status"])
+		}
+		if invPaidRes["remaining_balance"].(float64) > 0.01 {
+			t.Fatalf("Expected remaining_balance 0, got %v", invPaidRes["remaining_balance"])
+		}
+		t.Logf("✓ Verified Invoice is fully Paid with ₹0 balance")
+
+		// Verify linked Deal status AUTOMATICALLY changed to "won"
+		dealWonCode, dealWonRes := doJSON(t, client, "GET", fmt.Sprintf("%s/api/deals/%d", baseURL, dealID), nil, authHeaders)
+		if dealWonCode != http.StatusOK {
+			t.Fatalf("Failed to get deal after full payment: %d", dealWonCode)
+		}
+		newDealStatus := strings.ToLower(fmt.Sprintf("%v", dealWonRes["status"]))
+		if newDealStatus != "won" {
+			t.Fatalf("Expected deal status 'won' after full payment, got '%s'", newDealStatus)
+		}
+		stObj, _ := dealWonRes["stage"].(map[string]interface{})
+		if stObj != nil && stObj["is_won"] != true {
+			t.Fatalf("Expected deal stage is_won to be true, got %v", stObj["is_won"])
+		}
+		t.Logf("✓ Verified linked Deal %v status automatically changed to 'won' (Stage: %v, is_won: %v)",
+			dealWonRes["deal_number"], stObj["name"], stObj["is_won"])
+
+		// Verify timeline activity logged on Deal
+		actCode, actRes := doJSON(t, client, "GET", fmt.Sprintf("%s/api/deals/%d/activities", baseURL, dealID), nil, authHeaders)
+		if actCode == http.StatusOK {
+			activities, _ := actRes["items"].([]interface{})
+			foundWonAct := false
+			for _, a := range activities {
+				aMap, ok := a.(map[string]interface{})
+				if ok && strings.Contains(fmt.Sprintf("%v", aMap["title"]), "WON") {
+					foundWonAct = true
+					break
+				}
+			}
+			if !foundWonAct {
+				t.Fatalf("Expected 'Deal WON' timeline activity, found none in %d activities", len(activities))
+			}
+			t.Logf("✓ Verified Deal timeline activity recorded for full payment")
+		}
+
+		// Verify originating Lead status automatically synced to "Won"
+		leadCode, leadRes := doJSON(t, client, "GET", baseURL+"/api/leads/"+leadNum, nil, authHeaders)
+		if leadCode == http.StatusOK {
+			if leadRes["status"] != "Won" {
+				t.Fatalf("Expected originating lead status 'Won', got '%v'", leadRes["status"])
+			}
+			t.Logf("✓ Verified originating Lead %s status synced to 'Won'", leadNum)
+		}
 	})
 
 	// 10. Verify List Quotations filter

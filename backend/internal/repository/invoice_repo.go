@@ -1115,6 +1115,11 @@ func (r *InvoiceRepository) RecordPayment(ctx context.Context, id int, in models
 		}
 	}
 
+	// If invoice is fully paid, automatically update linked Deal to Won
+	if newStatus == "Paid" {
+		SyncDealOnInvoiceFullPaymentTx(ctx, tx, id, existing.InvoiceNumber, recordedByID)
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
@@ -1129,11 +1134,14 @@ func (r *InvoiceRepository) ChangeStatus(ctx context.Context, id int, status str
 		return nil, err
 	}
 
-	// If status changed to Paid, also sync linked order payment status
+	// If status changed to Paid, also sync linked order payment status and linked deal
 	if norm == "Paid" {
 		inv, _ := r.Get(ctx, id)
-		if inv != nil && inv.OrderID != nil && *inv.OrderID > 0 {
-			_, _ = r.db.Pool.Exec(ctx, "UPDATE orders SET payment_status = 'Paid', updated_at = NOW() WHERE id = $1", *inv.OrderID)
+		if inv != nil {
+			if inv.OrderID != nil && *inv.OrderID > 0 {
+				_, _ = r.db.Pool.Exec(ctx, "UPDATE orders SET payment_status = 'Paid', updated_at = NOW() WHERE id = $1", *inv.OrderID)
+			}
+			SyncDealOnInvoiceFullPaymentPool(ctx, r.db.Pool, id, inv.InvoiceNumber, userID)
 		}
 	}
 

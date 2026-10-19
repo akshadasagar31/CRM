@@ -1010,7 +1010,10 @@ func (r *OrderRepository) CreateFromWonDeal(ctx context.Context, dealID int, cur
 		`, dealID).Scan(&qtnID)
 	}
 
-	title := fmt.Sprintf("Order - %s", deal.Name)
+	title := deal.Name
+	if deal.Customer != nil && deal.Customer.Name != "" {
+		title = deal.Customer.Name
+	}
 	custID := deal.CustomerID
 	currency := deal.Currency
 	if currency == "" {
@@ -1126,10 +1129,15 @@ func (r *OrderRepository) CreateFromAcceptedQuotation(ctx context.Context, quota
 		return nil, fmt.Errorf("failed to fetch quotation %d: %w", quotationID, err)
 	}
 
-	// 3. Set Title directly to Quotation's Title
-	title := strings.TrimSpace(quot.Title)
+	title := ""
+	if quot.Customer != nil && quot.Customer.Name != "" {
+		title = quot.Customer.Name
+	}
 	if title == "" {
-		title = fmt.Sprintf("Order - Quotation %s", quot.QuotationNumber)
+		title = strings.TrimSpace(quot.Title)
+	}
+	if title == "" {
+		title = fmt.Sprintf("Order - %s", quot.QuotationNumber)
 	}
 
 	custID := quot.CustomerID

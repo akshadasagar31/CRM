@@ -785,7 +785,7 @@ func (db *DB) syncDefaultPipelineStagesAndBackfill(ctx context.Context) error {
 				}
 
 				if mappedStageID > 0 {
-					dealName := fmt.Sprintf("%s - Opportunity", ul.name)
+					dealName := ul.name
 					var newDealID int
 					errDeal := db.Pool.QueryRow(ctx, `
 						INSERT INTO deals (

@@ -56,6 +56,7 @@ import {
   Sparkles,
   PhoneCall,
   MessageCircle,
+  TrendingUp,
 } from "lucide-react";
 import {
   leadsApi,
@@ -91,8 +92,37 @@ type ViewType =
   | "unassigned"
   | "hot_leads"
   | "today_followups"
-  | "overdue_followups"
   | "trash";
+
+const DEFAULT_VISIBLE_COLUMNS: Record<string, boolean> = {
+  name: true,
+  phone: true,
+  email: true,
+  city: false,
+  status: true,
+  score: true,
+  owner: true,
+  source: true,
+  tags: true,
+  follow_up: true,
+  lead_age: true,
+  created_at: false,
+};
+
+const COLUMN_DEFINITIONS: { key: string; label: string }[] = [
+  { key: "name", label: "Lead Name" },
+  { key: "phone", label: "Phone / Contact" },
+  { key: "email", label: "Email" },
+  { key: "city", label: "City" },
+  { key: "status", label: "Status" },
+  { key: "score", label: "Lead Score" },
+  { key: "owner", label: "Owner" },
+  { key: "source", label: "Source" },
+  { key: "tags", label: "Tags" },
+  { key: "follow_up", label: "Next Follow-up" },
+  { key: "lead_age", label: "Age / Last Touch" },
+  { key: "created_at", label: "Created Date" },
+];
 
 export default function UniversalLeadsPage() {
   const router = useRouter();
@@ -141,22 +171,85 @@ export default function UniversalLeadsPage() {
   // Multi-Selection State for Bulk Actions
   const [selectedLeadNumbers, setSelectedLeadNumbers] = useState<Set<string>>(new Set());
 
-  // Configurable Column Visibility
+  // Configurable Column Visibility with Persistence
   const [isColumnChooserOpen, setIsColumnChooserOpen] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>({
-    name: true,
-    phone: true,
-    email: true,
-    status: true,
-    score: true,
-    owner: true,
-    source: true,
-    tags: true,
-    follow_up: true,
-    lead_age: true,
-    created_at: false,
-    city: false,
-  });
+  const columnChooserRef = useRef<HTMLDivElement>(null);
+  const columnChooserBtnRef = useRef<HTMLButtonElement>(null);
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(DEFAULT_VISIBLE_COLUMNS);
+
+  // Load saved column preferences from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("crm_leads_visible_columns");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed === "object" && parsed !== null) {
+          setVisibleColumns((prev) => ({ ...prev, ...parsed }));
+        }
+      }
+    } catch (e) {
+      console.warn("Could not load saved column preferences:", e);
+    }
+  }, []);
+
+  const handleToggleColumn = (colKey: string, checked: boolean) => {
+    setVisibleColumns((prev) => {
+      const updated = { ...prev, [colKey]: checked };
+      try {
+        localStorage.setItem("crm_leads_visible_columns", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const handleResetColumns = () => {
+    setVisibleColumns(DEFAULT_VISIBLE_COLUMNS);
+    try {
+      localStorage.setItem("crm_leads_visible_columns", JSON.stringify(DEFAULT_VISIBLE_COLUMNS));
+    } catch (e) {}
+  };
+
+  // Handle Columns dropdown click-outside, Escape key, and focus loss
+  useEffect(() => {
+    if (!isColumnChooserOpen) return;
+
+    const handlePointerDown = (e: MouseEvent) => {
+      if (
+        columnChooserRef.current &&
+        !columnChooserRef.current.contains(e.target as Node)
+      ) {
+        setIsColumnChooserOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsColumnChooserOpen(false);
+        columnChooserBtnRef.current?.focus();
+      }
+    };
+
+    const handleFocusOut = (e: FocusEvent) => {
+      if (
+        columnChooserRef.current &&
+        e.relatedTarget &&
+        !columnChooserRef.current.contains(e.relatedTarget as Node)
+      ) {
+        setIsColumnChooserOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    const node = columnChooserRef.current;
+    node?.addEventListener("focusout", handleFocusOut);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      node?.removeEventListener("focusout", handleFocusOut);
+    };
+  }, [isColumnChooserOpen]);
 
   // UI Toast & Error Modals
   const [toastMessage, setToastMessage] = useState<{
@@ -193,6 +286,27 @@ export default function UniversalLeadsPage() {
 
   // Active Lead for Details / Edit
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
+
+  // Handle Lead Detail Modal Escape key dismissal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (isDetailsDrawerOpen) {
+          setIsDetailsDrawerOpen(false);
+        } else if (isAddModalOpen) {
+          setIsAddModalOpen(false);
+        } else if (isEditModalOpen) {
+          setIsEditModalOpen(false);
+        } else if (isBulkModalOpen) {
+          setIsBulkModalOpen(false);
+        } else if (isImportModalOpen) {
+          setIsImportModalOpen(false);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDetailsDrawerOpen, isAddModalOpen, isEditModalOpen, isBulkModalOpen, isImportModalOpen]);
   const [activeNotes, setActiveNotes] = useState<LeadNote[]>([]);
   const [activeActivities, setActiveActivities] = useState<LeadActivity[]>([]);
   const [activeFollowUps, setActiveFollowUps] = useState<FollowUpItem[]>([]);
@@ -1219,24 +1333,23 @@ export default function UniversalLeadsPage() {
       />
 
       {/* Main Screen Content Wrapper */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, width: "100%" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, width: "100%", height: "100vh", overflow: "hidden" }}>
         {/* Streamlined Topbar */}
         <header
           style={{
             borderBottom: "1px solid #E2E8F0",
             backgroundColor: "#FFFFFF",
-            position: "sticky",
-            top: 0,
-            zIndex: 40,
-            padding: "0.75rem 1.75rem",
+            padding: "0.5rem 1.25rem",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
+            flexShrink: 0,
+            zIndex: 40,
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
             <h1 style={{ fontSize: "1.125rem", fontWeight: 800, color: "#0F172A", margin: 0 }}>
-              {activeTab === "leads" && "Leads Management"}
+              {activeTab === "leads" && "Universal Lead Management"}
               {activeTab === "deals" && "Deals & Sales Pipeline"}
               {activeTab === "follow-ups" && "Scheduled Follow-ups"}
               {activeTab === "api-keys" && "API Keys & Integrations"}
@@ -1245,7 +1358,7 @@ export default function UniversalLeadsPage() {
             </h1>
             <span
               style={{
-                padding: "0.125rem 0.5rem",
+                padding: "0.1rem 0.45rem",
                 borderRadius: "999px",
                 fontSize: "0.6875rem",
                 fontWeight: 700,
@@ -1253,18 +1366,82 @@ export default function UniversalLeadsPage() {
                 color: "#0F766E",
               }}
             >
-              Universal CRM
+              {activeTab === "leads" ? `${leads.length} Leads` : "Universal CRM"}
             </span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            {activeTab === "leads" && (
+              <>
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    padding: "0.35rem 0.65rem",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#334155",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Upload size={13} /> Import
+                </button>
+
+                <button
+                  onClick={handleExportCsv}
+                  disabled={isExporting}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    padding: "0.35rem 0.65rem",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: isExporting ? "#94A3B8" : "#334155",
+                    cursor: isExporting ? "not-allowed" : "pointer",
+                    opacity: isExporting ? 0.7 : 1,
+                  }}
+                >
+                  <Download size={13} /> {isExporting ? "..." : "Export"}
+                </button>
+
+                <button
+                  onClick={handleOpenAddModal}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    padding: "0.38rem 0.8rem",
+                    borderRadius: "6px",
+                    border: "none",
+                    backgroundColor: "#0D9488",
+                    color: "#FFFFFF",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: "0 2px 4px rgba(13, 148, 136, 0.2)",
+                  }}
+                >
+                  <Plus size={14} /> Create Lead
+                </button>
+              </>
+            )}
+
             <button
               onClick={() => handleSelectTab("profile")}
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.25rem 0.5rem",
+                gap: "0.4rem",
+                padding: "0.2rem 0.45rem",
                 borderRadius: "6px",
                 border: "1px solid #E2E8F0",
                 backgroundColor: "#F8FAFC",
@@ -1273,8 +1450,8 @@ export default function UniversalLeadsPage() {
             >
               <div
                 style={{
-                  width: "28px",
-                  height: "28px",
+                  width: "24px",
+                  height: "24px",
                   borderRadius: "50%",
                   backgroundColor: "#E0E7FF",
                   color: "#4338CA",
@@ -1282,12 +1459,12 @@ export default function UniversalLeadsPage() {
                   alignItems: "center",
                   justifyContent: "center",
                   fontWeight: 700,
-                  fontSize: "0.75rem",
+                  fontSize: "0.6875rem",
                 }}
               >
                 {user?.name ? user.name[0].toUpperCase() : "U"}
               </div>
-              <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#334155" }}>
+              <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "#334155" }}>
                 {user?.name || "User"}
               </span>
             </button>
@@ -1295,93 +1472,20 @@ export default function UniversalLeadsPage() {
         </header>
 
         {/* Tab 1: Leads View (Keep-Alive) */}
-        <div style={{ display: activeTab === "leads" ? "block" : "none", width: "100%" }}>
+        <div style={{ display: activeTab === "leads" ? "flex" : "none", flexDirection: "column", width: "100%", flex: 1, minHeight: 0, overflow: "hidden" }}>
 
       {/* Main Container */}
-      <div style={{ maxWidth: "1600px", margin: "0 auto", padding: "1.5rem", width: "100%", flex: 1, display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        {/* Top Actions Bar */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem" }}>
-          <div>
-            <h1 style={{ fontSize: "1.625rem", fontWeight: 800, color: "#0F172A", margin: 0, letterSpacing: "-0.02em" }}>
-              Universal Lead Management
-            </h1>
-            <p style={{ fontSize: "0.875rem", color: "#64748B", margin: "0.25rem 0 0 0" }}>
-              Industry-flexible lead tracking with custom fields, duplicate control, follow-ups, and automated timeline.
-            </p>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", flexWrap: "wrap" }}>
-            <button
-              onClick={() => setIsImportModalOpen(true)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.375rem",
-                padding: "0.5rem 0.875rem",
-                borderRadius: "6px",
-                border: "1px solid #CBD5E1",
-                backgroundColor: "#FFFFFF",
-                fontSize: "0.8125rem",
-                fontWeight: 600,
-                color: "#334155",
-                cursor: "pointer",
-              }}
-            >
-              <Upload size={15} /> Import CSV
-            </button>
-
-            <button
-              onClick={handleExportCsv}
-              disabled={isExporting}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.375rem",
-                padding: "0.5rem 0.875rem",
-                borderRadius: "6px",
-                border: "1px solid #CBD5E1",
-                backgroundColor: "#FFFFFF",
-                fontSize: "0.8125rem",
-                fontWeight: 600,
-                color: isExporting ? "#94A3B8" : "#334155",
-                cursor: isExporting ? "not-allowed" : "pointer",
-                opacity: isExporting ? 0.7 : 1,
-              }}
-            >
-              <Download size={15} /> {isExporting ? "Exporting..." : "Export CSV"}
-            </button>
-
-            <button
-              onClick={handleOpenAddModal}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "0.375rem",
-                padding: "0.5rem 1rem",
-                borderRadius: "6px",
-                border: "none",
-                backgroundColor: "#0D9488",
-                color: "#FFFFFF",
-                fontSize: "0.8125rem",
-                fontWeight: 700,
-                cursor: "pointer",
-                boxShadow: "0 2px 4px rgba(13, 148, 136, 0.2)",
-              }}
-            >
-              <Plus size={16} /> Create Lead
-            </button>
-          </div>
-        </div>
+      <div style={{ padding: "0.55rem 1.25rem", width: "100%", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: "0.45rem", overflow: "hidden" }}>
 
         {/* Saved Views Pills */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", overflowX: "auto", paddingBottom: "0.25rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", overflowX: "auto", flexShrink: 0 }}>
           {[
             { id: "all", label: "All Leads", count: viewCounts.all },
             { id: "my_leads", label: "My Leads", count: viewCounts.my_leads },
             { id: "unassigned", label: "Unassigned", count: viewCounts.unassigned },
             { id: "hot_leads", label: "Hot Leads 🔥", count: viewCounts.hot_leads },
             { id: "today_followups", label: "Today's Follow-ups", count: viewCounts.today_followups },
-            { id: "overdue_followups", label: "Overdue Follow-ups ⚠️", count: viewCounts.overdue_followups },
+            { id: "overdue_followups", label: "Overdue ⚠️", count: viewCounts.overdue_followups },
             { id: "trash", label: "Trash / Deleted", count: viewCounts.trash },
           ].map((viewItem) => {
             const isActive = currentView === viewItem.id;
@@ -1394,25 +1498,25 @@ export default function UniversalLeadsPage() {
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: "0.375rem",
-                  padding: "0.4rem 0.875rem",
+                  gap: "0.3rem",
+                  padding: "0.25rem 0.6rem",
                   borderRadius: "999px",
-                  fontSize: "0.8125rem",
+                  fontSize: "0.75rem",
                   fontWeight: isActive ? 700 : 500,
                   border: isActive ? "1px solid #0D9488" : "1px solid #E2E8F0",
                   backgroundColor: isActive ? "#0D9488" : "#FFFFFF",
                   color: isActive ? "#FFFFFF" : "#475569",
                   cursor: "pointer",
                   whiteSpace: "nowrap",
-                  transition: "all 0.15s ease",
+                  transition: "all 0.12s ease",
                 }}
               >
                 <span>{viewItem.label}</span>
                 <span
                   style={{
-                    fontSize: "0.6875rem",
+                    fontSize: "0.625rem",
                     fontWeight: 700,
-                    padding: "0.1rem 0.4rem",
+                    padding: "0.05rem 0.35rem",
                     borderRadius: "999px",
                     backgroundColor: isActive ? "rgba(255,255,255,0.25)" : "#F1F5F9",
                     color: isActive ? "#FFFFFF" : "#64748B",
@@ -1429,28 +1533,29 @@ export default function UniversalLeadsPage() {
         <div
           style={{
             backgroundColor: "#FFFFFF",
-            borderRadius: "10px",
+            borderRadius: "8px",
             border: "1px solid #E2E8F0",
-            padding: "0.875rem 1.25rem",
+            padding: "0.45rem 0.75rem",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             flexWrap: "wrap",
-            gap: "0.75rem",
+            gap: "0.5rem",
+            flexShrink: 0,
           }}
         >
           {/* Search Box */}
-          <div style={{ position: "relative", minWidth: "280px", flex: "1 1 280px" }}>
-            <Search size={16} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }} />
+          <div style={{ position: "relative", minWidth: "220px", flex: "1 1 220px", maxWidth: "360px" }}>
+            <Search size={14} style={{ position: "absolute", left: "9px", top: "50%", transform: "translateY(-50%)", color: "#94A3B8" }} />
             <input
               type="text"
-              placeholder="Search by name, phone, email, custom fields..."
+              placeholder="Search by name, phone, email, fields..."
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
               style={{
                 width: "100%",
-                padding: "0.45rem 0.5rem 0.45rem 2.1rem",
-                fontSize: "0.8125rem",
+                padding: "0.35rem 0.5rem 0.35rem 1.85rem",
+                fontSize: "0.75rem",
                 borderRadius: "6px",
                 border: "1px solid #CBD5E1",
                 outline: "none",
@@ -1459,7 +1564,7 @@ export default function UniversalLeadsPage() {
           </div>
 
           {/* Filter Dropdowns */}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", flexWrap: "wrap" }}>
             {/* Status Filter */}
             <select
               value={selectedStatus}
@@ -1467,8 +1572,8 @@ export default function UniversalLeadsPage() {
                 setSelectedStatus(e.target.value);
               }}
               style={{
-                padding: "0.45rem 0.625rem",
-                fontSize: "0.8125rem",
+                padding: "0.35rem 0.5rem",
+                fontSize: "0.75rem",
                 borderRadius: "6px",
                 border: "1px solid #CBD5E1",
                 backgroundColor: "#FFFFFF",
@@ -1491,8 +1596,8 @@ export default function UniversalLeadsPage() {
                 setSelectedSource(e.target.value);
               }}
               style={{
-                padding: "0.45rem 0.625rem",
-                fontSize: "0.8125rem",
+                padding: "0.35rem 0.5rem",
+                fontSize: "0.75rem",
                 borderRadius: "6px",
                 border: "1px solid #CBD5E1",
                 backgroundColor: "#FFFFFF",
@@ -1515,8 +1620,8 @@ export default function UniversalLeadsPage() {
                 setSelectedOwnerId(e.target.value);
               }}
               style={{
-                padding: "0.45rem 0.625rem",
-                fontSize: "0.8125rem",
+                padding: "0.35rem 0.5rem",
+                fontSize: "0.75rem",
                 borderRadius: "6px",
                 border: "1px solid #CBD5E1",
                 backgroundColor: "#FFFFFF",
@@ -1540,8 +1645,8 @@ export default function UniversalLeadsPage() {
                 setSelectedFollowUpFilter(e.target.value);
               }}
               style={{
-                padding: "0.45rem 0.625rem",
-                fontSize: "0.8125rem",
+                padding: "0.35rem 0.5rem",
+                fontSize: "0.75rem",
                 borderRadius: "6px",
                 border: "1px solid #CBD5E1",
                 backgroundColor: "#FFFFFF",
@@ -1557,24 +1662,27 @@ export default function UniversalLeadsPage() {
             </select>
 
             {/* Column Chooser Button */}
-            <div style={{ position: "relative" }}>
+            <div ref={columnChooserRef} style={{ position: "relative" }}>
               <button
+                ref={columnChooserBtnRef}
                 onClick={() => setIsColumnChooserOpen(!isColumnChooserOpen)}
+                aria-expanded={isColumnChooserOpen}
+                aria-haspopup="true"
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: "0.25rem",
-                  padding: "0.45rem 0.75rem",
+                  padding: "0.35rem 0.55rem",
                   borderRadius: "6px",
-                  border: "1px solid #CBD5E1",
-                  backgroundColor: "#FFFFFF",
-                  fontSize: "0.8125rem",
+                  border: isColumnChooserOpen ? "1px solid #0D9488" : "1px solid #CBD5E1",
+                  backgroundColor: isColumnChooserOpen ? "#F0FDFA" : "#FFFFFF",
+                  fontSize: "0.75rem",
                   fontWeight: 600,
-                  color: "#475569",
+                  color: isColumnChooserOpen ? "#0D9488" : "#475569",
                   cursor: "pointer",
                 }}
               >
-                <Sliders size={14} /> Columns
+                <Sliders size={13} /> Columns
               </button>
 
               {isColumnChooserOpen && (
@@ -1589,23 +1697,67 @@ export default function UniversalLeadsPage() {
                     borderRadius: "8px",
                     boxShadow: "0 10px 25px rgba(0,0,0,0.1)",
                     padding: "0.75rem",
-                    width: "200px",
+                    width: "220px",
                     zIndex: 50,
                   }}
                 >
-                  <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", marginBottom: "0.5rem", textTransform: "uppercase" }}>
-                    Toggle Columns
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      color: "#64748B",
+                      marginBottom: "0.5rem",
+                      paddingBottom: "0.4rem",
+                      borderBottom: "1px solid #F1F5F9",
+                    }}
+                  >
+                    <span style={{ textTransform: "uppercase" }}>Toggle Columns</span>
+                    <button
+                      type="button"
+                      onClick={handleResetColumns}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        padding: 0,
+                        color: "#0D9488",
+                        fontSize: "0.6875rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      Reset Defaults
+                    </button>
                   </div>
-                  {Object.keys(visibleColumns).map((colKey) => (
-                    <label key={colKey} style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.8125rem", padding: "0.25rem 0", cursor: "pointer" }}>
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns[colKey]}
-                        onChange={(e) => setVisibleColumns({ ...visibleColumns, [colKey]: e.target.checked })}
-                      />
-                      <span style={{ textTransform: "capitalize" }}>{colKey.replace("_", " ")}</span>
-                    </label>
-                  ))}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", maxHeight: "280px", overflowY: "auto" }}>
+                    {COLUMN_DEFINITIONS.map(({ key, label }) => (
+                      <label
+                        key={key}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.35rem",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          userSelect: "none",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#F8FAFC")}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={visibleColumns[key] ?? false}
+                          onChange={(e) => handleToggleColumn(key, e.target.checked)}
+                          style={{ cursor: "pointer", accentColor: "#0D9488" }}
+                        />
+                        <span style={{ color: "#334155" }}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1615,7 +1767,7 @@ export default function UniversalLeadsPage() {
               onClick={() => fetchLeads()}
               title="Refresh leads list"
               style={{
-                padding: "0.45rem",
+                padding: "0.35rem 0.45rem",
                 borderRadius: "6px",
                 border: "1px solid #CBD5E1",
                 backgroundColor: "#FFFFFF",
@@ -1623,7 +1775,7 @@ export default function UniversalLeadsPage() {
                 color: "#64748B",
               }}
             >
-              <RefreshCw size={15} />
+              <RefreshCw size={13} />
             </button>
           </div>
         </div>
@@ -1635,29 +1787,30 @@ export default function UniversalLeadsPage() {
               backgroundColor: "#0F172A",
               color: "#FFFFFF",
               borderRadius: "8px",
-              padding: "0.75rem 1.25rem",
+              padding: "0.45rem 0.85rem",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
               animation: "slideDown 0.15s ease-out",
+              flexShrink: 0,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <CheckSquare size={18} color="#0D9488" />
-              <span style={{ fontSize: "0.875rem", fontWeight: 700 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <CheckSquare size={16} color="#0D9488" />
+              <span style={{ fontSize: "0.8125rem", fontWeight: 700 }}>
                 {selectedLeadNumbers.size} leads selected
               </span>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <button
                 onClick={() => {
                   setBulkActionType("update_status");
                   setIsBulkModalOpen(true);
                 }}
                 style={{
-                  padding: "0.35rem 0.75rem",
+                  padding: "0.3rem 0.65rem",
                   borderRadius: "4px",
                   border: "1px solid rgba(255,255,255,0.2)",
                   backgroundColor: "rgba(255,255,255,0.1)",
@@ -1676,7 +1829,7 @@ export default function UniversalLeadsPage() {
                   setIsBulkModalOpen(true);
                 }}
                 style={{
-                  padding: "0.35rem 0.75rem",
+                  padding: "0.3rem 0.65rem",
                   borderRadius: "4px",
                   border: "1px solid rgba(255,255,255,0.2)",
                   backgroundColor: "rgba(255,255,255,0.1)",
@@ -1695,7 +1848,7 @@ export default function UniversalLeadsPage() {
                   setIsBulkModalOpen(true);
                 }}
                 style={{
-                  padding: "0.35rem 0.75rem",
+                  padding: "0.3rem 0.65rem",
                   borderRadius: "4px",
                   border: "1px solid rgba(255,255,255,0.2)",
                   backgroundColor: "rgba(255,255,255,0.1)",
@@ -1714,7 +1867,7 @@ export default function UniversalLeadsPage() {
                   setIsBulkModalOpen(true);
                 }}
                 style={{
-                  padding: "0.35rem 0.75rem",
+                  padding: "0.3rem 0.65rem",
                   borderRadius: "4px",
                   border: "1px solid #EF4444",
                   backgroundColor: "rgba(239, 68, 68, 0.2)",
@@ -1730,7 +1883,7 @@ export default function UniversalLeadsPage() {
               <button
                 onClick={() => setSelectedLeadNumbers(new Set())}
                 style={{
-                  padding: "0.35rem 0.5rem",
+                  padding: "0.3rem 0.45rem",
                   borderRadius: "4px",
                   border: "none",
                   backgroundColor: "transparent",
@@ -1745,29 +1898,29 @@ export default function UniversalLeadsPage() {
           </div>
         )}
 
-        {/* Leads Table Card */}
-        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        {/* Leads Table Card with Sticky Header & Internal Scroll */}
+        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "8px", border: "1px solid #E2E8F0", overflow: "hidden", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
           {isLoading ? (
-            <div style={{ padding: "4rem", textAlign: "center", color: "#64748B" }}>
-              <RefreshCw size={24} className="animate-spin" style={{ margin: "0 auto 1rem auto" }} />
+            <div style={{ padding: "3rem", textAlign: "center", color: "#64748B" }}>
+              <RefreshCw size={22} className="animate-spin" style={{ margin: "0 auto 0.75rem auto" }} />
               <div>Fetching leads...</div>
             </div>
           ) : leads.length === 0 ? (
-            <div style={{ padding: "4rem", textAlign: "center", color: "#64748B" }}>
-              <Users size={40} style={{ color: "#CBD5E1", margin: "0 auto 1rem auto" }} />
-              <div style={{ fontSize: "1rem", fontWeight: 700, color: "#1E293B", marginBottom: "0.375rem" }}>
+            <div style={{ padding: "3rem", textAlign: "center", color: "#64748B" }}>
+              <Users size={36} style={{ color: "#CBD5E1", margin: "0 auto 0.75rem auto" }} />
+              <div style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#1E293B", marginBottom: "0.25rem" }}>
                 No leads found
               </div>
-              <div style={{ fontSize: "0.875rem", maxWidth: "400px", margin: "0 auto" }}>
+              <div style={{ fontSize: "0.8125rem", maxWidth: "380px", margin: "0 auto" }}>
                 Try adjusting your search criteria or create a new lead to start tracking.
               </div>
             </div>
           ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8125rem", textAlign: "left" }}>
-                <thead style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569" }}>
+            <div style={{ overflowY: "auto", overflowX: "auto", flex: 1, minHeight: 0 }}>
+              <table style={{ width: "100%", minWidth: "max-content", borderCollapse: "collapse", fontSize: "0.75rem", textAlign: "left" }}>
+                <thead style={{ position: "sticky", top: 0, zIndex: 10, backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569" }}>
                   <tr>
-                    <th style={{ padding: "0.75rem 1rem", width: "40px" }}>
+                    <th style={{ padding: "0.45rem 0.65rem", width: "36px", textAlign: "center" }}>
                       <input
                         type="checkbox"
                         checked={leads.length > 0 && selectedLeadNumbers.size === leads.length}
@@ -1780,21 +1933,47 @@ export default function UniversalLeadsPage() {
                           setSortField("name");
                           setSortOrder(sortOrder === "asc" ? "desc" : "asc");
                         }}
-                        style={{ padding: "0.75rem 1rem", fontWeight: 700, cursor: "pointer" }}
+                        style={{ padding: "0.45rem 0.75rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
                       >
-                        Lead Name
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                          <span>Lead Name</span>
+                          {sortField === "name" && (
+                            <span style={{ fontSize: "0.625rem", color: "#0D9488" }}>
+                              {sortOrder === "asc" ? "▲" : "▼"}
+                            </span>
+                          )}
+                        </div>
                       </th>
                     )}
-                    {visibleColumns.phone && <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Phone / Contact</th>}
-                    {visibleColumns.email && <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Email</th>}
-                    {visibleColumns.status && <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Status</th>}
-                    {visibleColumns.score && <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Score</th>}
-                    {visibleColumns.owner && <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Owner</th>}
-                    {visibleColumns.source && <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Source</th>}
-                    {visibleColumns.tags && <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Tags</th>}
-                    {visibleColumns.follow_up && <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Next Follow-up</th>}
-                    {visibleColumns.lead_age && <th style={{ padding: "0.75rem 1rem", fontWeight: 700 }}>Age / Last Touch</th>}
-                    <th style={{ padding: "0.75rem 1rem", textAlign: "right", fontWeight: 700 }}>Actions</th>
+                    {visibleColumns.phone && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>Phone / Contact</th>}
+                    {visibleColumns.email && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>Email</th>}
+                    {visibleColumns.city && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>City</th>}
+                    {visibleColumns.status && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>Status</th>}
+                    {visibleColumns.score && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, textAlign: "center", whiteSpace: "nowrap" }}>Score</th>}
+                    {visibleColumns.owner && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>Owner</th>}
+                    {visibleColumns.source && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>Source</th>}
+                    {visibleColumns.tags && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>Tags</th>}
+                    {visibleColumns.follow_up && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>Next Follow-up</th>}
+                    {visibleColumns.lead_age && <th style={{ padding: "0.45rem 0.75rem", fontWeight: 700, whiteSpace: "nowrap" }}>Age / Last Touch</th>}
+                    {visibleColumns.created_at && (
+                      <th
+                        onClick={() => {
+                          setSortField("created_at");
+                          setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                        }}
+                        style={{ padding: "0.45rem 0.75rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+                      >
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+                          <span>Created Date</span>
+                          {sortField === "created_at" && (
+                            <span style={{ fontSize: "0.625rem", color: "#0D9488" }}>
+                              {sortOrder === "asc" ? "▲" : "▼"}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                    )}
+                    <th style={{ padding: "0.45rem 0.75rem", textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1817,7 +1996,7 @@ export default function UniversalLeadsPage() {
                           transition: "background-color 0.1s ease",
                         }}
                       >
-                        <td style={{ padding: "0.75rem 1rem" }}>
+                        <td style={{ padding: "0.38rem 0.65rem", width: "36px", textAlign: "center" }}>
                           <input
                             type="checkbox"
                             checked={isSelected}
@@ -1826,74 +2005,102 @@ export default function UniversalLeadsPage() {
                         </td>
 
                         {visibleColumns.name && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
-                            <div style={{ display: "flex", flexDirection: "column" }}>
-                              <button
-                                onClick={() => handleOpenDetails(lead, "overview")}
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  padding: 0,
-                                  font: "inherit",
-                                  textAlign: "left",
-                                  fontWeight: 700,
-                                  color: "#0F172A",
-                                  cursor: "pointer",
-                                  textDecoration: "underline",
-                                }}
-                              >
-                                {lead.name}
-                              </button>
-                              <span style={{ fontSize: "0.6875rem", color: "#64748B", fontFamily: "monospace" }}>
-                                #{lead.number}
-                              </span>
-                            </div>
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
+                            <button
+                              onClick={() => handleOpenDetails(lead, "overview")}
+                              title={lead.name}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                padding: 0,
+                                font: "inherit",
+                                textAlign: "left",
+                                fontWeight: 700,
+                                color: "#0F172A",
+                                cursor: "pointer",
+                                fontSize: "0.8125rem",
+                                display: "inline-block",
+                                maxWidth: "220px",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                verticalAlign: "middle",
+                              }}
+                            >
+                              {lead.name}
+                            </button>
                           </td>
                         )}
 
                         {visibleColumns.phone && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                              <span style={{ fontFamily: "monospace", color: "#334155", fontWeight: 600 }}>
-                                {lead.phone || lead.number}
-                              </span>
-                              <a
-                                href={`tel:${lead.phone || lead.number}`}
-                                title="Call lead"
-                                style={{ color: "#0D9488", display: "inline-flex" }}
-                              >
-                                <PhoneCall size={13} />
-                              </a>
-                              <a
-                                href={`https://wa.me/${(lead.phone || lead.number).replace(/[^0-9]/g, "")}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                title="WhatsApp chat"
-                                style={{ color: "#16A34A", display: "inline-flex" }}
-                              >
-                                <MessageCircle size={13} />
-                              </a>
-                            </div>
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
+                            {lead.phone ? (
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                                <span style={{ fontFamily: "monospace", color: "#334155", fontWeight: 600 }}>
+                                  {lead.phone}
+                                </span>
+                                <a
+                                  href={`tel:${lead.phone}`}
+                                  title={`Call ${lead.name}`}
+                                  style={{ color: "#0D9488", display: "inline-flex" }}
+                                >
+                                  <PhoneCall size={12} />
+                                </a>
+                                <a
+                                  href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, "")}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title={`WhatsApp ${lead.name}`}
+                                  style={{ color: "#16A34A", display: "inline-flex" }}
+                                >
+                                  <MessageCircle size={12} />
+                                </a>
+                              </div>
+                            ) : (
+                              <span style={{ color: "#94A3B8" }}>—</span>
+                            )}
                           </td>
                         )}
 
                         {visibleColumns.email && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
-                            <a
-                              href={`mailto:${lead.email}`}
-                              style={{ color: "#2563EB", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}
-                            >
-                              <Mail size={13} /> {lead.email}
-                            </a>
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
+                            {lead.email ? (
+                              <a
+                                href={`mailto:${lead.email}`}
+                                title={lead.email}
+                                style={{
+                                  color: "#2563EB",
+                                  textDecoration: "none",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  maxWidth: "200px",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                <Mail size={12} style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{lead.email}</span>
+                              </a>
+                            ) : (
+                              <span style={{ color: "#94A3B8" }}>—</span>
+                            )}
+                          </td>
+                        )}
+
+                        {visibleColumns.city && (
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
+                            <span style={{ color: lead.city ? "#334155" : "#94A3B8", fontWeight: 500 }}>
+                              {lead.city || "—"}
+                            </span>
                           </td>
                         )}
 
                         {visibleColumns.status && (
-                          <td style={{ padding: "0.75rem 1rem", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
                             <span
                               style={{
                                 display: "inline-block",
-                                padding: "0.2rem 0.55rem",
+                                padding: "0.15rem 0.5rem",
                                 borderRadius: "999px",
                                 fontSize: "0.6875rem",
                                 fontWeight: 700,
@@ -1908,13 +2115,13 @@ export default function UniversalLeadsPage() {
                         )}
 
                         {visibleColumns.score && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
+                          <td style={{ padding: "0.38rem 0.75rem", textAlign: "center", whiteSpace: "nowrap" }}>
                             {renderScoreBadge(lead.score)}
                           </td>
                         )}
 
                         {visibleColumns.owner && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
                             <span style={{ color: lead.owner ? "#334155" : "#94A3B8", fontWeight: 500 }}>
                               {lead.owner ? lead.owner.name : "Unassigned"}
                             </span>
@@ -1922,15 +2129,16 @@ export default function UniversalLeadsPage() {
                         )}
 
                         {visibleColumns.source && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
                             <span
                               style={{
                                 fontSize: "0.6875rem",
                                 fontWeight: 600,
                                 color: "#475569",
                                 backgroundColor: "#F1F5F9",
-                                padding: "0.15rem 0.45rem",
+                                padding: "0.1rem 0.4rem",
                                 borderRadius: "4px",
+                                border: "1px solid #E2E8F0",
                               }}
                             >
                               {lead.source}
@@ -1939,24 +2147,42 @@ export default function UniversalLeadsPage() {
                         )}
 
                         {visibleColumns.tags && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.2rem", flexWrap: "nowrap" }}>
                               {lead.tags && lead.tags.length > 0 ? (
-                                lead.tags.slice(0, 3).map((tg, i) => (
-                                  <span
-                                    key={i}
-                                    style={{
-                                      fontSize: "0.6875rem",
-                                      backgroundColor: "#EEF2FF",
-                                      color: "#4F46E5",
-                                      padding: "0.1rem 0.35rem",
-                                      borderRadius: "4px",
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    {tg}
-                                  </span>
-                                ))
+                                <>
+                                  {lead.tags.slice(0, 2).map((tg, i) => (
+                                    <span
+                                      key={i}
+                                      style={{
+                                        fontSize: "0.625rem",
+                                        backgroundColor: "#EEF2FF",
+                                        color: "#4F46E5",
+                                        padding: "0.08rem 0.3rem",
+                                        borderRadius: "3px",
+                                        fontWeight: 600,
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {tg}
+                                    </span>
+                                  ))}
+                                  {lead.tags.length > 2 && (
+                                    <span
+                                      title={lead.tags.slice(2).join(", ")}
+                                      style={{
+                                        fontSize: "0.625rem",
+                                        backgroundColor: "#F1F5F9",
+                                        color: "#64748B",
+                                        padding: "0.08rem 0.3rem",
+                                        borderRadius: "3px",
+                                        fontWeight: 700,
+                                      }}
+                                    >
+                                      +{lead.tags.length - 2}
+                                    </span>
+                                  )}
+                                </>
                               ) : (
                                 <span style={{ color: "#CBD5E1" }}>—</span>
                               )}
@@ -1965,10 +2191,10 @@ export default function UniversalLeadsPage() {
                         )}
 
                         {visibleColumns.follow_up && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
                             {lead.follow_up_date ? (
-                              <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                                <Clock size={13} color={isOverdue ? "#DC2626" : "#64748B"} />
+                              <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                <Clock size={12} color={isOverdue ? "#DC2626" : "#64748B"} style={{ flexShrink: 0 }} />
                                 <span
                                   style={{
                                     fontSize: "0.75rem",
@@ -1984,10 +2210,10 @@ export default function UniversalLeadsPage() {
                                 {isOverdue && (
                                   <span
                                     style={{
-                                      fontSize: "0.625rem",
+                                      fontSize: "0.5625rem",
                                       backgroundColor: "#FEE2E2",
                                       color: "#B91C1C",
-                                      padding: "0.05rem 0.3rem",
+                                      padding: "0.05rem 0.25rem",
                                       borderRadius: "3px",
                                       fontWeight: 800,
                                     }}
@@ -1997,34 +2223,48 @@ export default function UniversalLeadsPage() {
                                 )}
                               </div>
                             ) : (
-                              <span style={{ color: "#94A3B8" }}>No follow-up</span>
+                              <span style={{ color: "#94A3B8" }}>—</span>
                             )}
                           </td>
                         )}
 
                         {visibleColumns.lead_age && (
-                          <td style={{ padding: "0.75rem 1rem" }}>
-                            <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                              {lead.lead_age_days === 0 ? "Created today" : `${lead.lead_age_days}d ago`}
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
+                            <div style={{ fontSize: "0.6875rem", color: "#64748B" }}>
+                              {lead.lead_age_days === 0 ? "Today" : `${lead.lead_age_days}d ago`}
                             </div>
                           </td>
                         )}
 
+                        {visibleColumns.created_at && (
+                          <td style={{ padding: "0.38rem 0.75rem", whiteSpace: "nowrap" }}>
+                            <span style={{ color: "#475569", fontSize: "0.75rem" }}>
+                              {lead.created_at
+                                ? new Date(lead.created_at).toLocaleDateString(undefined, {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })
+                                : "—"}
+                            </span>
+                          </td>
+                        )}
+
                         {/* Row Action Buttons */}
-                        <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.375rem" }}>
+                        <td style={{ padding: "0.38rem 0.75rem", textAlign: "right", whiteSpace: "nowrap" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "0.25rem" }}>
                             <button
                               onClick={() => handleOpenDetails(lead, "overview")}
                               title="View full details"
                               style={{
                                 background: "none",
                                 border: "none",
-                                padding: "0.25rem",
+                                padding: "0.2rem",
                                 cursor: "pointer",
                                 color: "#0D9488",
                               }}
                             >
-                              <Eye size={16} />
+                              <Eye size={14} />
                             </button>
 
                             <button
@@ -2033,12 +2273,12 @@ export default function UniversalLeadsPage() {
                               style={{
                                 background: "none",
                                 border: "none",
-                                padding: "0.25rem",
+                                padding: "0.2rem",
                                 cursor: "pointer",
                                 color: "#475569",
                               }}
                             >
-                              <Edit3 size={16} />
+                              <Edit3 size={14} />
                             </button>
 
                             <button
@@ -2047,27 +2287,27 @@ export default function UniversalLeadsPage() {
                               style={{
                                 background: "none",
                                 border: "none",
-                                padding: "0.25rem",
+                                padding: "0.2rem",
                                 cursor: "pointer",
-                                color: "#4F46E5",
+                                color: "#0284C7",
                               }}
                             >
-                              <Briefcase size={16} />
+                              <Sparkles size={14} />
                             </button>
 
                             {currentView === "trash" ? (
                               <button
                                 onClick={() => handleRestoreLead(lead)}
-                                title="Restore from trash"
+                                title="Restore lead"
                                 style={{
                                   background: "none",
                                   border: "none",
-                                  padding: "0.25rem",
+                                  padding: "0.2rem",
                                   cursor: "pointer",
                                   color: "#059669",
                                 }}
                               >
-                                <RotateCcw size={16} />
+                                <RotateCcw size={14} />
                               </button>
                             ) : (
                               <button
@@ -2076,12 +2316,12 @@ export default function UniversalLeadsPage() {
                                 style={{
                                   background: "none",
                                   border: "none",
-                                  padding: "0.25rem",
+                                  padding: "0.2rem",
                                   cursor: "pointer",
                                   color: "#DC2626",
                                 }}
                               >
-                                <Trash2 size={16} />
+                                <Trash2 size={14} />
                               </button>
                             )}
                           </div>
@@ -2097,14 +2337,15 @@ export default function UniversalLeadsPage() {
           {/* Table Footer with Total Count */}
           <div
             style={{
-              padding: "0.75rem 1.25rem",
+              padding: "0.4rem 0.85rem",
               borderTop: "1px solid #E2E8F0",
               backgroundColor: "#F8FAFC",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              fontSize: "0.8125rem",
+              fontSize: "0.75rem",
               color: "#64748B",
+              flexShrink: 0,
             }}
           >
             <div>
@@ -2146,34 +2387,39 @@ export default function UniversalLeadsPage() {
       {/* End of Main Screen Content Wrapper */}
 
       {/* ========================================================================= */}
-      {/* LEAD DETAIL DRAWER / SLIDE-OVER                                           */}
+      {/* LEAD DETAIL MODAL                                                         */}
       {/* ========================================================================= */}
       {isDetailsDrawerOpen && activeLead && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            backgroundColor: "rgba(15, 23, 42, 0.5)",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
             zIndex: 9000,
             display: "flex",
-            justifyContent: "flex-end",
-            backdropFilter: "blur(2px)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1.5rem",
+            backdropFilter: "blur(4px)",
           }}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
               width: "100%",
-              maxWidth: "680px",
+              maxWidth: "1000px",
+              maxHeight: "90vh",
               backgroundColor: "#FFFFFF",
-              height: "100%",
+              borderRadius: "16px",
               display: "flex",
               flexDirection: "column",
-              boxShadow: "-10px 0 30px rgba(0,0,0,0.15)",
-              overflowY: "auto",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              overflow: "hidden",
+              border: "1px solid #E2E8F0",
             }}
           >
-            {/* Drawer Header */}
-            <div style={{ padding: "1.5rem", borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
+            {/* Modal Fixed Header */}
+            <div style={{ flexShrink: 0, padding: "16px 24px", borderBottom: "1px solid #E2E8F0", backgroundColor: "#F8FAFC" }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "0.75rem" }}>
                 <div>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
@@ -2448,8 +2694,8 @@ export default function UniversalLeadsPage() {
               </div>
             </div>
 
-            {/* Drawer Body Content */}
-            <div style={{ padding: "1.5rem", flex: 1 }}>
+            {/* Modal Body Content (Scrollable) */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
               {detailsTab === "overview" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
                   {/* Lead requirement callout */}
@@ -2788,6 +3034,75 @@ export default function UniversalLeadsPage() {
                 </div>
               )}
             </div>
+
+            {/* Modal Fixed Footer */}
+            <div
+              style={{
+                flexShrink: 0,
+                padding: "14px 24px",
+                borderTop: "1px solid #E2E8F0",
+                backgroundColor: "#F8FAFC",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+              }}
+            >
+              <button
+                onClick={() => setIsDetailsDrawerOpen(false)}
+                style={{
+                  padding: "0.45rem 1rem",
+                  borderRadius: "6px",
+                  border: "1px solid #CBD5E1",
+                  backgroundColor: "#FFFFFF",
+                  color: "#475569",
+                  fontSize: "0.8125rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  onClick={() => handleOpenEditModal(activeLead)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.375rem",
+                    padding: "0.45rem 1rem",
+                    borderRadius: "6px",
+                    border: "1px solid #CBD5E1",
+                    backgroundColor: "#FFFFFF",
+                    color: "#334155",
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  <Edit3 size={14} /> Edit Lead
+                </button>
+                <button
+                  onClick={() => openConvertLeadModal(activeLead)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.375rem",
+                    padding: "0.45rem 1rem",
+                    borderRadius: "6px",
+                    backgroundColor: "#0D9488",
+                    color: "#FFFFFF",
+                    fontSize: "0.8125rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    border: "none",
+                  }}
+                >
+                  <TrendingUp size={14} /> Convert to Pipeline Deal
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2806,19 +3121,21 @@ export default function UniversalLeadsPage() {
             alignItems: "center",
             justifyContent: "center",
             padding: "1rem",
-            backdropFilter: "blur(2px)",
+            backdropFilter: "blur(4px)",
           }}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
               backgroundColor: "#FFFFFF",
-              borderRadius: "12px",
+              borderRadius: "16px",
               padding: "1.75rem",
-              maxWidth: "680px",
+              maxWidth: "760px",
               width: "100%",
               maxHeight: "90vh",
               overflowY: "auto",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #E2E8F0",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
@@ -2840,7 +3157,7 @@ export default function UniversalLeadsPage() {
                   <input
                     type="text"
                     required
-                    placeholder="+1-555-0192"
+                    placeholder="+91-9876543210"
                     value={formData.number}
                     onChange={(e) => setFormData({ ...formData, number: e.target.value, phone: e.target.value })}
                     style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -2854,7 +3171,7 @@ export default function UniversalLeadsPage() {
                   <input
                     type="text"
                     required
-                    placeholder="Morgan Freeman"
+                    placeholder="Rahul Sharma"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -2870,7 +3187,7 @@ export default function UniversalLeadsPage() {
                   <input
                     type="email"
                     required
-                    placeholder="morgan@enterprise.com"
+                    placeholder="rahul.sharma@gmail.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -2884,7 +3201,7 @@ export default function UniversalLeadsPage() {
                   <input
                     type="text"
                     required
-                    placeholder="New York"
+                    placeholder="Pune"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                     style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -2899,7 +3216,7 @@ export default function UniversalLeadsPage() {
                 <textarea
                   required
                   rows={2}
-                  placeholder="Details of client requirements or project specifications..."
+                  placeholder="e.g., Need 20 laptops for our office"
                   value={formData.requirement}
                   onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
                   style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -2981,7 +3298,7 @@ export default function UniversalLeadsPage() {
                   </label>
                   <input
                     type="text"
-                    placeholder="Hot, VIP, Enterprise"
+                    placeholder="Hot, VIP, Corporate"
                     value={formData.tagsText}
                     onChange={(e) => setFormData({ ...formData, tagsText: e.target.value })}
                     style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -3106,19 +3423,21 @@ export default function UniversalLeadsPage() {
             alignItems: "center",
             justifyContent: "center",
             padding: "1rem",
-            backdropFilter: "blur(2px)",
+            backdropFilter: "blur(4px)",
           }}
         >
           <div
+            onClick={(e) => e.stopPropagation()}
             style={{
               backgroundColor: "#FFFFFF",
-              borderRadius: "12px",
+              borderRadius: "16px",
               padding: "1.75rem",
-              maxWidth: "680px",
+              maxWidth: "760px",
               width: "100%",
               maxHeight: "90vh",
               overflowY: "auto",
-              boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              border: "1px solid #E2E8F0",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.25rem" }}>
@@ -3139,6 +3458,7 @@ export default function UniversalLeadsPage() {
                   <input
                     type="text"
                     required
+                    placeholder="Rahul Sharma"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -3152,6 +3472,7 @@ export default function UniversalLeadsPage() {
                   <input
                     type="email"
                     required
+                    placeholder="rahul.sharma@gmail.com"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -3166,6 +3487,7 @@ export default function UniversalLeadsPage() {
                   </label>
                   <input
                     type="text"
+                    placeholder="+91-9876543210"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -3179,6 +3501,7 @@ export default function UniversalLeadsPage() {
                   <input
                     type="text"
                     required
+                    placeholder="Pune"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                     style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -3193,6 +3516,7 @@ export default function UniversalLeadsPage() {
                 <textarea
                   required
                   rows={2}
+                  placeholder="e.g., Need 20 laptops for our office"
                   value={formData.requirement}
                   onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
                   style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
@@ -4420,28 +4744,28 @@ export default function UniversalLeadsPage() {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
                   <input
                     type="text"
-                    placeholder="Customer Name"
+                    placeholder="Rahul Sharma"
                     value={convCustomerName}
                     onChange={(e) => setConvCustomerName(e.target.value)}
                     style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
                   />
                   <input
                     type="text"
-                    placeholder="Company"
+                    placeholder="ABC Technologies Pvt. Ltd."
                     value={convCustomerCompany}
                     onChange={(e) => setConvCustomerCompany(e.target.value)}
                     style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
                   />
                   <input
                     type="email"
-                    placeholder="Email"
+                    placeholder="rahul.sharma@gmail.com"
                     value={convCustomerEmail}
                     onChange={(e) => setConvCustomerEmail(e.target.value)}
                     style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
                   />
                   <input
                     type="tel"
-                    placeholder="Phone"
+                    placeholder="+91-9876543210"
                     value={convCustomerPhone}
                     onChange={(e) => setConvCustomerPhone(e.target.value)}
                     style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}

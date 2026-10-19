@@ -17,6 +17,7 @@ import {
   CompanyProfile,
   User,
 } from "@/lib/api";
+import { getCleanCustomerName } from "@/lib/titleUtils";
 import {
   Search,
   Plus,
@@ -230,6 +231,16 @@ export default function PaymentsPage() {
     setIsDetailsDrawerOpen(false);
     setSelectedPaymentForDrawer(null);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isDetailsDrawerOpen) {
+        handleClosePaymentDrawer();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isDetailsDrawerOpen]);
 
   // Void / Delete Payment State
   const [paymentToVoid, setPaymentToVoid] = useState<PaymentLedgerItem | null>(null);
@@ -1853,9 +1864,9 @@ export default function PaymentsPage() {
 
                           {/* Title / Customer */}
                           <td style={{ padding: "14px 16px" }}>
-                            <div style={{ fontWeight: 600, color: "#1E293B" }}>{ord.title}</div>
+                            <div style={{ fontWeight: 600, color: "#1E293B" }}>{getCleanCustomerName(ord.customer, ord.title)}</div>
                             <div style={{ fontSize: "0.75rem", color: "#64748B" }}>
-                              Customer: {ord.customer?.name || ord.customer?.company || "—"}
+                              {ord.customer?.company ? `Company: ${ord.customer.company}` : (ord.customer?.name ? `Customer: ${ord.customer.name}` : "—")}
                             </div>
                           </td>
 
@@ -2706,7 +2717,8 @@ export default function PaymentsPage() {
         </div>
       )}
       {/* ========================================================================= */}
-      {/* PAYMENT DETAILS SLIDE-OVER DRAWER                                         */}
+      {/* ========================================================================= */}
+      {/* PAYMENT / RECEIPT DETAILS CENTERED MODAL                                  */}
       {/* ========================================================================= */}
       {isDetailsDrawerOpen && selectedPaymentForDrawer && (
         <div
@@ -2715,34 +2727,39 @@ export default function PaymentsPage() {
             inset: 0,
             zIndex: 9000,
             display: "flex",
-            justifyContent: "flex-end",
-            backgroundColor: "rgba(15, 23, 42, 0.4)",
-            backdropFilter: "blur(2px)",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "rgba(15, 23, 42, 0.6)",
+            backdropFilter: "blur(4px)",
+            padding: "1.5rem",
+            animation: "fadeIn 0.2s ease-out",
           }}
-          onClick={handleClosePaymentDrawer}
         >
           <div
             style={{
               width: "100%",
-              maxWidth: "540px",
+              maxWidth: "1000px",
+              maxHeight: "90vh",
               backgroundColor: "#FFFFFF",
-              height: "100%",
-              boxShadow: "-10px 0 30px rgba(0,0,0,0.15)",
+              borderRadius: "16px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
               display: "flex",
               flexDirection: "column",
-              borderLeft: "1px solid #E2E8F0",
+              overflow: "hidden",
+              border: "1px solid #E2E8F0",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Drawer Header */}
+            {/* Modal Header */}
             <div
               style={{
-                padding: "20px 24px",
+                padding: "16px 24px",
                 borderBottom: "1px solid #E2E8F0",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 backgroundColor: "#F8FAFC",
+                flexShrink: 0,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -2756,46 +2773,75 @@ export default function PaymentsPage() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
                   <Receipt size={22} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 800, color: "#0F172A" }}>
-                    PAY-{String(selectedPaymentForDrawer.id).padStart(5, "0")}
-                  </h3>
-                  <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
-                    Payment Details & Complete Sales Lineage
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                    <span
+                      style={{
+                        fontSize: "0.8125rem",
+                        fontWeight: 800,
+                        color: "#0F766E",
+                        backgroundColor: "#CCFBF1",
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                      }}
+                    >
+                      PAY-{String(selectedPaymentForDrawer.id).padStart(5, "0")}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.6875rem",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        backgroundColor: "#DCFCE7",
+                        color: "#15803D",
+                        border: "1px solid #BBF7D0",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      Received
+                    </span>
                   </div>
+                  <h3 style={{ margin: 0, fontSize: "1.125rem", fontWeight: 800, color: "#0F172A" }}>
+                    {selectedPaymentForDrawer.customer_name}
+                  </h3>
                 </div>
               </div>
-              <button
-                onClick={handleClosePaymentDrawer}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#94A3B8",
-                  cursor: "pointer",
-                  padding: "6px",
-                  borderRadius: "6px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <X size={20} />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  onClick={handleClosePaymentDrawer}
+                  title="Close modal (Esc)"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#64748B",
+                    cursor: "pointer",
+                    padding: "6px",
+                    borderRadius: "6px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
-            {/* Drawer Scrollable Content */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+            {/* Modal Scrollable Content */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "24px", display: "flex", flexDirection: "column", gap: "18px" }}>
               {/* Highlight Amount Card */}
               <div
                 style={{
                   backgroundColor: "#F0FDFA",
                   borderRadius: "12px",
                   border: "1px solid #99F6E4",
-                  padding: "20px",
+                  padding: "18px 24px",
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
@@ -2805,10 +2851,10 @@ export default function PaymentsPage() {
                   <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0D9488", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                     Total Amount Received
                   </div>
-                  <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0F766E", marginTop: "4px" }}>
+                  <div style={{ fontSize: "1.75rem", fontWeight: 800, color: "#0F766E", marginTop: "2px" }}>
                     {formatINR(selectedPaymentForDrawer.amount)}
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "4px" }}>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
                     Paid on {new Date(selectedPaymentForDrawer.payment_date).toLocaleDateString("en-IN", {
                       day: "2-digit",
                       month: "long",
@@ -2820,7 +2866,7 @@ export default function PaymentsPage() {
                 </div>
                 <span
                   style={{
-                    padding: "6px 14px",
+                    padding: "6px 16px",
                     borderRadius: "999px",
                     fontSize: "0.8125rem",
                     fontWeight: 700,
@@ -2833,194 +2879,89 @@ export default function PaymentsPage() {
                 </span>
               </div>
 
-              {/* Transaction & Reference Details */}
-              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
-                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "12px" }}>
-                  Transaction Reference & Recording
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                  <div>
-                    <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Reference / UTR / Cheque</div>
-                    <div style={{ fontSize: "0.875rem", fontWeight: 700, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      {selectedPaymentForDrawer.reference_number ? (
-                        <>
-                          <span style={{ fontFamily: "monospace" }}>{selectedPaymentForDrawer.reference_number}</span>
-                          <button
-                            onClick={() => handleCopyRef(selectedPaymentForDrawer.reference_number!)}
-                            title="Copy"
-                            style={{ background: "none", border: "none", cursor: "pointer", color: "#0D9488", padding: "2px" }}
-                          >
-                            <Copy size={13} />
-                          </button>
-                        </>
-                      ) : (
-                        <span style={{ color: "#94A3B8" }}>— None provided —</span>
-                      )}
+              {/* 2-Column Overview Grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: "16px", alignItems: "start" }}>
+                {/* Left Column: Transaction Details, Customer, Notes */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {/* Customer Information */}
+                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
+                    <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "6px" }}>
+                      Customer & Payer
+                    </div>
+                    <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A" }}>
+                      {selectedPaymentForDrawer.customer_name}
                     </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Recorded By</div>
-                    <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <UserIcon size={14} color="#64748B" />
-                      <span>{selectedPaymentForDrawer.recorder?.name || selectedPaymentForDrawer.recorded_by || "System Admin"}</span>
+
+                  {/* Transaction & Reference Details */}
+                  <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
+                    <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "12px" }}>
+                      Transaction Reference & Recording
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                      <div>
+                        <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Reference / UTR / Cheque</div>
+                        <div style={{ fontSize: "0.875rem", fontWeight: 700, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "6px" }}>
+                          {selectedPaymentForDrawer.reference_number ? (
+                            <>
+                              <span style={{ fontFamily: "monospace" }}>{selectedPaymentForDrawer.reference_number}</span>
+                              <button
+                                onClick={() => handleCopyRef(selectedPaymentForDrawer.reference_number!)}
+                                title="Copy"
+                                style={{ background: "none", border: "none", cursor: "pointer", color: "#0D9488", padding: "2px" }}
+                              >
+                                <Copy size={13} />
+                              </button>
+                            </>
+                          ) : (
+                            <span style={{ color: "#94A3B8" }}>— None provided —</span>
+                          )}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "0.75rem", color: "#64748B" }}>Recorded By</div>
+                        <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#0F172A", marginTop: "2px", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <UserIcon size={14} color="#64748B" />
+                          <span>{selectedPaymentForDrawer.recorder?.name || selectedPaymentForDrawer.recorded_by || "System Admin"}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Customer Information */}
-              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
-                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "8px" }}>
-                  Customer
-                </div>
-                <div style={{ fontSize: "1rem", fontWeight: 700, color: "#0F172A" }}>
-                  {selectedPaymentForDrawer.customer_name}
-                </div>
-              </div>
-
-              {/* Complete Sales Lineage Tracking */}
-              <div style={{ backgroundColor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
-                <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "12px" }}>
-                  Connected Sales Lineage
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {/* Linked Invoice */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-                    <div>
-                      <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>LINKED INVOICE</div>
-                      <div style={{ fontWeight: 700, color: "#2563EB", fontSize: "0.875rem" }}>
-                        {selectedPaymentForDrawer.invoice_number}
+                  {/* Payment Notes */}
+                  {selectedPaymentForDrawer.notes && (
+                    <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
+                      <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "6px" }}>
+                        Payment Remarks / Notes
+                      </div>
+                      <div style={{ fontSize: "0.875rem", color: "#334155", lineHeight: 1.5, backgroundColor: "#F8FAFC", padding: "10px", borderRadius: "6px", border: "1px solid #E2E8F0" }}>
+                        {selectedPaymentForDrawer.notes}
                       </div>
                     </div>
-                    <button
-                      onClick={() => router.push(`/invoices?search=${encodeURIComponent(selectedPaymentForDrawer.invoice_number)}`)}
-                      style={{
-                        padding: "5px 10px",
-                        backgroundColor: "#EFF6FF",
-                        border: "1px solid #BFDBFE",
-                        borderRadius: "6px",
-                        color: "#1D4ED8",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <span>View Invoice</span>
-                      <ExternalLink size={12} />
-                    </button>
+                  )}
+                </div>
+
+                {/* Right Column: Complete Sales Lineage Tracking */}
+                <div style={{ backgroundColor: "#F8FAFC", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
+                  <div style={{ fontSize: "0.6875rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Layers size={13} color="#0D9488" />
+                    Connected Sales Lineage
                   </div>
-
-                  {/* Linked Order */}
-                  {selectedPaymentForDrawer.order_number && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {/* Linked Invoice */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
                       <div>
-                        <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>LINKED ORDER</div>
-                        <div style={{ fontWeight: 700, color: "#7E22CE", fontSize: "0.875rem" }}>
-                          {selectedPaymentForDrawer.order_number}
+                        <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>LINKED INVOICE</div>
+                        <div style={{ fontWeight: 700, color: "#2563EB", fontSize: "0.875rem" }}>
+                          {selectedPaymentForDrawer.invoice_number}
                         </div>
                       </div>
                       <button
-                        onClick={() => router.push(`/orders?search=${encodeURIComponent(selectedPaymentForDrawer.order_number!)}`)}
-                        style={{
-                          padding: "5px 10px",
-                          backgroundColor: "#FAF5FF",
-                          border: "1px solid #E9D5FF",
-                          borderRadius: "6px",
-                          color: "#7E22CE",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <span>View Order</span>
-                        <ExternalLink size={12} />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Origin Quotation */}
-                  {selectedPaymentForDrawer.quotation_number && (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-                      <div>
-                        <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>ACCEPTED QUOTATION</div>
-                        <div style={{ fontWeight: 700, color: "#92400E", fontSize: "0.875rem" }}>
-                          {selectedPaymentForDrawer.quotation_number}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => router.push(`/quotations?search=${encodeURIComponent(selectedPaymentForDrawer.quotation_number!)}`)}
-                        style={{
-                          padding: "5px 10px",
-                          backgroundColor: "#FEF3C7",
-                          border: "1px solid #FDE68A",
-                          borderRadius: "6px",
-                          color: "#92400E",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <span>View Quote</span>
-                        <ExternalLink size={12} />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Origin Deal */}
-                  {selectedPaymentForDrawer.deal_number && (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-                      <div>
-                        <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>ORIGIN DEAL</div>
-                        <div style={{ fontWeight: 700, color: "#15803D", fontSize: "0.875rem" }}>
-                          {selectedPaymentForDrawer.deal_number}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => router.push(`/deals?search=${encodeURIComponent(selectedPaymentForDrawer.deal_number!)}`)}
-                        style={{
-                          padding: "5px 10px",
-                          backgroundColor: "#F0FDF4",
-                          border: "1px solid #DCFCE7",
-                          borderRadius: "6px",
-                          color: "#15803D",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <span>View Deal</span>
-                        <ExternalLink size={12} />
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Origin Lead */}
-                  {selectedPaymentForDrawer.lead_number && (
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
-                      <div>
-                        <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>ORIGIN LEAD</div>
-                        <div style={{ fontWeight: 700, color: "#1D4ED8", fontSize: "0.875rem" }}>
-                          #{selectedPaymentForDrawer.lead_number}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => router.push(`/leads?search=${encodeURIComponent(selectedPaymentForDrawer.lead_number!)}`)}
+                        onClick={() => router.push(`/invoices?search=${encodeURIComponent(selectedPaymentForDrawer.invoice_number)}`)}
                         style={{
                           padding: "5px 10px",
                           backgroundColor: "#EFF6FF",
-                          border: "1px solid #DBEAFE",
+                          border: "1px solid #BFDBFE",
                           borderRadius: "6px",
                           color: "#1D4ED8",
                           fontSize: "0.75rem",
@@ -3031,55 +2972,169 @@ export default function PaymentsPage() {
                           gap: "4px",
                         }}
                       >
-                        <span>View Lead</span>
+                        <span>View Invoice</span>
                         <ExternalLink size={12} />
                       </button>
                     </div>
-                  )}
+
+                    {/* Linked Order */}
+                    {selectedPaymentForDrawer.order_number && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                        <div>
+                          <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>LINKED ORDER</div>
+                          <div style={{ fontWeight: 700, color: "#7E22CE", fontSize: "0.875rem" }}>
+                            {selectedPaymentForDrawer.order_number}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => router.push(`/orders?search=${encodeURIComponent(selectedPaymentForDrawer.order_number!)}`)}
+                          style={{
+                            padding: "5px 10px",
+                            backgroundColor: "#FAF5FF",
+                            border: "1px solid #E9D5FF",
+                            borderRadius: "6px",
+                            color: "#7E22CE",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <span>View Order</span>
+                          <ExternalLink size={12} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Origin Quotation */}
+                    {selectedPaymentForDrawer.quotation_number && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                        <div>
+                          <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>ACCEPTED QUOTATION</div>
+                          <div style={{ fontWeight: 700, color: "#92400E", fontSize: "0.875rem" }}>
+                            {selectedPaymentForDrawer.quotation_number}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => router.push(`/quotations?search=${encodeURIComponent(selectedPaymentForDrawer.quotation_number!)}`)}
+                          style={{
+                            padding: "5px 10px",
+                            backgroundColor: "#FEF3C7",
+                            border: "1px solid #FDE68A",
+                            borderRadius: "6px",
+                            color: "#92400E",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <span>View Quote</span>
+                          <ExternalLink size={12} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Origin Deal */}
+                    {selectedPaymentForDrawer.deal_number && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                        <div>
+                          <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>ORIGIN DEAL</div>
+                          <div style={{ fontWeight: 700, color: "#15803D", fontSize: "0.875rem" }}>
+                            {selectedPaymentForDrawer.deal_number}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => router.push(`/deals?search=${encodeURIComponent(selectedPaymentForDrawer.deal_number!)}`)}
+                          style={{
+                            padding: "5px 10px",
+                            backgroundColor: "#F0FDF4",
+                            border: "1px solid #DCFCE7",
+                            borderRadius: "6px",
+                            color: "#15803D",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <span>View Deal</span>
+                          <ExternalLink size={12} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Origin Lead */}
+                    {selectedPaymentForDrawer.lead_number && (
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#FFFFFF", padding: "10px 14px", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+                        <div>
+                          <div style={{ fontSize: "0.6875rem", color: "#64748B", fontWeight: 600 }}>ORIGIN LEAD</div>
+                          <div style={{ fontWeight: 700, color: "#1D4ED8", fontSize: "0.875rem" }}>
+                            #{selectedPaymentForDrawer.lead_number}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => router.push(`/leads?search=${encodeURIComponent(selectedPaymentForDrawer.lead_number!)}`)}
+                          style={{
+                            padding: "5px 10px",
+                            backgroundColor: "#EFF6FF",
+                            border: "1px solid #DBEAFE",
+                            borderRadius: "6px",
+                            color: "#1D4ED8",
+                            fontSize: "0.75rem",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "4px",
+                          }}
+                        >
+                          <span>View Lead</span>
+                          <ExternalLink size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              {/* Payment Notes */}
-              {selectedPaymentForDrawer.notes && (
-                <div style={{ backgroundColor: "#FFFFFF", borderRadius: "10px", border: "1px solid #E2E8F0", padding: "16px" }}>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#64748B", textTransform: "uppercase", marginBottom: "6px" }}>
-                    Payment Remarks / Notes
-                  </div>
-                  <div style={{ fontSize: "0.875rem", color: "#334155", lineHeight: 1.5 }}>
-                    {selectedPaymentForDrawer.notes}
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Drawer Footer Actions */}
+            {/* Modal Footer Actions */}
             <div
               style={{
-                padding: "16px 24px",
+                padding: "14px 24px",
                 borderTop: "1px solid #E2E8F0",
                 backgroundColor: "#F8FAFC",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
                 gap: "10px",
+                flexShrink: 0,
               }}
             >
               <button
                 type="button"
                 onClick={handleClosePaymentDrawer}
                 style={{
-                  padding: "9px 18px",
+                  padding: "8px 16px",
                   borderRadius: "8px",
                   border: "1px solid #CBD5E1",
                   backgroundColor: "#FFFFFF",
                   color: "#475569",
                   fontWeight: 600,
-                  fontSize: "0.875rem",
+                  fontSize: "0.8125rem",
                   cursor: "pointer",
                 }}
               >
-                Close Drawer
+                Close
               </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -3087,13 +3142,13 @@ export default function PaymentsPage() {
                   setIsReceiptModalOpen(true);
                 }}
                 style={{
-                  padding: "9px 18px",
+                  padding: "8px 16px",
                   borderRadius: "8px",
                   border: "none",
                   backgroundColor: "#0D9488",
                   color: "#FFFFFF",
                   fontWeight: 700,
-                  fontSize: "0.875rem",
+                  fontSize: "0.8125rem",
                   cursor: "pointer",
                   display: "inline-flex",
                   alignItems: "center",

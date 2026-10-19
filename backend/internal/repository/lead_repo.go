@@ -432,8 +432,12 @@ func (r *LeadRepository) GetByNumber(ctx context.Context, number string) (*model
 	var lead models.Lead
 	query := `
 		SELECT number, name, email, phone, requirement, source, city, status,
-		       owner_id, score, lost_reason, tags, follow_up_date, follow_up_type,
-		       follow_up_notes, follow_up_completed, last_activity_at, deleted_at,
+		       owner_id, score, lost_reason, tags,
+		       COALESCE((SELECT due_date FROM follow_ups WHERE lead_number = leads.number ORDER BY due_date DESC, id DESC LIMIT 1), follow_up_date) as follow_up_date,
+		       COALESCE((SELECT follow_up_type FROM follow_ups WHERE lead_number = leads.number ORDER BY due_date DESC, id DESC LIMIT 1), follow_up_type) as follow_up_type,
+		       COALESCE((SELECT notes FROM follow_ups WHERE lead_number = leads.number ORDER BY due_date DESC, id DESC LIMIT 1), follow_up_notes) as follow_up_notes,
+		       COALESCE((SELECT completed FROM follow_ups WHERE lead_number = leads.number ORDER BY due_date DESC, id DESC LIMIT 1), follow_up_completed) as follow_up_completed,
+		       last_activity_at, deleted_at,
 		       workspace_id, created_by_id, created_at, updated_at
 		FROM leads
 		WHERE number = $1
@@ -496,9 +500,35 @@ func (r *LeadRepository) List(ctx context.Context, f ListFilter) (*models.LeadLi
 		case "hot", "hot_leads":
 			whereClauses = append(whereClauses, `(score >= 70 OR tags ILIKE '%"Hot"%' OR tags ILIKE '%"Hot Lead"%')`)
 		case "today":
-			whereClauses = append(whereClauses, "follow_up_date::date = CURRENT_DATE AND follow_up_completed = 0")
+			whereClauses = append(whereClauses, `(
+				EXISTS (
+					SELECT 1 FROM follow_ups f 
+					WHERE f.lead_number = leads.number 
+					  AND f.completed = 0 
+					  AND f.due_date >= NOW()
+					  AND (f.due_date AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+				) OR (
+					NOT EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number)
+					AND leads.follow_up_date IS NOT NULL 
+					AND leads.follow_up_completed = 0 
+					AND leads.follow_up_date >= NOW()
+					AND (leads.follow_up_date AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+				)
+			)`)
 		case "overdue":
-			whereClauses = append(whereClauses, "follow_up_date < NOW() AND follow_up_completed = 0")
+			whereClauses = append(whereClauses, `(
+				EXISTS (
+					SELECT 1 FROM follow_ups f 
+					WHERE f.lead_number = leads.number 
+					  AND f.completed = 0 
+					  AND f.due_date < NOW()
+				) OR (
+					NOT EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number)
+					AND leads.follow_up_date IS NOT NULL 
+					AND leads.follow_up_completed = 0 
+					AND leads.follow_up_date < NOW()
+				)
+			)`)
 		}
 	}
 
@@ -543,6 +573,65 @@ func (r *LeadRepository) List(ctx context.Context, f ListFilter) (*models.LeadLi
 		argIdx++
 	}
 
+	fuState := strings.ToLower(strings.TrimSpace(f.FollowUpState))
+	switch fuState {
+	case "overdue":
+		whereClauses = append(whereClauses, `(
+			EXISTS (
+				SELECT 1 FROM follow_ups f 
+				WHERE f.lead_number = leads.number 
+				  AND f.completed = 0 
+				  AND f.due_date < NOW()
+			) OR (
+				NOT EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number)
+				AND leads.follow_up_date IS NOT NULL 
+				AND leads.follow_up_completed = 0 
+				AND leads.follow_up_date < NOW()
+			)
+		)`)
+	case "due_today", "today":
+		whereClauses = append(whereClauses, `(
+			EXISTS (
+				SELECT 1 FROM follow_ups f 
+				WHERE f.lead_number = leads.number 
+				  AND f.completed = 0 
+				  AND f.due_date >= NOW()
+				  AND (f.due_date AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+			) OR (
+				NOT EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number)
+				AND leads.follow_up_date IS NOT NULL 
+				AND leads.follow_up_completed = 0 
+				AND leads.follow_up_date >= NOW()
+				AND (leads.follow_up_date AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+			)
+		)`)
+	case "pending":
+		whereClauses = append(whereClauses, `(
+			EXISTS (
+				SELECT 1 FROM follow_ups f 
+				WHERE f.lead_number = leads.number 
+				  AND f.completed = 0 
+				  AND (f.due_date AT TIME ZONE 'Asia/Kolkata')::date > (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+			) OR (
+				NOT EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number)
+				AND leads.follow_up_date IS NOT NULL 
+				AND leads.follow_up_completed = 0 
+				AND (leads.follow_up_date AT TIME ZONE 'Asia/Kolkata')::date > (NOW() AT TIME ZONE 'Asia/Kolkata')::date
+			)
+		)`)
+	case "completed":
+		whereClauses = append(whereClauses, `(
+			(
+				EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number AND f.completed = 1)
+				AND NOT EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number AND f.completed = 0)
+			) OR (
+				NOT EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number)
+				AND leads.follow_up_date IS NOT NULL 
+				AND leads.follow_up_completed = 1
+			)
+		)`)
+	}
+
 	whereSQL := strings.Join(whereClauses, " AND ")
 
 	// Count total
@@ -575,8 +664,12 @@ func (r *LeadRepository) List(ctx context.Context, f ListFilter) (*models.LeadLi
 
 	selectQuery := fmt.Sprintf(`
 		SELECT number, name, email, phone, requirement, source, city, status,
-		       owner_id, score, lost_reason, tags, follow_up_date, follow_up_type,
-		       follow_up_notes, follow_up_completed, last_activity_at, deleted_at,
+		       owner_id, score, lost_reason, tags,
+		       COALESCE((SELECT due_date FROM follow_ups WHERE lead_number = leads.number ORDER BY due_date DESC, id DESC LIMIT 1), follow_up_date) as follow_up_date,
+		       COALESCE((SELECT follow_up_type FROM follow_ups WHERE lead_number = leads.number ORDER BY due_date DESC, id DESC LIMIT 1), follow_up_type) as follow_up_type,
+		       COALESCE((SELECT notes FROM follow_ups WHERE lead_number = leads.number ORDER BY due_date DESC, id DESC LIMIT 1), follow_up_notes) as follow_up_notes,
+		       COALESCE((SELECT completed FROM follow_ups WHERE lead_number = leads.number ORDER BY due_date DESC, id DESC LIMIT 1), follow_up_completed) as follow_up_completed,
+		       last_activity_at, deleted_at,
 		       workspace_id, created_by_id, created_at, updated_at
 		FROM leads
 		WHERE %s
@@ -615,8 +708,14 @@ func (r *LeadRepository) List(ctx context.Context, f ListFilter) (*models.LeadLi
 	_ = r.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM leads WHERE workspace_id = 1 AND deleted_at IS NULL AND owner_id = $1", f.CurrentUserID).Scan(&cMy)
 	_ = r.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM leads WHERE workspace_id = 1 AND deleted_at IS NULL AND owner_id IS NULL").Scan(&cUnassigned)
 	_ = r.db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM leads WHERE workspace_id = 1 AND deleted_at IS NULL AND (score >= 70 OR tags ILIKE '%"Hot"%' OR tags ILIKE '%"Hot Lead"%')`).Scan(&cHot)
-	_ = r.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM leads WHERE workspace_id = 1 AND deleted_at IS NULL AND follow_up_date::date = CURRENT_DATE AND follow_up_completed = 0").Scan(&cToday)
-	_ = r.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM leads WHERE workspace_id = 1 AND deleted_at IS NULL AND follow_up_date < NOW() AND follow_up_completed = 0").Scan(&cOverdue)
+	_ = r.db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM leads WHERE workspace_id = 1 AND deleted_at IS NULL AND (
+		EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number AND f.completed = 0 AND f.due_date >= NOW() AND (f.due_date AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date)
+		OR (NOT EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number) AND follow_up_date IS NOT NULL AND follow_up_completed = 0 AND follow_up_date >= NOW() AND (follow_up_date AT TIME ZONE 'Asia/Kolkata')::date = (NOW() AT TIME ZONE 'Asia/Kolkata')::date)
+	)`).Scan(&cToday)
+	_ = r.db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM leads WHERE workspace_id = 1 AND deleted_at IS NULL AND (
+		EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number AND f.completed = 0 AND f.due_date < NOW())
+		OR (NOT EXISTS (SELECT 1 FROM follow_ups f WHERE f.lead_number = leads.number) AND follow_up_date IS NOT NULL AND follow_up_completed = 0 AND follow_up_date < NOW())
+	)`).Scan(&cOverdue)
 	_ = r.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM leads WHERE workspace_id = 1 AND deleted_at IS NOT NULL").Scan(&cTrash)
 
 	viewCounts["all"] = cAll
@@ -1088,7 +1187,7 @@ func (r *LeadRepository) AutoCreateOrSyncDealForLead(ctx context.Context, lead *
 		dealOwnerID = currentUserID
 	}
 
-	dealName := fmt.Sprintf("%s - Opportunity", custName)
+	dealName := custName
 	dealInput := models.DealCreateInput{
 		Name:        dealName,
 		CustomerID:  customer.ID,
