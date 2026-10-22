@@ -46,7 +46,8 @@ func (r *CustomerRepository) Create(ctx context.Context, input models.CustomerCr
 	return &c, nil
 }
 
-func (r *CustomerRepository) FindOrCreateByEmailOrPhone(ctx context.Context, name, email, phone, company string, createdByID *int, workspaceID int) (*models.Customer, error) {
+func (r *CustomerRepository) FindOrCreateSafe(ctx context.Context, name, email, phone, company string, createdByID *int, workspaceID int) (*models.Customer, error) {
+	cleanName := strings.TrimSpace(name)
 	cleanEmail := strings.ToLower(strings.TrimSpace(email))
 	cleanPhone := strings.TrimSpace(phone)
 
@@ -63,7 +64,10 @@ func (r *CustomerRepository) FindOrCreateByEmailOrPhone(ctx context.Context, nam
 			&existing.CreatedAt, &existing.UpdatedAt,
 		)
 		if err == nil {
-			return &existing, nil
+			// Verify name matches to prevent cross-linking different people with shared or test emails
+			if cleanName == "" || strings.EqualFold(strings.TrimSpace(existing.Name), cleanName) {
+				return &existing, nil
+			}
 		}
 	}
 
@@ -80,11 +84,13 @@ func (r *CustomerRepository) FindOrCreateByEmailOrPhone(ctx context.Context, nam
 			&existing.CreatedAt, &existing.UpdatedAt,
 		)
 		if err == nil {
-			return &existing, nil
+			if cleanName == "" || strings.EqualFold(strings.TrimSpace(existing.Name), cleanName) {
+				return &existing, nil
+			}
 		}
 	}
 
-	// Create new
+	// Create new dedicated customer
 	input := models.CustomerCreateInput{
 		Name: name,
 	}
@@ -98,6 +104,10 @@ func (r *CustomerRepository) FindOrCreateByEmailOrPhone(ctx context.Context, nam
 		input.Company = &company
 	}
 	return r.Create(ctx, input, createdByID, workspaceID)
+}
+
+func (r *CustomerRepository) FindOrCreateByEmailOrPhone(ctx context.Context, name, email, phone, company string, createdByID *int, workspaceID int) (*models.Customer, error) {
+	return r.FindOrCreateSafe(ctx, name, email, phone, company, createdByID, workspaceID)
 }
 
 func (r *CustomerRepository) GetByID(ctx context.Context, id int, workspaceID int) (*models.Customer, error) {

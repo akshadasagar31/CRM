@@ -1176,7 +1176,7 @@ func (r *LeadRepository) AutoCreateOrSyncDealForLead(ctx context.Context, lead *
 		custPhone = strings.TrimSpace(*lead.Phone)
 	}
 
-	customer, err := r.customerRepo.FindOrCreateByEmailOrPhone(ctx, custName, custEmail, custPhone, "", currentUserID, workspaceID)
+	customer, err := r.customerRepo.FindOrCreateSafe(ctx, custName, custEmail, custPhone, "", currentUserID, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to link or create customer: %w", err)
 	}

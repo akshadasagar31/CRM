@@ -105,6 +105,9 @@ export interface FollowUpItem {
   completed_at?: string | null;
   notes?: string | null;
   reminder_state: string;
+  delivery_status?: string | null;
+  delivery_error?: string | null;
+  sent_at?: string | null;
   created_at: string;
 }
 
@@ -1160,6 +1163,16 @@ export interface Pipeline {
   created_at: string;
 }
 
+export interface LeadDealSummary {
+  number: string;
+  name: string;
+  email: string;
+  phone?: string | null;
+  requirement?: string;
+  status?: string;
+  city?: string;
+}
+
 export interface Deal {
   id: number;
   deal_number: string;
@@ -1167,6 +1180,7 @@ export interface Deal {
   customer_id: number;
   customer?: Customer;
   lead_number?: string | null;
+  lead?: LeadDealSummary | null;
   pipeline_id: number;
   pipeline?: Pipeline;
   stage_id: number;
@@ -1258,6 +1272,8 @@ export interface LeadConvertInput {
   customer_email?: string;
   customer_phone?: string;
   customer_company?: string;
+  customer_id?: number;
+  create_new_customer?: boolean;
 }
 
 export interface LeadConvertResponse {
@@ -1660,6 +1676,9 @@ export interface Quotation {
   created_by_id?: number | null;
   creator?: LeadUserSummary | null;
   items?: QuotationItem[];
+  sent_at?: string | null;
+  delivery_status?: string | null;
+  delivery_error?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -2192,6 +2211,9 @@ export interface Invoice {
   creator?: LeadUserSummary | null;
   items?: InvoiceItem[];
   payments?: InvoicePayment[];
+  sent_at?: string | null;
+  delivery_status?: string | null;
+  delivery_error?: string | null;
   created_at: string;
   updated_at: string;
 }

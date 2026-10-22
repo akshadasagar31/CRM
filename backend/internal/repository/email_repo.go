@@ -36,12 +36,12 @@ func (r *EmailRepository) Enqueue(ctx context.Context, item *models.EmailLog) (b
 		INSERT INTO email_logs (
 			workspace_id, recipient_email, recipient_name, subject, body_html, body_text,
 			entity_type, entity_id, email_type, status, retry_count, max_retries,
-			next_retry_at, last_error, has_attachment, attachment_name, idempotency_key,
+			next_retry_at, last_error, has_attachment, attachment_name, idempotency_key, reply_to,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8, $9, $10, $11, $12,
-			$13, $14, $15, $16, $17,
+			$13, $14, $15, $16, $17, $18,
 			NOW(), NOW()
 		)
 		ON CONFLICT (idempotency_key) DO NOTHING
@@ -51,7 +51,7 @@ func (r *EmailRepository) Enqueue(ctx context.Context, item *models.EmailLog) (b
 	err := r.db.Pool.QueryRow(ctx, query,
 		item.WorkspaceID, item.RecipientEmail, item.RecipientName, item.Subject, item.BodyHTML, item.BodyText,
 		item.EntityType, item.EntityID, item.EmailType, item.Status, item.RetryCount, item.MaxRetries,
-		item.NextRetryAt, item.LastError, item.HasAttachment, item.AttachmentName, item.IdempotencyKey,
+		item.NextRetryAt, item.LastError, item.HasAttachment, item.AttachmentName, item.IdempotencyKey, item.ReplyTo,
 	).Scan(&item.ID, &item.CreatedAt, &item.UpdatedAt)
 
 	if err != nil {
@@ -70,7 +70,7 @@ func (r *EmailRepository) GetByID(ctx context.Context, id int) (*models.EmailLog
 	query := `
 		SELECT id, workspace_id, recipient_email, recipient_name, subject, body_html, body_text,
 		       entity_type, entity_id, email_type, status, retry_count, max_retries,
-		       next_retry_at, last_error, has_attachment, attachment_name, idempotency_key,
+		       next_retry_at, last_error, has_attachment, attachment_name, idempotency_key, reply_to,
 		       sent_at, created_at, updated_at
 		FROM email_logs
 		WHERE id = $1
@@ -81,7 +81,7 @@ func (r *EmailRepository) GetByID(ctx context.Context, id int) (*models.EmailLog
 	err := row.Scan(
 		&item.ID, &item.WorkspaceID, &item.RecipientEmail, &item.RecipientName, &item.Subject, &item.BodyHTML, &item.BodyText,
 		&item.EntityType, &item.EntityID, &item.EmailType, &item.Status, &item.RetryCount, &item.MaxRetries,
-		&item.NextRetryAt, &item.LastError, &item.HasAttachment, &item.AttachmentName, &item.IdempotencyKey,
+		&item.NextRetryAt, &item.LastError, &item.HasAttachment, &item.AttachmentName, &item.IdempotencyKey, &item.ReplyTo,
 		&item.SentAt, &item.CreatedAt, &item.UpdatedAt,
 	)
 	if err != nil {
@@ -148,7 +148,7 @@ func (r *EmailRepository) GetPendingOrRetryable(ctx context.Context, workspaceID
 	query := `
 		SELECT id, workspace_id, recipient_email, recipient_name, subject, body_html, body_text,
 		       entity_type, entity_id, email_type, status, retry_count, max_retries,
-		       next_retry_at, last_error, has_attachment, attachment_name, idempotency_key,
+		       next_retry_at, last_error, has_attachment, attachment_name, idempotency_key, reply_to,
 		       sent_at, created_at, updated_at
 		FROM email_logs
 		WHERE workspace_id = $1
@@ -172,7 +172,7 @@ func (r *EmailRepository) GetPendingOrRetryable(ctx context.Context, workspaceID
 		if err := rows.Scan(
 			&item.ID, &item.WorkspaceID, &item.RecipientEmail, &item.RecipientName, &item.Subject, &item.BodyHTML, &item.BodyText,
 			&item.EntityType, &item.EntityID, &item.EmailType, &item.Status, &item.RetryCount, &item.MaxRetries,
-			&item.NextRetryAt, &item.LastError, &item.HasAttachment, &item.AttachmentName, &item.IdempotencyKey,
+			&item.NextRetryAt, &item.LastError, &item.HasAttachment, &item.AttachmentName, &item.IdempotencyKey, &item.ReplyTo,
 			&item.SentAt, &item.CreatedAt, &item.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -223,7 +223,7 @@ func (r *EmailRepository) List(ctx context.Context, workspaceID int, entityType 
 	selectQuery := fmt.Sprintf(`
 		SELECT id, workspace_id, recipient_email, recipient_name, subject, body_html, body_text,
 		       entity_type, entity_id, email_type, status, retry_count, max_retries,
-		       next_retry_at, last_error, has_attachment, attachment_name, idempotency_key,
+		       next_retry_at, last_error, has_attachment, attachment_name, idempotency_key, reply_to,
 		       sent_at, created_at, updated_at
 		FROM email_logs
 		WHERE %s
@@ -245,7 +245,7 @@ func (r *EmailRepository) List(ctx context.Context, workspaceID int, entityType 
 		if err := rows.Scan(
 			&item.ID, &item.WorkspaceID, &item.RecipientEmail, &item.RecipientName, &item.Subject, &item.BodyHTML, &item.BodyText,
 			&item.EntityType, &item.EntityID, &item.EmailType, &item.Status, &item.RetryCount, &item.MaxRetries,
-			&item.NextRetryAt, &item.LastError, &item.HasAttachment, &item.AttachmentName, &item.IdempotencyKey,
+			&item.NextRetryAt, &item.LastError, &item.HasAttachment, &item.AttachmentName, &item.IdempotencyKey, &item.ReplyTo,
 			&item.SentAt, &item.CreatedAt, &item.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -272,7 +272,7 @@ func (r *EmailRepository) GetLatestStatusForEntity(ctx context.Context, workspac
 	query := `
 		SELECT id, workspace_id, recipient_email, recipient_name, subject, body_html, body_text,
 		       entity_type, entity_id, email_type, status, retry_count, max_retries,
-		       next_retry_at, last_error, has_attachment, attachment_name, idempotency_key,
+		       next_retry_at, last_error, has_attachment, attachment_name, idempotency_key, reply_to,
 		       sent_at, created_at, updated_at
 		FROM email_logs
 		WHERE workspace_id = $1 AND entity_type = $2 AND entity_id = $3
@@ -283,7 +283,7 @@ func (r *EmailRepository) GetLatestStatusForEntity(ctx context.Context, workspac
 	err := r.db.Pool.QueryRow(ctx, query, workspaceID, entityType, entityID).Scan(
 		&item.ID, &item.WorkspaceID, &item.RecipientEmail, &item.RecipientName, &item.Subject, &item.BodyHTML, &item.BodyText,
 		&item.EntityType, &item.EntityID, &item.EmailType, &item.Status, &item.RetryCount, &item.MaxRetries,
-		&item.NextRetryAt, &item.LastError, &item.HasAttachment, &item.AttachmentName, &item.IdempotencyKey,
+		&item.NextRetryAt, &item.LastError, &item.HasAttachment, &item.AttachmentName, &item.IdempotencyKey, &item.ReplyTo,
 		&item.SentAt, &item.CreatedAt, &item.UpdatedAt,
 	)
 	if err != nil {

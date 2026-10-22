@@ -210,7 +210,7 @@ export default function OrdersPage() {
     if (id) {
       const matched = wonDeals.find((d) => d.id === id);
       if (matched) {
-        setCreateOrderTitle(getCleanCustomerName(matched.customer, matched.name));
+        setCreateOrderTitle(getCleanCustomerName(matched.customer, matched.name, matched.lead?.name));
       }
     }
   };
@@ -404,7 +404,7 @@ export default function OrdersPage() {
       />
 
       {/* Main Content */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: "100vh" }}>
         {/* Top Header */}
         <header
           style={{
@@ -415,6 +415,9 @@ export default function OrdersPage() {
             justifyContent: "space-between",
             alignItems: "center",
             flexShrink: 0,
+            position: "sticky",
+            top: 0,
+            zIndex: 30,
           }}
         >
           <div>
@@ -681,7 +684,7 @@ export default function OrdersPage() {
         </div>
 
         {/* Orders Table Container */}
-        <main style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+        <main style={{ flex: 1, padding: "20px 24px" }}>
           {isLoading ? (
             <div style={{ height: "300px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", color: "#64748B" }}>
               <RefreshCw size={28} className="animate-spin" color="#0D9488" />
@@ -741,7 +744,7 @@ export default function OrdersPage() {
                 borderRadius: "12px",
                 border: "1px solid #E2E8F0",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.02)",
-                overflow: "hidden",
+                overflowX: "auto",
               }}
             >
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
@@ -1680,7 +1683,7 @@ export default function OrdersPage() {
                   <option value="">-- Choose a Won Deal --</option>
                   {wonDeals.map((d) => (
                     <option key={d.id} value={d.id}>
-                      {d.deal_number} • {getCleanCustomerName(d.customer, d.name)} ({formatCurrency(d.value, d.currency)})
+                      {d.deal_number} • {getCleanCustomerName(d.customer, d.name, d.lead?.name)} ({formatCurrency(d.value, d.currency)})
                     </option>
                   ))}
                 </select>

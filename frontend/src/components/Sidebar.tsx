@@ -141,15 +141,21 @@ export default function Sidebar({
   // Independent multi-expansion state: persisted across route transitions in localStorage
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() => {
     const parentId = getParentCategoryId(activeTab);
-    const stored = getStoredExpandedCategories();
-    if (stored) {
-      if (parentId && stored[parentId] === undefined) {
-        return { ...stored, [parentId]: true };
-      }
-      return stored;
-    }
     return parentId ? { [parentId]: true } : { leads: true };
   });
+
+  // Reconcile with localStorage after client mount to prevent SSR hydration mismatch
+  useEffect(() => {
+    const stored = getStoredExpandedCategories();
+    const parentId = getParentCategoryId(activeTab);
+    if (stored) {
+      if (parentId && stored[parentId] === undefined) {
+        setExpandedCategories({ ...stored, [parentId]: true });
+      } else {
+        setExpandedCategories(stored);
+      }
+    }
+  }, []);
 
   // Track hovered category in collapsed mode for floating popover menu
   const [hoveredCategory, setHoveredCategory] = useState<string | null>(null);

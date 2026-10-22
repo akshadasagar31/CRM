@@ -315,7 +315,7 @@ export default function CompanyPage() {
   };
 
   return (
-    <div style={{ display: "flex", width: "100%", height: "100vh", overflow: "hidden", backgroundColor: "#F8FAFC" }}>
+    <div style={{ display: "flex", width: "100%", minHeight: "100vh", backgroundColor: "#F8FAFC" }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -366,7 +366,7 @@ export default function CompanyPage() {
       />
 
       {/* Main Content Workspace */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: "100vh" }}>
         {/* Top Header / Toolbar */}
         <header
           style={{
@@ -637,8 +637,8 @@ export default function CompanyPage() {
           </div>
         </header>
 
-        {/* Scrollable Page Body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "28px", maxWidth: "1280px", width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
+        {/* Page Body */}
+        <div style={{ flex: 1, padding: "28px", maxWidth: "1280px", width: "100%", margin: "0 auto", boxSizing: "border-box" }}>
           {activeSubTab === "emails" ? (
             /* ================= EMAIL DELIVERABILITY & AUDIT LOGS ================= */
             <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>

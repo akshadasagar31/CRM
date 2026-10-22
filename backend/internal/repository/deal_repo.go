@@ -150,13 +150,15 @@ func (r *DealRepository) GetByID(ctx context.Context, id int, workspaceID int) (
 		       p.id, p.name,
 		       s.id, s.name, s.stage_order, s.probability, s.color, s.is_won, s.is_lost,
 		       u.id, u.name, u.email,
-		       cu.id, cu.name, cu.email
+		       cu.id, cu.name, cu.email,
+		       l.number, l.name, l.email, l.phone, l.requirement, l.status, l.city
 		FROM deals d
 		JOIN customers c ON d.customer_id = c.id
 		JOIN pipelines p ON d.pipeline_id = p.id
 		JOIN deal_stages s ON d.stage_id = s.id
 		LEFT JOIN users u ON u.id = d.owner_id
 		LEFT JOIN users cu ON cu.id = d.created_by_id
+		LEFT JOIN leads l ON d.lead_number = l.number
 		WHERE d.id = $1 AND d.workspace_id = $2
 	`
 
@@ -174,6 +176,7 @@ func (r *DealRepository) GetByID(ctx context.Context, id int, workspaceID int) (
 	var uName, uEmail *string
 	var cuID *int
 	var cuName, cuEmail *string
+	var lNum, lName, lEmail, lPhone, lReq, lStatus, lCity *string
 
 	err := r.db.Pool.QueryRow(ctx, query, id, workspaceID).Scan(
 		&d.ID, &d.DealNumber, &d.Name, &d.CustomerID, &d.LeadNumber, &d.PipelineID, &d.StageID,
@@ -184,6 +187,7 @@ func (r *DealRepository) GetByID(ctx context.Context, id int, workspaceID int) (
 		&sID, &sName, &sOrder, &sProb, &sColor, &wonInt, &lostInt,
 		&uID, &uName, &uEmail,
 		&cuID, &cuName, &cuEmail,
+		&lNum, &lName, &lEmail, &lPhone, &lReq, &lStatus, &lCity,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -198,6 +202,17 @@ func (r *DealRepository) GetByID(ctx context.Context, id int, workspaceID int) (
 		Email:   cEmail,
 		Phone:   cPhone,
 		Company: cCompany,
+	}
+	if lNum != nil {
+		d.Lead = &models.LeadDealSummary{
+			Number:      *lNum,
+			Name:        derefStr(lName),
+			Email:       derefStr(lEmail),
+			Phone:       lPhone,
+			Requirement: derefStr(lReq),
+			Status:      derefStr(lStatus),
+			City:        derefStr(lCity),
+		}
 	}
 	d.Pipeline = &models.Pipeline{
 		ID:   pID,
@@ -295,12 +310,14 @@ func (r *DealRepository) List(ctx context.Context, filter DealFilter, workspaceI
 		       c.id, c.name, c.email, c.phone, c.company,
 		       p.id, p.name,
 		       s.id, s.name, s.stage_order, s.probability, s.color, s.is_won, s.is_lost,
-		       u.id, u.name, u.email
+		       u.id, u.name, u.email,
+		       l.number, l.name, l.email, l.phone, l.requirement, l.status, l.city
 		FROM deals d
 		JOIN customers c ON d.customer_id = c.id
 		JOIN pipelines p ON d.pipeline_id = p.id
 		JOIN deal_stages s ON d.stage_id = s.id
 		LEFT JOIN users u ON u.id = d.owner_id
+		LEFT JOIN leads l ON d.lead_number = l.number
 	` + whereSQL + `
 		ORDER BY d.created_at DESC
 		LIMIT $` + strconv.Itoa(idx) + ` OFFSET $` + strconv.Itoa(idx+1)
@@ -327,6 +344,7 @@ func (r *DealRepository) List(ctx context.Context, filter DealFilter, workspaceI
 		var sColor string
 		var uID *int
 		var uName, uEmail *string
+		var lNum, lName, lEmail, lPhone, lReq, lStatus, lCity *string
 
 		if err := rows.Scan(
 			&d.ID, &d.DealNumber, &d.Name, &d.CustomerID, &d.LeadNumber, &d.PipelineID, &d.StageID,
@@ -336,6 +354,7 @@ func (r *DealRepository) List(ctx context.Context, filter DealFilter, workspaceI
 			&pID, &pName,
 			&sID, &sName, &sOrder, &sProb, &sColor, &wonInt, &lostInt,
 			&uID, &uName, &uEmail,
+			&lNum, &lName, &lEmail, &lPhone, &lReq, &lStatus, &lCity,
 		); err != nil {
 			return nil, err
 		}
@@ -346,6 +365,17 @@ func (r *DealRepository) List(ctx context.Context, filter DealFilter, workspaceI
 			Email:   cEmail,
 			Phone:   cPhone,
 			Company: cCompany,
+		}
+		if lNum != nil {
+			d.Lead = &models.LeadDealSummary{
+				Number:      *lNum,
+				Name:        derefStr(lName),
+				Email:       derefStr(lEmail),
+				Phone:       lPhone,
+				Requirement: derefStr(lReq),
+				Status:      derefStr(lStatus),
+				City:        derefStr(lCity),
+			}
 		}
 		d.Pipeline = &models.Pipeline{
 			ID:   pID,
@@ -678,7 +708,8 @@ func (r *DealRepository) DeleteNote(ctx context.Context, dealID int, noteID int)
 func (r *DealRepository) ListFollowUps(ctx context.Context, dealID int) ([]models.FollowUp, error) {
 	query := `
 		SELECT f.id, f.deal_id, d.name, f.user_id, f.title, f.follow_up_type,
-		       f.due_date, f.completed, f.completed_at, f.notes, f.reminder_state, f.created_at,
+		       f.due_date, f.completed, f.completed_at, f.notes, f.reminder_state,
+		       f.delivery_status, f.delivery_error, f.sent_at, f.created_at,
 		       u.id, u.name, u.email
 		FROM follow_ups f
 		JOIN deals d ON f.deal_id = d.id
@@ -701,7 +732,8 @@ func (r *DealRepository) ListFollowUps(ctx context.Context, dealID int) ([]model
 
 		if err := rows.Scan(
 			&f.ID, &f.DealID, &f.DealName, &f.UserID, &f.Title, &f.FollowUpType,
-			&f.DueDate, &completedInt, &f.CompletedAt, &f.Notes, &f.ReminderState, &f.CreatedAt,
+			&f.DueDate, &completedInt, &f.CompletedAt, &f.Notes, &f.ReminderState,
+			&f.DeliveryStatus, &f.DeliveryError, &f.SentAt, &f.CreatedAt,
 			&uID, &uName, &uEmail,
 		); err != nil {
 			return nil, err
@@ -728,15 +760,19 @@ func (r *DealRepository) CreateFollowUp(ctx context.Context, dealID int, title, 
 		followUpType = "Call"
 	}
 
+	var leadNum *string
+	_ = r.db.Pool.QueryRow(ctx, "SELECT lead_number FROM deals WHERE id = $1", dealID).Scan(&leadNum)
+
 	var f models.FollowUp
 	var completedInt int
 	query := `
-		INSERT INTO follow_ups (deal_id, user_id, title, follow_up_type, due_date, completed, notes, reminder_state, created_at)
-		VALUES ($1, $2, $3, $4, $5, 0, $6, 'pending', NOW())
-		RETURNING id, deal_id, user_id, title, follow_up_type, due_date, completed, notes, reminder_state, created_at
+		INSERT INTO follow_ups (deal_id, lead_number, user_id, title, follow_up_type, due_date, completed, notes, reminder_state, delivery_status, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 0, $7, 'pending', 'pending', NOW())
+		RETURNING id, deal_id, user_id, title, follow_up_type, due_date, completed, notes, reminder_state, delivery_status, delivery_error, sent_at, created_at
 	`
-	err := r.db.Pool.QueryRow(ctx, query, dealID, userID, cleanTitle, followUpType, dueDate, notes).Scan(
-		&f.ID, &f.DealID, &f.UserID, &f.Title, &f.FollowUpType, &f.DueDate, &completedInt, &f.Notes, &f.ReminderState, &f.CreatedAt,
+	err := r.db.Pool.QueryRow(ctx, query, dealID, leadNum, userID, cleanTitle, followUpType, dueDate, notes).Scan(
+		&f.ID, &f.DealID, &f.UserID, &f.Title, &f.FollowUpType, &f.DueDate, &completedInt, &f.Notes, &f.ReminderState,
+		&f.DeliveryStatus, &f.DeliveryError, &f.SentAt, &f.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -776,9 +812,34 @@ func (r *DealRepository) ConvertLeadToDeal(ctx context.Context, leadNumber strin
 	}
 	custCompany := strings.TrimSpace(input.CustomerCompany)
 
-	customer, err := r.customerRepo.FindOrCreateByEmailOrPhone(ctx, custName, custEmail, custPhone, custCompany, userID, workspaceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create or find customer: %w", err)
+	var customer *models.Customer
+	if input.CustomerID != nil && *input.CustomerID > 0 {
+		customer, err = r.customerRepo.GetByID(ctx, *input.CustomerID, workspaceID)
+		if err != nil || customer == nil {
+			return nil, fmt.Errorf("selected customer #%d not found: %w", *input.CustomerID, err)
+		}
+	} else if input.CreateNewCustomer {
+		newCustInput := models.CustomerCreateInput{
+			Name: custName,
+		}
+		if custEmail != "" {
+			newCustInput.Email = &custEmail
+		}
+		if custPhone != "" {
+			newCustInput.Phone = &custPhone
+		}
+		if custCompany != "" {
+			newCustInput.Company = &custCompany
+		}
+		customer, err = r.customerRepo.Create(ctx, newCustInput, userID, workspaceID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create dedicated customer: %w", err)
+		}
+	} else {
+		customer, err = r.customerRepo.FindOrCreateSafe(ctx, custName, custEmail, custPhone, custCompany, userID, workspaceID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create or find customer: %w", err)
+		}
 	}
 
 	// 3. Create Deal
@@ -844,3 +905,11 @@ func (r *DealRepository) ConvertLeadToDeal(ctx context.Context, leadNumber strin
 		LeadNumber: lead.Number,
 	}, nil
 }
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+

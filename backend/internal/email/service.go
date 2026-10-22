@@ -64,6 +64,22 @@ func (s *Service) SendEmail(
 	attachmentName string,
 	attachmentBytes []byte,
 ) error {
+	return s.SendEmailWithReplyTo(ctx, toEmail, toName, "", "", subject, bodyHTML, bodyText, attachmentName, attachmentBytes)
+}
+
+// SendEmailWithReplyTo builds and sends an email with an optional custom Reply-To header
+func (s *Service) SendEmailWithReplyTo(
+	ctx context.Context,
+	toEmail string,
+	toName string,
+	replyToEmail string,
+	replyToName string,
+	subject string,
+	bodyHTML string,
+	bodyText string,
+	attachmentName string,
+	attachmentBytes []byte,
+) error {
 	toEmail = strings.TrimSpace(toEmail)
 	if toEmail == "" {
 		return fmt.Errorf("recipient email address cannot be empty")
@@ -115,7 +131,19 @@ func (s *Service) SendEmail(
 		msgBuf.WriteString(fmt.Sprintf("To: <%s>\r\n", toEmail))
 	}
 	msgBuf.WriteString(fmt.Sprintf("From: \"%s\" <%s>\r\n", cleanFromName, fromEmail))
-	msgBuf.WriteString(fmt.Sprintf("Reply-To: \"%s\" <%s>\r\n", cleanFromName, fromEmail))
+
+	cleanReplyToEmail := strings.TrimSpace(replyToEmail)
+	if cleanReplyToEmail != "" && IsValidEmail(cleanReplyToEmail) {
+		cleanReplyToName := cleanHeaderValue(replyToName)
+		if cleanReplyToName != "" && cleanReplyToName != cleanReplyToEmail {
+			msgBuf.WriteString(fmt.Sprintf("Reply-To: \"%s\" <%s>\r\n", cleanReplyToName, cleanReplyToEmail))
+		} else {
+			msgBuf.WriteString(fmt.Sprintf("Reply-To: <%s>\r\n", cleanReplyToEmail))
+		}
+	} else {
+		msgBuf.WriteString(fmt.Sprintf("Reply-To: \"%s\" <%s>\r\n", cleanFromName, fromEmail))
+	}
+
 	msgBuf.WriteString(fmt.Sprintf("Subject: %s\r\n", cleanSubject))
 	msgBuf.WriteString(fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z)))
 	if !strings.HasSuffix(strings.ToLower(s.cfg.SMTPHost), "gmail.com") {

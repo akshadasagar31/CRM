@@ -60,7 +60,7 @@ func (h *QuotationHandler) Create(c *gin.Context) {
 		return
 	}
 
-	if h.emailWorker != nil && (strings.EqualFold(q.Status, "Finalized") || strings.EqualFold(q.Status, "Sent") || strings.EqualFold(q.Status, "Accepted")) {
+	if h.emailWorker != nil && strings.EqualFold(q.Status, "Sent") {
 		_, _ = h.emailWorker.TriggerQuotationEmail(c.Request.Context(), q.ID, false)
 	}
 
@@ -226,7 +226,7 @@ func (h *QuotationHandler) ChangeStatus(c *gin.Context) {
 		return
 	}
 
-	if h.emailWorker != nil && (strings.EqualFold(q.Status, "Finalized") || strings.EqualFold(q.Status, "Sent") || strings.EqualFold(q.Status, "Accepted")) {
+	if h.emailWorker != nil && strings.EqualFold(q.Status, "Sent") {
 		_, _ = h.emailWorker.TriggerQuotationEmail(context.Background(), id, false)
 	}
 

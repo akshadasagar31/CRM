@@ -135,7 +135,7 @@ func (h *InvoiceHandler) Create(c *gin.Context) {
 
 func isInvoiceIssuedForEmail(status string) bool {
 	s := strings.ToLower(strings.TrimSpace(status))
-	return s == "issued/sent" || s == "issued" || s == "sent" || s == "unpaid" || s == "partially paid" || s == "paid"
+	return s == "issued/sent" || s == "issued" || s == "sent"
 }
 
 // CreateFromOrder godoc

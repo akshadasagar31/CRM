@@ -52,6 +52,7 @@ import {
   Percent,
   Download,
   Loader2,
+  RotateCcw,
 } from "lucide-react";
 
 // Status Badges & Colors
@@ -232,13 +233,26 @@ export default function InvoicesPage() {
   const [isSendingEmail, setIsSendingEmail] = useState<number | null>(null);
 
   const handleSendEmail = async (inv: Invoice) => {
+    const isAlreadySent = Boolean(inv.sent_at || inv.status === "Issued/Sent" || inv.delivery_status === "sent");
+    if (isAlreadySent) {
+      const confirmed = window.confirm(
+        `Invoice ${inv.invoice_number} was previously sent to ${inv.customer_name || "the customer"}.\n\nDo you want to manually resend this invoice email?`
+      );
+      if (!confirmed) return;
+    }
+
     setIsSendingEmail(inv.id);
     try {
       const res = await invoicesApi.sendEmail(inv.id);
-      showToast(res.message || "Invoice PDF email queued for delivery!", "success");
+      showToast(res.message || (isAlreadySent ? "Invoice email resent successfully!" : "Invoice PDF email queued for delivery!"), "success");
       loadInvoices();
       if (selectedInvoice && selectedInvoice.id === inv.id) {
-        setSelectedInvoice({ ...selectedInvoice, status: "Sent" });
+        setSelectedInvoice({
+          ...selectedInvoice,
+          status: selectedInvoice.status === "Draft" ? "Issued/Sent" : selectedInvoice.status,
+          sent_at: new Date().toISOString(),
+          delivery_status: "sent",
+        });
       }
     } catch (err: any) {
       showToast(err.message || "Failed to send invoice email", "error");
@@ -581,7 +595,7 @@ export default function InvoicesPage() {
   }, [printInvoice, companyProfile]);
 
   return (
-    <div style={{ display: "flex", height: "100vh", backgroundColor: "#F8FAFC", overflow: "hidden" }}>
+    <div style={{ display: "flex", minHeight: "100vh", backgroundColor: "#F8FAFC" }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -635,7 +649,7 @@ export default function InvoicesPage() {
       />
 
       {/* Main Content Workspace */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: "100vh" }}>
         {/* Top Header */}
         <header
           style={{
@@ -647,6 +661,9 @@ export default function InvoicesPage() {
             alignItems: "center",
             justifyContent: "space-between",
             flexShrink: 0,
+            position: "sticky",
+            top: 0,
+            zIndex: 30,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -725,8 +742,8 @@ export default function InvoicesPage() {
           </div>
         </header>
 
-        {/* Scrollable Body Content */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+        {/* Body Content */}
+        <div style={{ flex: 1, padding: "20px 24px", display: "flex", flexDirection: "column", gap: "20px" }}>
           {/* KPI Metrics Strip */}
           <div
             style={{
@@ -1224,7 +1241,7 @@ export default function InvoicesPage() {
               border: "1px solid #E2E8F0",
               borderRadius: "10px",
               boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-              overflow: "hidden",
+              overflowX: "auto",
             }}
           >
             {isLoading ? (
@@ -1416,20 +1433,51 @@ export default function InvoicesPage() {
 
                         {/* Status Badge */}
                         <td style={{ padding: "12px 16px" }}>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "3px 8px",
-                              borderRadius: "999px",
-                              fontSize: "0.72rem",
-                              fontWeight: 700,
-                              backgroundColor: stColor.bg,
-                              color: stColor.text,
-                              border: `1px solid ${stColor.border}`,
-                            }}
-                          >
-                            {inv.status}
-                          </span>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                padding: "3px 8px",
+                                borderRadius: "999px",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                backgroundColor: stColor.bg,
+                                color: stColor.text,
+                                border: `1px solid ${stColor.border}`,
+                              }}
+                            >
+                              {inv.status}
+                            </span>
+                            {inv.sent_at || inv.delivery_status === "sent" ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 600,
+                                  color: "#059669",
+                                }}
+                                title={`Invoice PDF delivered to customer${inv.sent_at ? " on " + new Date(inv.sent_at).toLocaleDateString() : ""}`}
+                              >
+                                <CheckCircle2 size={11} /> Emailed
+                              </span>
+                            ) : inv.delivery_status === "failed" ? (
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "3px",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 600,
+                                  color: "#DC2626",
+                                }}
+                                title={inv.delivery_error || "Invoice email delivery failed"}
+                              >
+                                <AlertCircle size={11} /> Delivery Failed
+                              </span>
+                            ) : null}
+                          </div>
                         </td>
 
                         {/* Total & Balance */}
@@ -1478,27 +1526,39 @@ export default function InvoicesPage() {
                               <Printer size={13} /> Print
                             </button>
 
-                            {/* Email Tax Invoice PDF */}
-                            <button
-                              onClick={() => handleSendEmail(inv)}
-                              disabled={isSendingEmail === inv.id}
-                              title="Email Tax Invoice PDF to Customer"
-                              style={{
-                                padding: "5px 8px",
-                                borderRadius: "6px",
-                                border: "1px solid #CBD5E1",
-                                backgroundColor: isSendingEmail === inv.id ? "#F1F5F9" : "#FFFFFF",
-                                color: "#2563EB",
-                                cursor: isSendingEmail === inv.id ? "wait" : "pointer",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                fontSize: "0.75rem",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {isSendingEmail === inv.id ? <RefreshCw size={13} className="animate-spin" /> : <Mail size={13} />} Email
-                            </button>
+                            {/* Email / Resend Tax Invoice PDF */}
+                            {(() => {
+                              const isAlreadySent = Boolean(inv.sent_at || inv.status === "Issued/Sent" || inv.delivery_status === "sent");
+                              return (
+                                <button
+                                  onClick={() => handleSendEmail(inv)}
+                                  disabled={isSendingEmail === inv.id}
+                                  title={isAlreadySent ? "Resend Tax Invoice Email" : "Email Tax Invoice PDF to Customer"}
+                                  style={{
+                                    padding: "5px 8px",
+                                    borderRadius: "6px",
+                                    border: "1px solid #CBD5E1",
+                                    backgroundColor: isSendingEmail === inv.id ? "#F1F5F9" : isAlreadySent ? "#EFF6FF" : "#FFFFFF",
+                                    color: isAlreadySent ? "#1D4ED8" : "#2563EB",
+                                    cursor: isSendingEmail === inv.id ? "wait" : "pointer",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    fontSize: "0.75rem",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {isSendingEmail === inv.id ? (
+                                    <RefreshCw size={13} className="animate-spin" />
+                                  ) : isAlreadySent ? (
+                                    <RotateCcw size={13} />
+                                  ) : (
+                                    <Mail size={13} />
+                                  )}
+                                  <span>{isAlreadySent ? "Resend" : "Email"}</span>
+                                </button>
+                              );
+                            })()}
 
                             {/* View / Detail */}
                             <button
@@ -1674,6 +1734,43 @@ export default function InvoicesPage() {
                     >
                       {selectedInvoice.status}
                     </span>
+                    {selectedInvoice.sent_at || selectedInvoice.delivery_status === "sent" ? (
+                      <span
+                        style={{
+                          fontSize: "0.6875rem",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          backgroundColor: "#ECFDF5",
+                          color: "#059669",
+                          border: "1px solid #A7F3D0",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                        title={`Emailed to customer on ${selectedInvoice.sent_at ? new Date(selectedInvoice.sent_at).toLocaleDateString() : "earlier"}`}
+                      >
+                        <CheckCircle2 size={11} /> Emailed
+                      </span>
+                    ) : selectedInvoice.delivery_status === "failed" ? (
+                      <span
+                        style={{
+                          fontSize: "0.6875rem",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          backgroundColor: "#FEF2F2",
+                          color: "#DC2626",
+                          border: "1px solid #FECACA",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                        }}
+                        title={selectedInvoice.delivery_error || "Email delivery failed"}
+                      >
+                        <AlertCircle size={11} /> Delivery Failed
+                      </span>
+                    ) : null}
                   </div>
                   <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
                     {selectedInvoice.customer?.name || selectedInvoice.customer_name}
@@ -2287,27 +2384,45 @@ export default function InvoicesPage() {
                   <DollarSign size={14} /> Record Payment
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleSendEmail(selectedInvoice)}
-                  disabled={isSendingEmail === selectedInvoice.id}
-                  title="Send Tax Invoice PDF to Customer Email"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "8px 14px",
-                    borderRadius: "8px",
-                    backgroundColor: "#2563EB",
-                    color: "#FFFFFF",
-                    fontSize: "0.8125rem",
-                    fontWeight: 600,
-                    border: "none",
-                    cursor: isSendingEmail === selectedInvoice.id ? "wait" : "pointer",
-                  }}
-                >
-                  <Mail size={14} /> {isSendingEmail === selectedInvoice.id ? "Sending..." : "Email PDF"}
-                </button>
+                {(() => {
+                  const isAlreadySent = Boolean(selectedInvoice.sent_at || selectedInvoice.status === "Issued/Sent" || selectedInvoice.delivery_status === "sent");
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => handleSendEmail(selectedInvoice)}
+                      disabled={isSendingEmail === selectedInvoice.id}
+                      title={isAlreadySent ? "Manually Resend Tax Invoice Email" : "Send Tax Invoice PDF to Customer Email"}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 14px",
+                        borderRadius: "8px",
+                        backgroundColor: isAlreadySent ? "#1D4ED8" : "#2563EB",
+                        color: "#FFFFFF",
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        border: "none",
+                        cursor: isSendingEmail === selectedInvoice.id ? "wait" : "pointer",
+                      }}
+                    >
+                      {isSendingEmail === selectedInvoice.id ? (
+                        <RefreshCw size={14} className="animate-spin" />
+                      ) : isAlreadySent ? (
+                        <RotateCcw size={14} />
+                      ) : (
+                        <Mail size={14} />
+                      )}
+                      <span>
+                        {isSendingEmail === selectedInvoice.id
+                          ? "Sending..."
+                          : isAlreadySent
+                          ? "Resend Email"
+                          : "Email PDF"}
+                      </span>
+                    </button>
+                  );
+                })()}
 
                 <button
                   id="btn-drawer-print"

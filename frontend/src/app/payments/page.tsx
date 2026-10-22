@@ -577,7 +577,7 @@ export default function PaymentsPage() {
       />
 
       {/* Main Workspace */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: "100vh" }}>
         {/* Top Header Bar */}
         <header
           style={{
@@ -588,6 +588,9 @@ export default function PaymentsPage() {
             alignItems: "center",
             justifyContent: "space-between",
             flexShrink: 0,
+            position: "sticky",
+            top: 0,
+            zIndex: 30,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
@@ -682,8 +685,8 @@ export default function PaymentsPage() {
           </div>
         </header>
 
-        {/* Scrollable View Area */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "1.75rem 2rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        {/* View Area */}
+        <div style={{ flex: 1, padding: "1.75rem 2rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           {/* 1. Summary Cards Section */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.25rem" }}>
             {/* Card 1: Total Invoiced */}

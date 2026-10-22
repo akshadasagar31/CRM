@@ -30,6 +30,7 @@ import {
   UserCheck,
   Check,
   RotateCcw,
+  Info,
 } from "lucide-react";
 import {
   followUpsApi,
@@ -1121,77 +1122,186 @@ export default function FollowUpsPage({
                         )}
                       </td>
 
-                      {/* 6. Status */}
+                      {/* 6. Status & Delivery Tracking */}
                       <td style={{ padding: "0.85rem 1rem", whiteSpace: "nowrap" }}>
-                        {item.completed ? (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              backgroundColor: "#ECFDF5",
-                              color: "#059669",
-                              border: "1px solid rgba(16, 185, 129, 0.25)",
-                              padding: "2px 8px",
-                              borderRadius: "9999px",
-                              fontSize: "0.75rem",
-                              fontWeight: 700,
-                            }}
-                          >
-                            <Check size={12} /> Completed
-                          </span>
-                        ) : overdue ? (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              backgroundColor: "#FEF2F2",
-                              color: "#DC2626",
-                              border: "1px solid rgba(239, 68, 68, 0.25)",
-                              padding: "2px 8px",
-                              borderRadius: "9999px",
-                              fontSize: "0.75rem",
-                              fontWeight: 700,
-                            }}
-                          >
-                            <AlertCircle size={12} /> Overdue
-                          </span>
-                        ) : dueToday ? (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              backgroundColor: "#FFFBEB",
-                              color: "#D97706",
-                              border: "1px solid rgba(217, 119, 6, 0.25)",
-                              padding: "2px 8px",
-                              borderRadius: "9999px",
-                              fontSize: "0.75rem",
-                              fontWeight: 700,
-                            }}
-                          >
-                            <Clock size={12} /> Due Today
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                              backgroundColor: "#F1F5F9",
-                              color: "#475569",
-                              border: "1px solid rgba(71, 85, 105, 0.2)",
-                              padding: "2px 8px",
-                              borderRadius: "9999px",
-                              fontSize: "0.75rem",
-                              fontWeight: 700,
-                            }}
-                          >
-                            <Clock size={12} /> Pending
-                          </span>
-                        )}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", alignItems: "flex-start" }}>
+                          {item.completed ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                                backgroundColor: "#ECFDF5",
+                                color: "#059669",
+                                border: "1px solid rgba(16, 185, 129, 0.25)",
+                                padding: "2px 8px",
+                                borderRadius: "9999px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              <Check size={12} /> Completed
+                            </span>
+                          ) : overdue ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                                backgroundColor: "#FEF2F2",
+                                color: "#DC2626",
+                                border: "1px solid rgba(239, 68, 68, 0.25)",
+                                padding: "2px 8px",
+                                borderRadius: "9999px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              <AlertCircle size={12} /> Overdue
+                            </span>
+                          ) : dueToday ? (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                                backgroundColor: "#FFFBEB",
+                                color: "#D97706",
+                                border: "1px solid rgba(217, 119, 6, 0.25)",
+                                padding: "2px 8px",
+                                borderRadius: "9999px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              <Clock size={12} /> Due Today
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                                backgroundColor: "#F1F5F9",
+                                color: "#475569",
+                                border: "1px solid rgba(71, 85, 105, 0.2)",
+                                padding: "2px 8px",
+                                borderRadius: "9999px",
+                                fontSize: "0.75rem",
+                                fontWeight: 700,
+                              }}
+                            >
+                              <Clock size={12} /> Pending
+                            </span>
+                          )}
+
+                          {/* Dual Delivery Tracking: Customer Outreach + Rep Reminder */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: "3px", marginTop: "4px" }}>
+                            {/* 1. Customer Email Delivery */}
+                            {item.delivery_status === "sent" || item.sent_at ? (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 600,
+                                  color: "#059669",
+                                }}
+                                title={`Customer follow-up email dispatched${item.sent_at ? " at " + formatDateTime(item.sent_at) : ""}`}
+                              >
+                                <CheckCircle2 size={11} /> Customer: Sent
+                              </div>
+                            ) : item.delivery_status === "failed" ? (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 600,
+                                  color: "#DC2626",
+                                }}
+                                title={item.delivery_error || "Customer delivery failed: missing or invalid email address"}
+                              >
+                                <AlertTriangle size={11} /> Customer: {item.delivery_error?.includes("Missing") ? "No Email" : "Failed"}
+                              </div>
+                            ) : item.delivery_status === "internal_only" ? (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 500,
+                                  color: "#64748B",
+                                }}
+                                title="Internal task: no customer outreach needed"
+                              >
+                                <Info size={11} /> Customer: Internal Only
+                              </div>
+                            ) : !item.completed ? (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 500,
+                                  color: "#6366F1",
+                                }}
+                                title="Automated message will be sent to the customer at the scheduled date & time"
+                              >
+                                <Clock size={11} /> Customer: Scheduled
+                              </div>
+                            ) : null}
+
+                            {/* 2. Salesperson Reminder Delivery */}
+                            {item.reminder_state === "sent" ? (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 600,
+                                  color: "#059669",
+                                }}
+                                title="Task reminder delivered to assigned salesperson"
+                              >
+                                <CheckCircle2 size={11} /> Rep: Sent
+                              </div>
+                            ) : item.reminder_state === "failed" ? (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 600,
+                                  color: "#DC2626",
+                                }}
+                                title="Salesperson task reminder delivery failed"
+                              >
+                                <AlertTriangle size={11} /> Rep: Failed
+                              </div>
+                            ) : !item.completed ? (
+                              <div
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.25rem",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 500,
+                                  color: "#6366F1",
+                                }}
+                                title="Task reminder will be sent to the assigned salesperson at scheduled date & time"
+                              >
+                                <Clock size={11} /> Rep: Scheduled
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
                       </td>
 
                       {/* 7. Owner */}
@@ -1383,17 +1493,30 @@ export default function FollowUpsPage({
                   </div>
                 </div>
 
-                {/* 4. Notes */}
+                {/* 4. Notes & Automated Message Notice */}
                 <div className="form-group">
-                  <label className="form-label">Agenda / Notes</label>
+                  <label className="form-label">Message Content / Notes</label>
                   <textarea
                     className="form-input"
                     rows={3}
-                    placeholder="Agenda, topics to discuss, or prep notes..."
+                    placeholder="Personalized message sent to customer at scheduled time, or agenda notes..."
                     value={scheduleForm.notes}
                     onChange={(e) => setScheduleForm({ ...scheduleForm, notes: e.target.value })}
                     id="textarea-schedule-notes"
                   />
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      fontSize: "0.75rem",
+                      color: "#4F46E5",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "5px",
+                    }}
+                  >
+                    <Sparkles size={12} />
+                    <span>An automated email will be sent to the customer at the scheduled time using your notes.</span>
+                  </div>
                 </div>
               </div>
 
@@ -1459,11 +1582,47 @@ export default function FollowUpsPage({
                     borderRadius: "var(--radius-md)",
                     marginBottom: "1rem",
                     border: "1px solid var(--border-subtle)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "0.5rem",
                   }}
                 >
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Associated Lead:</span>
-                  <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>
-                    {activeItem.lead_name || activeItem.lead_number} ({activeItem.lead_number})
+                  <div>
+                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Associated Lead:</span>
+                    <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>
+                      {activeItem.lead_name || activeItem.lead_number} ({activeItem.lead_number})
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <span
+                      style={{
+                        fontSize: "0.6875rem",
+                        fontWeight: 600,
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        backgroundColor: activeItem.delivery_status === "sent" ? "#ECFDF5" : activeItem.delivery_status === "failed" ? "#FEF2F2" : "#EFF6FF",
+                        color: activeItem.delivery_status === "sent" ? "#059669" : activeItem.delivery_status === "failed" ? "#DC2626" : "#2563EB",
+                        border: `1px solid ${activeItem.delivery_status === "sent" ? "#A7F3D0" : activeItem.delivery_status === "failed" ? "#FECACA" : "#BFDBFE"}`,
+                      }}
+                      title={activeItem.delivery_error || undefined}
+                    >
+                      Customer: {activeItem.delivery_status === "sent" ? "Sent" : activeItem.delivery_status === "failed" ? "Failed" : activeItem.delivery_status === "internal_only" ? "Internal" : "Scheduled"}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.6875rem",
+                        fontWeight: 600,
+                        padding: "2px 8px",
+                        borderRadius: "999px",
+                        backgroundColor: activeItem.reminder_state === "sent" ? "#ECFDF5" : activeItem.reminder_state === "failed" ? "#FEF2F2" : "#EFF6FF",
+                        color: activeItem.reminder_state === "sent" ? "#059669" : activeItem.reminder_state === "failed" ? "#DC2626" : "#2563EB",
+                        border: `1px solid ${activeItem.reminder_state === "sent" ? "#A7F3D0" : activeItem.reminder_state === "failed" ? "#FECACA" : "#BFDBFE"}`,
+                      }}
+                    >
+                      Rep: {activeItem.reminder_state === "sent" ? "Sent" : activeItem.reminder_state === "failed" ? "Failed" : "Scheduled"}
+                    </span>
                   </div>
                 </div>
 

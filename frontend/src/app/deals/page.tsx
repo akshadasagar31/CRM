@@ -960,7 +960,7 @@ export default function DealsPage({
       )}
 
       {/* Main Content View */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: "100vh" }}>
         {/* Top Header / Toolbar styled exactly matching Leads and Products pages */}
         <header
           style={{
@@ -1246,7 +1246,6 @@ export default function DealsPage({
           <main
             style={{
               flex: 1,
-              overflowY: "auto",
               padding: "20px 24px",
               backgroundColor: "#F8FAFC",
             }}
@@ -1263,7 +1262,7 @@ export default function DealsPage({
                 <div style={{ fontSize: "0.875rem", marginTop: "4px" }}>Try clearing search criteria or add a new deal.</div>
               </div>
             ) : (
-              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+              <div style={{ backgroundColor: "#FFFFFF", borderRadius: "12px", border: "1px solid #E2E8F0", overflowX: "auto", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "0.875rem" }}>
                   <thead>
                     <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
@@ -1289,7 +1288,7 @@ export default function DealsPage({
                           onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#FFFFFF")}
                         >
                           <td style={{ padding: "12px 16px" }}>
-                            <div style={{ fontWeight: 700, color: "#0F172A" }}>{getCleanCustomerName(deal.customer, deal.name)}</div>
+                            <div style={{ fontWeight: 700, color: "#0F172A" }}>{deal.lead?.name || getCleanCustomerName(deal.customer, deal.name)}</div>
                             <div style={{ fontSize: "0.75rem", color: "#64748B", display: "flex", alignItems: "center", gap: "6px", marginTop: "2px" }}>
                               <span style={{ fontFamily: "monospace", fontWeight: 600 }}>#{deal.deal_number || deal.id}</span>
                               {deal.lead_number && (
@@ -1300,7 +1299,7 @@ export default function DealsPage({
                             </div>
                           </td>
                           <td style={{ padding: "12px 16px" }}>
-                            <div style={{ fontWeight: 600, color: "#334155" }}>{deal.customer?.name || "—"}</div>
+                            <div style={{ fontWeight: 600, color: "#334155" }}>{deal.lead?.name || deal.customer?.name || "—"}</div>
                             {deal.customer?.company && (
                               <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "1px" }}>{deal.customer.company}</div>
                             )}
@@ -1417,6 +1416,7 @@ export default function DealsPage({
           <main
             style={{
               flex: 1,
+              height: "calc(100vh - 75px)",
               overflowX: "auto",
               overflowY: "hidden",
               padding: "20px 24px",
@@ -1579,7 +1579,7 @@ export default function DealsPage({
                         </div>
                       ) : (
                         stageDeals.map((deal) => {
-                          const contactName = getCleanCustomerName(deal.customer, deal.name, deal.lead_number ? `Lead ${deal.lead_number}` : undefined);
+                          const contactName = deal.lead?.name || getCleanCustomerName(deal.customer, deal.name, deal.lead_number ? `Lead ${deal.lead_number}` : undefined);
                           const companyName = deal.customer?.company;
                           const isBeingDragged = draggedDealId === deal.id;
 
@@ -1773,7 +1773,7 @@ export default function DealsPage({
                   )}
                 </div>
                 <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
-                  {getCleanCustomerName(selectedDeal.customer, selectedDeal.name, linkedLead?.name)}
+                  {selectedDeal.lead?.name || linkedLead?.name || getCleanCustomerName(selectedDeal.customer, selectedDeal.name)}
                 </h2>
               </div>
 
@@ -2348,11 +2348,11 @@ export default function DealsPage({
                     )}
 
                     {/* Requirement text */}
-                    {selectedDeal.requirement && (
+                    {(selectedDeal.requirement || selectedDeal.lead?.requirement || linkedLead?.requirement) && (
                       <div style={{ marginTop: "10px", padding: "10px", borderRadius: "8px", backgroundColor: "#F8FAFC", border: "1px solid #F1F5F9" }}>
                         <span style={{ fontSize: "0.6875rem", color: "#94A3B8", fontWeight: 500, display: "block", marginBottom: "2px" }}>Requirement</span>
                         <p style={{ color: "#334155", margin: 0, fontSize: "0.8125rem", lineHeight: 1.5 }}>
-                          {selectedDeal.requirement}
+                          {selectedDeal.requirement || selectedDeal.lead?.requirement || linkedLead?.requirement}
                         </p>
                       </div>
                     )}
@@ -2414,7 +2414,7 @@ export default function DealsPage({
                         <div style={{ padding: "10px", borderRadius: "8px", backgroundColor: "#F8FAFC", border: "1px solid #F1F5F9" }}>
                           <span style={{ fontSize: "0.6875rem", color: "#94A3B8", fontWeight: 500, display: "block", marginBottom: "2px" }}>Contact Name</span>
                           <span style={{ fontWeight: 600, color: "#0F172A" }}>
-                            {selectedDeal.customer?.name || linkedLead?.name || "N/A"}
+                            {selectedDeal.lead?.name || linkedLead?.name || selectedDeal.customer?.name || "N/A"}
                           </span>
                         </div>
 
@@ -2431,20 +2431,20 @@ export default function DealsPage({
                         <div style={{ padding: "10px", borderRadius: "8px", backgroundColor: "#F8FAFC", border: "1px solid #F1F5F9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                           <div style={{ minWidth: 0 }}>
                             <span style={{ fontSize: "0.6875rem", color: "#94A3B8", fontWeight: 500, display: "block", marginBottom: "2px" }}>Phone</span>
-                            {selectedDeal.customer?.phone || linkedLead?.phone ? (
+                            {selectedDeal.lead?.phone || linkedLead?.phone || selectedDeal.customer?.phone ? (
                               <a
-                                href={`tel:${selectedDeal.customer?.phone || linkedLead?.phone}`}
+                                href={`tel:${selectedDeal.lead?.phone || linkedLead?.phone || selectedDeal.customer?.phone}`}
                                 style={{ fontWeight: 600, color: "#009F9A", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}
                               >
-                                {selectedDeal.customer?.phone || linkedLead?.phone}
+                                {selectedDeal.lead?.phone || linkedLead?.phone || selectedDeal.customer?.phone}
                               </a>
                             ) : (
                               <span style={{ color: "#94A3B8" }}>N/A</span>
                             )}
                           </div>
-                          {(selectedDeal.customer?.phone || linkedLead?.phone) && (
+                          {(selectedDeal.lead?.phone || linkedLead?.phone || selectedDeal.customer?.phone) && (
                             <button
-                              onClick={() => handleCopyText(selectedDeal.customer?.phone || linkedLead?.phone || "", "Phone")}
+                              onClick={() => handleCopyText(selectedDeal.lead?.phone || linkedLead?.phone || selectedDeal.customer?.phone || "", "Phone")}
                               style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
                               title="Copy Phone"
                             >
@@ -2456,20 +2456,20 @@ export default function DealsPage({
                         <div style={{ padding: "10px", borderRadius: "8px", backgroundColor: "#F8FAFC", border: "1px solid #F1F5F9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                           <div style={{ minWidth: 0 }}>
                             <span style={{ fontSize: "0.6875rem", color: "#94A3B8", fontWeight: 500, display: "block", marginBottom: "2px" }}>Email</span>
-                            {selectedDeal.customer?.email || linkedLead?.email ? (
+                            {selectedDeal.lead?.email || linkedLead?.email || selectedDeal.customer?.email ? (
                               <a
-                                href={`mailto:${selectedDeal.customer?.email || linkedLead?.email}`}
+                                href={`mailto:${selectedDeal.lead?.email || linkedLead?.email || selectedDeal.customer?.email}`}
                                 style={{ fontWeight: 600, color: "#009F9A", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}
                               >
-                                {selectedDeal.customer?.email || linkedLead?.email}
+                                {selectedDeal.lead?.email || linkedLead?.email || selectedDeal.customer?.email}
                               </a>
                             ) : (
                               <span style={{ color: "#94A3B8" }}>N/A</span>
                             )}
                           </div>
-                          {(selectedDeal.customer?.email || linkedLead?.email) && (
+                          {(selectedDeal.lead?.email || linkedLead?.email || selectedDeal.customer?.email) && (
                             <button
-                              onClick={() => handleCopyText(selectedDeal.customer?.email || linkedLead?.email || "", "Email")}
+                              onClick={() => handleCopyText(selectedDeal.lead?.email || linkedLead?.email || selectedDeal.customer?.email || "", "Email")}
                               style={{ background: "none", border: "none", color: "#94A3B8", cursor: "pointer", padding: "4px" }}
                               title="Copy Email"
                             >

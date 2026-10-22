@@ -465,11 +465,9 @@ export default function ProductsPage() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        height: "100vh",
         backgroundColor: "#F8FAFC",
         color: "#0F172A",
         fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
-        overflow: "hidden",
       }}
     >
       {/* Toast Notification */}
@@ -539,8 +537,7 @@ export default function ProductsPage() {
           display: "flex",
           flexDirection: "column",
           minWidth: 0,
-          height: "100vh",
-          overflow: "hidden",
+          minHeight: "100vh",
           backgroundColor: "#F8FAFC",
         }}
       >
@@ -557,6 +554,8 @@ export default function ProductsPage() {
             flexWrap: "wrap",
             gap: "0.75rem",
             flexShrink: 0,
+            position: "sticky",
+            top: 0,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -656,7 +655,7 @@ export default function ProductsPage() {
         </header>
 
         {/* Content Wrapper */}
-        <div style={{ padding: "0.65rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.55rem", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <div style={{ padding: "0.65rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.55rem", flex: 1 }}>
           {/* 4 Slim Modern KPI Cards */}
           <section
             style={{
@@ -1019,13 +1018,11 @@ export default function ProductsPage() {
               border: "1px solid #E2E8F0",
               boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03)",
               overflow: "hidden",
-              flex: 1,
-              minHeight: 0,
               display: "flex",
               flexDirection: "column",
             }}
           >
-            <div style={{ overflowY: "auto", overflowX: "auto", flex: 1, minHeight: 0 }}>
+            <div style={{ overflowX: "auto", width: "100%" }}>
               <table
                 style={{
                   width: "100%",

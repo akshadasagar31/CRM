@@ -179,6 +179,9 @@ type FollowUp struct {
 	CompletedAt   *time.Time   `json:"completed_at"`
 	Notes         *string      `json:"notes"`
 	ReminderState string       `json:"reminder_state"`
+	DeliveryStatus *string     `json:"delivery_status,omitempty"`
+	DeliveryError  *string     `json:"delivery_error,omitempty"`
+	SentAt         *time.Time  `json:"sent_at,omitempty"`
 	CreatedAt     time.Time    `json:"created_at"`
 }
 
@@ -336,32 +339,44 @@ type DealStageUpdateInput struct {
 	IsActive    *bool   `json:"is_active"`
 }
 
+// LeadDealSummary represents essential linked lead details embedded in a Deal
+type LeadDealSummary struct {
+	Number      string  `json:"number"`
+	Name        string  `json:"name"`
+	Email       string  `json:"email"`
+	Phone       *string `json:"phone"`
+	Requirement string  `json:"requirement"`
+	Status      string  `json:"status"`
+	City        string  `json:"city"`
+}
+
 // Deal represents a sales deal
 type Deal struct {
-	ID                int          `json:"id"`
-	DealNumber        string       `json:"deal_number"`
-	Name              string       `json:"name"`
-	CustomerID        int          `json:"customer_id"`
-	Customer          *Customer    `json:"customer,omitempty"`
-	LeadNumber        *string      `json:"lead_number"`
-	PipelineID        int          `json:"pipeline_id"`
-	Pipeline          *Pipeline    `json:"pipeline,omitempty"`
-	StageID           int          `json:"stage_id"`
-	Stage             *DealStage   `json:"stage,omitempty"`
-	OwnerID           *int         `json:"owner_id"`
-	Owner             *UserSummary `json:"owner,omitempty"`
-	Value             float64      `json:"value"`
-	Currency          string       `json:"currency"`
-	Priority          string       `json:"priority"` // "Low", "Medium", "High", "Urgent"
-	ExpectedCloseDate *time.Time   `json:"expected_close_date"`
-	Requirement       string       `json:"requirement"`
-	Status            string       `json:"status"` // "open", "won", "lost"
-	LostReason        *string      `json:"lost_reason"`
-	WorkspaceID       int          `json:"workspace_id"`
-	CreatedByID       *int         `json:"created_by_id"`
-	Creator           *UserSummary `json:"creator,omitempty"`
-	CreatedAt         time.Time    `json:"created_at"`
-	UpdatedAt         time.Time    `json:"updated_at"`
+	ID                int              `json:"id"`
+	DealNumber        string           `json:"deal_number"`
+	Name              string           `json:"name"`
+	CustomerID        int              `json:"customer_id"`
+	Customer          *Customer        `json:"customer,omitempty"`
+	LeadNumber        *string          `json:"lead_number"`
+	Lead              *LeadDealSummary `json:"lead,omitempty"`
+	PipelineID        int              `json:"pipeline_id"`
+	Pipeline          *Pipeline        `json:"pipeline,omitempty"`
+	StageID           int              `json:"stage_id"`
+	Stage             *DealStage       `json:"stage,omitempty"`
+	OwnerID           *int             `json:"owner_id"`
+	Owner             *UserSummary     `json:"owner,omitempty"`
+	Value             float64          `json:"value"`
+	Currency          string           `json:"currency"`
+	Priority          string           `json:"priority"` // "Low", "Medium", "High", "Urgent"
+	ExpectedCloseDate *time.Time       `json:"expected_close_date"`
+	Requirement       string           `json:"requirement"`
+	Status            string           `json:"status"` // "open", "won", "lost"
+	LostReason        *string          `json:"lost_reason"`
+	WorkspaceID       int              `json:"workspace_id"`
+	CreatedByID       *int             `json:"created_by_id"`
+	Creator           *UserSummary     `json:"creator,omitempty"`
+	CreatedAt         time.Time        `json:"created_at"`
+	UpdatedAt         time.Time        `json:"updated_at"`
 }
 
 type DealCreateInput struct {
@@ -439,6 +454,8 @@ type LeadConvertInput struct {
 	OwnerID           *int       `json:"owner_id"`
 	Priority          string     `json:"priority"`
 	Requirement       string     `json:"requirement"`
+	CustomerID        *int       `json:"customer_id,omitempty"`
+	CreateNewCustomer bool       `json:"create_new_customer"`
 	CustomerName      string     `json:"customer_name"`
 	CustomerEmail     string     `json:"customer_email"`
 	CustomerPhone     string     `json:"customer_phone"`
@@ -602,6 +619,8 @@ type Quotation struct {
 	CreatedByID        *int            `json:"created_by_id"`
 	Creator            *UserSummary    `json:"creator,omitempty"`
 	Items              []QuotationItem `json:"items,omitempty"`
+	SentAt             *time.Time      `json:"sent_at,omitempty"`
+	DeliveryStatus     *string         `json:"delivery_status,omitempty"`
 	CreatedAt          time.Time       `json:"created_at"`
 	UpdatedAt          time.Time       `json:"updated_at"`
 }
@@ -916,6 +935,8 @@ type Invoice struct {
 	Creator            *UserSummary     `json:"creator,omitempty"`
 	Items              []InvoiceItem    `json:"items,omitempty"`
 	Payments           []InvoicePayment `json:"payments,omitempty"`
+	SentAt             *time.Time       `json:"sent_at,omitempty"`
+	DeliveryStatus     *string          `json:"delivery_status,omitempty"`
 	CreatedAt          time.Time        `json:"created_at"`
 	UpdatedAt          time.Time        `json:"updated_at"`
 }
@@ -1223,6 +1244,7 @@ type EmailLog struct {
 	HasAttachment  bool       `json:"has_attachment"`
 	AttachmentName *string    `json:"attachment_name"`
 	IdempotencyKey string     `json:"idempotency_key"`
+	ReplyTo        *string    `json:"reply_to,omitempty"`
 	SentAt         *time.Time `json:"sent_at"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`

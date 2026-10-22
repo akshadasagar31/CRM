@@ -43,6 +43,7 @@ import {
   Percent,
   Download,
   Loader2,
+  RotateCcw,
 } from "lucide-react";
 import {
   quotationsApi,
@@ -126,13 +127,21 @@ function QuotationsContent() {
   const [isSendingEmail, setIsSendingEmail] = useState<number | null>(null);
 
   const handleSendEmail = async (quote: Quotation) => {
+    const isAlreadySent = Boolean(quote.sent_at || quote.status === "Sent" || quote.status === "Accepted");
+    if (isAlreadySent) {
+      const confirmed = window.confirm(
+        `Quotation ${quote.quotation_number} was previously sent to ${quote.customer?.name || "the customer"}.\n\nDo you want to manually resend this quotation email?`
+      );
+      if (!confirmed) return;
+    }
+
     setIsSendingEmail(quote.id);
     try {
       const res = await quotationsApi.sendEmail(quote.id);
-      showToast(res.message || "Quotation email queued for delivery!", "success");
+      showToast(res.message || (isAlreadySent ? "Quotation email resent successfully!" : "Quotation email queued for delivery!"), "success");
       loadAllData();
       if (selectedQuotation && selectedQuotation.id === quote.id) {
-        setSelectedQuotation({ ...selectedQuotation, status: "Sent" });
+        setSelectedQuotation({ ...selectedQuotation, status: "Sent", sent_at: new Date().toISOString(), delivery_status: "sent" });
       }
     } catch (err: any) {
       showToast(err.message || "Failed to send quotation email", "error");
@@ -283,7 +292,7 @@ function QuotationsContent() {
     const deal = deals.find((d) => d.id === dealId);
     const linkedCust = deal?.customer || customers.find((c) => c.id === deal?.customer_id);
 
-    setQuotationTitle(deal ? getCleanCustomerName(deal.customer, deal.name) : "Sales Quotation");
+    setQuotationTitle(deal ? getCleanCustomerName(deal.customer, deal.name, deal.lead?.name) : "Sales Quotation");
     setValidUntil(dateStr);
     setCurrency(companyProfile?.default_currency || "INR");
     setCustomerState(linkedCust?.state || companyProfile?.state || "Maharashtra");
@@ -489,7 +498,7 @@ function QuotationsContent() {
     if (dId) {
       const deal = deals.find((d) => d.id === dId);
       if (deal) {
-        setQuotationTitle(getCleanCustomerName(deal.customer, deal.name));
+        setQuotationTitle(getCleanCustomerName(deal.customer, deal.name, deal.lead?.name));
         const linkedCust = deal.customer || customers.find((c) => c.id === deal.customer_id);
         if (linkedCust?.state) {
           setCustomerState(linkedCust.state);
@@ -859,7 +868,7 @@ function QuotationsContent() {
   };
 
   return (
-    <div style={{ display: "flex", width: "100%", height: "100vh", overflow: "hidden", backgroundColor: "#F8FAFC" }}>
+    <div style={{ display: "flex", width: "100%", minHeight: "100vh", backgroundColor: "#F8FAFC" }}>
       {/* Toast Notification */}
       {toastMessage && (
         <div
@@ -912,7 +921,7 @@ function QuotationsContent() {
       />
 
       {/* Main Content Workspace */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, minHeight: "100vh" }}>
         {/* Top Header / Toolbar */}
         <header
           style={{
@@ -1145,7 +1154,7 @@ function QuotationsContent() {
         </div>
 
         {/* Quotations List View / Table */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+        <div style={{ flex: 1, padding: "20px 24px" }}>
           {isLoading ? (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "300px", gap: "12px", color: "#64748B" }}>
               <RefreshCw size={28} className="animate-spin" color="#009F9A" />
@@ -1261,7 +1270,7 @@ function QuotationsContent() {
                           <td style={{ padding: "14px 16px", color: "#334155" }}>
                             {quote.deal ? (
                               <div style={{ display: "flex", flexDirection: "column" }}>
-                                <span style={{ fontWeight: 600, color: "#2563EB" }}>{getCleanCustomerName(quote.deal.customer, quote.deal.name)}</span>
+                                <span style={{ fontWeight: 600, color: "#2563EB" }}>{getCleanCustomerName(quote.deal.customer, quote.deal.name, quote.deal.lead?.name)}</span>
                                 {quote.deal.stage && (
                                   <span style={{ fontSize: "0.6875rem", color: "#64748B" }}>
                                     Stage: {quote.deal.stage.name}
@@ -1311,25 +1320,56 @@ function QuotationsContent() {
                             )}
                           </td>
 
-                          {/* Status */}
+                          {/* Status & Delivery Tracking */}
                           <td style={{ padding: "14px 16px" }}>
-                            <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                padding: "3px 10px",
-                                borderRadius: "999px",
-                                fontSize: "0.6875rem",
-                                fontWeight: 700,
-                                backgroundColor: badge.bg,
-                                color: badge.text,
-                                border: `1px solid ${badge.border}`,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.03em",
-                              }}
-                            >
-                              {badge.label}
-                            </span>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  padding: "3px 10px",
+                                  borderRadius: "999px",
+                                  fontSize: "0.6875rem",
+                                  fontWeight: 700,
+                                  backgroundColor: badge.bg,
+                                  color: badge.text,
+                                  border: `1px solid ${badge.border}`,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.03em",
+                                }}
+                              >
+                                {badge.label}
+                              </span>
+                              {quote.sent_at || quote.delivery_status === "sent" ? (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 600,
+                                    color: "#059669",
+                                  }}
+                                  title={`Quotation PDF delivered to customer${quote.sent_at ? " on " + new Date(quote.sent_at).toLocaleDateString() : ""}`}
+                                >
+                                  <CheckCircle2 size={11} /> Emailed
+                                </span>
+                              ) : quote.delivery_status === "failed" ? (
+                                <span
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "3px",
+                                    fontSize: "0.6875rem",
+                                    fontWeight: 600,
+                                    color: "#DC2626",
+                                  }}
+                                  title="Quotation email delivery failed"
+                                >
+                                  <AlertTriangle size={11} /> Delivery Failed
+                                </span>
+                              ) : null}
+                            </div>
                           </td>
 
                           {/* Total Amount */}
@@ -1375,19 +1415,25 @@ function QuotationsContent() {
                               </button>
                               <button
                                 type="button"
-                                title="Email PDF to Customer"
+                                title={quote.sent_at || quote.status === "Sent" ? "Resend Quotation Email" : "Email PDF to Customer"}
                                 disabled={isSendingEmail === quote.id}
                                 onClick={() => handleSendEmail(quote)}
                                 style={{
                                   padding: "6px",
                                   borderRadius: "6px",
                                   border: "1px solid #E2E8F0",
-                                  backgroundColor: isSendingEmail === quote.id ? "#F1F5F9" : "#FFFFFF",
-                                  color: "#2563EB",
+                                  backgroundColor: isSendingEmail === quote.id ? "#F1F5F9" : quote.sent_at ? "#EFF6FF" : "#FFFFFF",
+                                  color: quote.sent_at ? "#1D4ED8" : "#2563EB",
                                   cursor: isSendingEmail === quote.id ? "wait" : "pointer",
                                 }}
                               >
-                                {isSendingEmail === quote.id ? <RefreshCw size={14} className="animate-spin" /> : <Mail size={14} />}
+                                {isSendingEmail === quote.id ? (
+                                  <RefreshCw size={14} className="animate-spin" />
+                                ) : quote.sent_at || quote.status === "Sent" ? (
+                                  <RotateCcw size={14} />
+                                ) : (
+                                  <Mail size={14} />
+                                )}
                               </button>
                               <button
                                 type="button"
@@ -1547,7 +1593,7 @@ function QuotationsContent() {
                   </option>
                   {deals.map((deal) => (
                     <option key={deal.id} value={deal.id}>
-                      #{deal.deal_number || deal.id} - {getCleanCustomerName(deal.customer, deal.name)} — (Value: ${deal.value.toLocaleString()})
+                      #{deal.deal_number || deal.id} - {getCleanCustomerName(deal.customer, deal.name, deal.lead?.name)} — (Value: ${deal.value.toLocaleString()})
                     </option>
                   ))}
                 </select>
@@ -1581,16 +1627,21 @@ function QuotationsContent() {
                           Customer & Company
                         </div>
                         <div style={{ fontWeight: 700, color: "#0F172A" }}>
-                          {currentSelectedCustomer?.name || currentSelectedDeal.customer?.name || "No Customer Linked"}
+                          {currentSelectedDeal.lead?.name || currentSelectedCustomer?.name || currentSelectedDeal.customer?.name || "No Customer Linked"}
                         </div>
                         {(currentSelectedCustomer?.company || currentSelectedDeal.customer?.company) && (
                           <div style={{ color: "#475569", fontSize: "0.75rem" }}>
                             {currentSelectedCustomer?.company || currentSelectedDeal.customer?.company}
                           </div>
                         )}
-                        {(currentSelectedCustomer?.email || currentSelectedDeal.customer?.email) && (
+                        {(currentSelectedDeal.lead?.email || currentSelectedCustomer?.email || currentSelectedDeal.customer?.email) && (
                           <div style={{ color: "#0D9488", fontSize: "0.75rem" }}>
-                            {currentSelectedCustomer?.email || currentSelectedDeal.customer?.email}
+                            {currentSelectedDeal.lead?.email || currentSelectedCustomer?.email || currentSelectedDeal.customer?.email}
+                          </div>
+                        )}
+                        {(currentSelectedDeal.lead?.phone || currentSelectedCustomer?.phone || currentSelectedDeal.customer?.phone) && (
+                          <div style={{ color: "#64748B", fontSize: "0.75rem" }}>
+                            {currentSelectedDeal.lead?.phone || currentSelectedCustomer?.phone || currentSelectedDeal.customer?.phone}
                           </div>
                         )}
                       </div>
@@ -1601,7 +1652,7 @@ function QuotationsContent() {
                           Originating Lead
                         </div>
                         <div style={{ fontWeight: 700, color: "#0F172A" }}>
-                          {currentSelectedDeal.lead_number || "None"}
+                          {currentSelectedDeal.lead?.name ? `${currentSelectedDeal.lead.name} (Lead #${currentSelectedDeal.lead_number})` : (currentSelectedDeal.lead_number ? `Lead #${currentSelectedDeal.lead_number}` : "None")}
                         </div>
                         <div style={{ color: "#64748B", fontSize: "0.75rem" }}>
                           Qualified Lead automatically synced
@@ -1613,8 +1664,8 @@ function QuotationsContent() {
                         <div style={{ color: "#64748B", fontSize: "0.6875rem", textTransform: "uppercase", fontWeight: 600 }}>
                           Requirement / Scope
                         </div>
-                        <div style={{ color: "#1E293B", fontSize: "0.8125rem", fontStyle: currentSelectedDeal.requirement ? "normal" : "italic" }}>
-                          {currentSelectedDeal.requirement || "No requirement notes recorded in deal."}
+                        <div style={{ color: "#1E293B", fontSize: "0.8125rem", fontStyle: (currentSelectedDeal.requirement || currentSelectedDeal.lead?.requirement) ? "normal" : "italic" }}>
+                          {currentSelectedDeal.requirement || currentSelectedDeal.lead?.requirement || "No requirement notes recorded in deal."}
                         </div>
                       </div>
                     </div>
@@ -2903,27 +2954,45 @@ function QuotationsContent() {
                   <span>Print / PDF</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleSendEmail(selectedQuotation)}
-                  disabled={isSendingEmail === selectedQuotation.id}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "8px 14px",
-                    fontSize: "0.8125rem",
-                    fontWeight: 600,
-                    color: "#FFFFFF",
-                    backgroundColor: "#2563EB",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: isSendingEmail === selectedQuotation.id ? "wait" : "pointer",
-                  }}
-                >
-                  <Mail size={14} />
-                  <span>{isSendingEmail === selectedQuotation.id ? "Sending..." : "Email PDF"}</span>
-                </button>
+                {(() => {
+                  const isAlreadySent = Boolean(selectedQuotation.sent_at || selectedQuotation.status === "Sent" || selectedQuotation.status === "Accepted");
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => handleSendEmail(selectedQuotation)}
+                      disabled={isSendingEmail === selectedQuotation.id}
+                      title={isAlreadySent ? "Manually Resend Quotation Email" : "Email Quotation PDF"}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 14px",
+                        fontSize: "0.8125rem",
+                        fontWeight: 600,
+                        color: "#FFFFFF",
+                        backgroundColor: isAlreadySent ? "#1D4ED8" : "#2563EB",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: isSendingEmail === selectedQuotation.id ? "wait" : "pointer",
+                      }}
+                    >
+                      {isSendingEmail === selectedQuotation.id ? (
+                        <RefreshCw size={14} className="animate-spin" />
+                      ) : isAlreadySent ? (
+                        <RotateCcw size={14} />
+                      ) : (
+                        <Mail size={14} />
+                      )}
+                      <span>
+                        {isSendingEmail === selectedQuotation.id
+                          ? "Sending..."
+                          : isAlreadySent
+                          ? "Resend Email"
+                          : "Email PDF"}
+                      </span>
+                    </button>
+                  );
+                })()}
 
                 {selectedQuotation.status.toLowerCase() !== "sent" && selectedQuotation.status.toLowerCase() !== "accepted" && (
                   <button

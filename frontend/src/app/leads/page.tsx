@@ -78,6 +78,8 @@ import {
   FollowUpItem,
   Pipeline,
   pipelinesApi,
+  Customer,
+  customersApi,
 } from "@/lib/api";
 import Sidebar, { SidebarTab } from "@/components/Sidebar";
 import ProfileView from "@/components/ProfileView";
@@ -376,6 +378,8 @@ export default function UniversalLeadsPage() {
   const [convCustomerPhone, setConvCustomerPhone] = useState("");
   const [convPipelines, setConvPipelines] = useState<Pipeline[]>([]);
   const [isConverting, setIsConverting] = useState(false);
+  const [matchingCustomer, setMatchingCustomer] = useState<Customer | null>(null);
+  const [customerChoice, setCustomerChoice] = useState<"new" | "link">("new");
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -758,6 +762,8 @@ export default function UniversalLeadsPage() {
     setConvDealValue(10000);
     setConvPriority("Medium");
     setConvExpectedCloseDate(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+    setMatchingCustomer(null);
+    setCustomerChoice("new");
 
     try {
       const pipes = await pipelinesApi.list();
@@ -771,6 +777,30 @@ export default function UniversalLeadsPage() {
       }
     } catch (err) {
       console.error("Error loading pipelines for conversion:", err);
+    }
+
+    // Check if an existing customer has matching email or phone
+    try {
+      let matched: Customer | null = null;
+      if (lead.email && lead.email.trim()) {
+        const res = await customersApi.list(lead.email.trim(), 1, 5);
+        matched = res.items.find((c) => c.email && c.email.trim().toLowerCase() === lead.email.trim().toLowerCase()) || null;
+      }
+      if (!matched && lead.phone && lead.phone.trim()) {
+        const res = await customersApi.list(lead.phone.trim(), 1, 5);
+        matched = res.items.find((c) => c.phone && c.phone.trim() === lead.phone!.trim()) || null;
+      }
+      if (matched) {
+        setMatchingCustomer(matched);
+        if (matched.name.trim().toLowerCase() === lead.name.trim().toLowerCase()) {
+          setCustomerChoice("link");
+        } else {
+          // Different person's name: default to safe new customer to avoid data mismatch
+          setCustomerChoice("new");
+        }
+      }
+    } catch (err) {
+      console.error("Error checking matching customer:", err);
     }
 
     setIsConvertModalOpen(true);
@@ -799,6 +829,8 @@ export default function UniversalLeadsPage() {
         customer_email: convCustomerEmail.trim() || leadToConvert.email,
         customer_phone: convCustomerPhone.trim() || undefined,
         customer_company: convCustomerCompany.trim() || undefined,
+        customer_id: customerChoice === "link" && matchingCustomer ? matchingCustomer.id : undefined,
+        create_new_customer: customerChoice === "new" || !matchingCustomer,
       });
 
       // Update local lead status
@@ -1333,7 +1365,7 @@ export default function UniversalLeadsPage() {
       />
 
       {/* Main Screen Content Wrapper */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, width: "100%", height: "100vh", overflow: "hidden" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, width: "100%", minHeight: "100vh" }}>
         {/* Streamlined Topbar */}
         <header
           style={{
@@ -1345,6 +1377,8 @@ export default function UniversalLeadsPage() {
             justifyContent: "space-between",
             flexShrink: 0,
             zIndex: 40,
+            position: "sticky",
+            top: 0,
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
@@ -1472,10 +1506,10 @@ export default function UniversalLeadsPage() {
         </header>
 
         {/* Tab 1: Leads View (Keep-Alive) */}
-        <div style={{ display: activeTab === "leads" ? "flex" : "none", flexDirection: "column", width: "100%", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        <div style={{ display: activeTab === "leads" ? "flex" : "none", flexDirection: "column", width: "100%", flex: 1 }}>
 
       {/* Main Container */}
-      <div style={{ padding: "0.55rem 1.25rem", width: "100%", flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: "0.45rem", overflow: "hidden" }}>
+      <div style={{ padding: "0.55rem 1.25rem", width: "100%", flex: 1, display: "flex", flexDirection: "column", gap: "0.45rem" }}>
 
         {/* Saved Views Pills */}
         <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", overflowX: "auto", flexShrink: 0 }}>
@@ -1899,7 +1933,7 @@ export default function UniversalLeadsPage() {
         )}
 
         {/* Leads Table Card with Sticky Header & Internal Scroll */}
-        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "8px", border: "1px solid #E2E8F0", overflow: "hidden", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+        <div style={{ backgroundColor: "#FFFFFF", borderRadius: "8px", border: "1px solid #E2E8F0", overflow: "hidden", display: "flex", flexDirection: "column" }}>
           {isLoading ? (
             <div style={{ padding: "3rem", textAlign: "center", color: "#64748B" }}>
               <RefreshCw size={22} className="animate-spin" style={{ margin: "0 auto 0.75rem auto" }} />
@@ -1916,7 +1950,7 @@ export default function UniversalLeadsPage() {
               </div>
             </div>
           ) : (
-            <div style={{ overflowY: "auto", overflowX: "auto", flex: 1, minHeight: 0 }}>
+            <div style={{ overflowX: "auto", width: "100%" }}>
               <table style={{ width: "100%", minWidth: "max-content", borderCollapse: "collapse", fontSize: "0.75rem", textAlign: "left" }}>
                 <thead style={{ position: "sticky", top: 0, zIndex: 10, backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#475569" }}>
                   <tr>
@@ -4736,10 +4770,53 @@ export default function UniversalLeadsPage() {
                 </div>
               </div>
 
+              {/* Customer Match Notification & Selection */}
+              {matchingCustomer && (
+                <div style={{ backgroundColor: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "8px", padding: "12px" }}>
+                  <div style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#1E40AF", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <AlertCircle size={15} />
+                    <span>Existing Customer Found</span>
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#1E3A8A", marginTop: "4px", lineHeight: 1.4 }}>
+                    A customer named <strong>{matchingCustomer.name}</strong> has matching contact info ({matchingCustomer.email || matchingCustomer.phone}).
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+                    <label style={{ display: "flex", alignItems: "flex-start", gap: "8px", cursor: "pointer", fontSize: "0.75rem", color: "#1E293B" }}>
+                      <input
+                        type="radio"
+                        name="customerChoice"
+                        value="new"
+                        checked={customerChoice === "new"}
+                        onChange={() => setCustomerChoice("new")}
+                        style={{ marginTop: "2px" }}
+                      />
+                      <div>
+                        <strong>Create New Dedicated Customer for "{leadToConvert.name}"</strong> (Recommended)
+                        <div style={{ color: "#64748B", fontSize: "0.6875rem" }}>Keeps "{leadToConvert.name}" separate and avoids mixing with "{matchingCustomer.name}".</div>
+                      </div>
+                    </label>
+                    <label style={{ display: "flex", alignItems: "flex-start", gap: "8px", cursor: "pointer", fontSize: "0.75rem", color: "#1E293B" }}>
+                      <input
+                        type="radio"
+                        name="customerChoice"
+                        value="link"
+                        checked={customerChoice === "link"}
+                        onChange={() => setCustomerChoice("link")}
+                        style={{ marginTop: "2px" }}
+                      />
+                      <div>
+                        <strong>Link to Existing Customer "{matchingCustomer.name}"</strong>
+                        <div style={{ color: "#64748B", fontSize: "0.6875rem" }}>Attaches this new deal to {matchingCustomer.name}'s customer profile.</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
               {/* Customer Details Section */}
               <div style={{ backgroundColor: "#F8FAFC", padding: "1rem", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
                 <h4 style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#0F172A", margin: "0 0 0.5rem 0" }}>
-                  Customer Details (New or Linked)
+                  Customer Details ({customerChoice === "link" && matchingCustomer ? `Linked: ${matchingCustomer.name}` : "New Dedicated Customer"})
                 </h4>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
                   <input

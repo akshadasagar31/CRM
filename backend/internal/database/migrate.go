@@ -636,6 +636,18 @@ func (db *DB) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_email_logs_entity ON email_logs(entity_type, entity_id);`,
 		`CREATE INDEX IF NOT EXISTS idx_email_logs_idempotency ON email_logs(idempotency_key);`,
 		`CREATE INDEX IF NOT EXISTS idx_email_logs_created_at ON email_logs(created_at DESC);`,
+
+		// 39. Follow-Up, Quotation & Invoice automated delivery tracking columns
+		`ALTER TABLE follow_ups ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP WITH TIME ZONE;`,
+		`ALTER TABLE follow_ups ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(50) DEFAULT 'pending';`,
+		`ALTER TABLE follow_ups ADD COLUMN IF NOT EXISTS delivery_error TEXT;`,
+		`ALTER TABLE follow_ups ADD COLUMN IF NOT EXISTS last_delivery_attempt_at TIMESTAMP WITH TIME ZONE;`,
+		`CREATE INDEX IF NOT EXISTS idx_follow_ups_due ON follow_ups(completed, due_date);`,
+		`ALTER TABLE quotations ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP WITH TIME ZONE;`,
+		`ALTER TABLE quotations ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(50) DEFAULT 'pending';`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sent_at TIMESTAMP WITH TIME ZONE;`,
+		`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(50) DEFAULT 'pending';`,
+		`ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS reply_to VARCHAR(255);`,
 	}
 
 	for _, query := range queries {

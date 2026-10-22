@@ -158,15 +158,15 @@ func (r *InteractionRepository) CreateFollowUp(ctx context.Context, leadNumber s
 		fType = "Call"
 	}
 	query := `
-		INSERT INTO follow_ups (lead_number, user_id, title, follow_up_type, due_date, completed, reminder_state, notes, created_at)
-		VALUES ($1, $2, $3, $4, $5, 0, 'pending', $6, NOW())
-		RETURNING id, lead_number, user_id, title, follow_up_type, due_date, completed, completed_at, notes, reminder_state, created_at
+		INSERT INTO follow_ups (lead_number, user_id, title, follow_up_type, due_date, completed, reminder_state, delivery_status, notes, created_at)
+		VALUES ($1, $2, $3, $4, $5, 0, 'pending', 'pending', $6, NOW())
+		RETURNING id, lead_number, user_id, title, follow_up_type, due_date, completed, completed_at, notes, reminder_state, delivery_status, delivery_error, sent_at, created_at
 	`
 	var f models.FollowUp
 	var compInt int
 	err := r.db.Pool.QueryRow(ctx, query, leadNumber, userID, title, fType, dueDate, notes).Scan(
 		&f.ID, &f.LeadNumber, &f.UserID, &f.Title, &f.FollowUpType, &f.DueDate,
-		&compInt, &f.CompletedAt, &f.Notes, &f.ReminderState, &f.CreatedAt,
+		&compInt, &f.CompletedAt, &f.Notes, &f.ReminderState, &f.DeliveryStatus, &f.DeliveryError, &f.SentAt, &f.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -195,7 +195,8 @@ func (r *InteractionRepository) CreateFollowUp(ctx context.Context, leadNumber s
 
 func (r *InteractionRepository) ListFollowUps(ctx context.Context, leadNumber string) ([]models.FollowUp, error) {
 	query := `
-		SELECT f.id, f.lead_number, f.user_id, f.title, f.follow_up_type, f.due_date, f.completed, f.completed_at, f.notes, f.reminder_state, f.created_at,
+		SELECT f.id, f.lead_number, f.user_id, f.title, f.follow_up_type, f.due_date, f.completed, f.completed_at, f.notes, f.reminder_state,
+		       f.delivery_status, f.delivery_error, f.sent_at, f.created_at,
 		       u.id, u.name, u.email
 		FROM follow_ups f
 		LEFT JOIN users u ON f.user_id = u.id
@@ -217,7 +218,8 @@ func (r *InteractionRepository) ListFollowUps(ctx context.Context, leadNumber st
 
 		err := rows.Scan(
 			&f.ID, &f.LeadNumber, &f.UserID, &f.Title, &f.FollowUpType, &f.DueDate,
-			&compInt, &f.CompletedAt, &f.Notes, &f.ReminderState, &f.CreatedAt,
+			&compInt, &f.CompletedAt, &f.Notes, &f.ReminderState,
+			&f.DeliveryStatus, &f.DeliveryError, &f.SentAt, &f.CreatedAt,
 			&uID, &uName, &uEmail,
 		)
 		if err != nil {
@@ -239,11 +241,13 @@ func (r *InteractionRepository) UpdateFollowUp(ctx context.Context, leadNumber s
 	var current models.FollowUp
 	var compInt int
 	err := r.db.Pool.QueryRow(ctx, `
-		SELECT id, lead_number, user_id, title, follow_up_type, due_date, completed, completed_at, notes, reminder_state, created_at
+		SELECT id, lead_number, user_id, title, follow_up_type, due_date, completed, completed_at, notes, reminder_state,
+		       delivery_status, delivery_error, sent_at, created_at
 		FROM follow_ups WHERE id = $1 AND lead_number = $2
 	`, fupID, leadNumber).Scan(
 		&current.ID, &current.LeadNumber, &current.UserID, &current.Title, &current.FollowUpType, &current.DueDate,
-		&compInt, &current.CompletedAt, &current.Notes, &current.ReminderState, &current.CreatedAt,
+		&compInt, &current.CompletedAt, &current.Notes, &current.ReminderState,
+		&current.DeliveryStatus, &current.DeliveryError, &current.SentAt, &current.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -253,6 +257,7 @@ func (r *InteractionRepository) UpdateFollowUp(ctx context.Context, leadNumber s
 	}
 	current.Completed = compInt == 1
 
+	isRescheduled := false
 	if title != nil {
 		current.Title = *title
 	}
@@ -260,6 +265,9 @@ func (r *InteractionRepository) UpdateFollowUp(ctx context.Context, leadNumber s
 		current.FollowUpType = *fType
 	}
 	if dueDate != nil {
+		if !dueDate.Equal(current.DueDate) {
+			isRescheduled = true
+		}
 		current.DueDate = *dueDate
 	}
 	if notes != nil {
@@ -275,16 +283,33 @@ func (r *InteractionRepository) UpdateFollowUp(ctx context.Context, leadNumber s
 		} else {
 			newCompInt = 0
 			current.CompletedAt = nil
+			if compInt == 1 {
+				isRescheduled = true
+			}
 		}
 		current.Completed = *completed
 	}
 
+	// If rescheduled by salesperson, reset reminder and delivery state so it triggers at new scheduled time
+	if isRescheduled {
+		newCompInt = 0
+		current.Completed = false
+		current.CompletedAt = nil
+		current.ReminderState = "pending"
+		p := "pending"
+		current.DeliveryStatus = &p
+		current.DeliveryError = nil
+		current.SentAt = nil
+	}
+
 	query := `
 		UPDATE follow_ups
-		SET title = $1, follow_up_type = $2, due_date = $3, completed = $4, completed_at = $5, notes = $6
-		WHERE id = $7 AND lead_number = $8
+		SET title = $1, follow_up_type = $2, due_date = $3, completed = $4, completed_at = $5, notes = $6,
+		    reminder_state = $7, delivery_status = $8, delivery_error = $9, sent_at = $10
+		WHERE id = $11 AND lead_number = $12
 	`
-	_, err = r.db.Pool.Exec(ctx, query, current.Title, current.FollowUpType, current.DueDate, newCompInt, current.CompletedAt, current.Notes, fupID, leadNumber)
+	_, err = r.db.Pool.Exec(ctx, query, current.Title, current.FollowUpType, current.DueDate, newCompInt, current.CompletedAt, current.Notes,
+		current.ReminderState, current.DeliveryStatus, current.DeliveryError, current.SentAt, fupID, leadNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -294,6 +319,10 @@ func (r *InteractionRepository) UpdateFollowUp(ctx context.Context, leadNumber s
 		_, _ = r.db.Pool.Exec(ctx, "UPDATE leads SET follow_up_completed = 1, last_activity_at = NOW() WHERE number = $1", leadNumber)
 		actTitle := "Follow-up completed: " + current.Title
 		_ = r.LogActivity(ctx, leadNumber, current.UserID, "follow_up_completed", actTitle, current.Notes)
+	} else if isRescheduled {
+		_, _ = r.db.Pool.Exec(ctx, "UPDATE leads SET follow_up_date = $1, follow_up_type = $2, follow_up_completed = 0, last_activity_at = NOW() WHERE number = $3", current.DueDate, current.FollowUpType, leadNumber)
+		actTitle := "Follow-up rescheduled: " + current.Title
+		_ = r.LogActivity(ctx, leadNumber, current.UserID, "follow_up_scheduled", actTitle, current.Notes)
 	}
 
 	return &current, nil
@@ -302,7 +331,8 @@ func (r *InteractionRepository) UpdateFollowUp(ctx context.Context, leadNumber s
 func (r *InteractionRepository) ListAllFollowUps(ctx context.Context, filter string) ([]models.FollowUp, map[string]int, error) {
 	query := `
 		SELECT f.id, f.lead_number, COALESCE(l.name, f.lead_number) AS lead_name, CAST('' AS TEXT) AS lead_company,
-		       f.user_id, f.title, f.follow_up_type, f.due_date, f.completed, f.completed_at, f.notes, f.reminder_state, f.created_at,
+		       f.user_id, f.title, f.follow_up_type, f.due_date, f.completed, f.completed_at, f.notes, f.reminder_state,
+		       f.delivery_status, f.delivery_error, f.sent_at, f.created_at,
 		       u.id, u.name, u.email
 		FROM follow_ups f
 		LEFT JOIN leads l ON f.lead_number = l.number
@@ -337,7 +367,8 @@ func (r *InteractionRepository) ListAllFollowUps(ctx context.Context, filter str
 		err := rows.Scan(
 			&f.ID, &f.LeadNumber, &f.LeadName, &f.LeadCompany,
 			&f.UserID, &f.Title, &f.FollowUpType, &f.DueDate,
-			&compInt, &f.CompletedAt, &f.Notes, &f.ReminderState, &f.CreatedAt,
+			&compInt, &f.CompletedAt, &f.Notes, &f.ReminderState,
+			&f.DeliveryStatus, &f.DeliveryError, &f.SentAt, &f.CreatedAt,
 			&uID, &uName, &uEmail,
 		)
 		if err != nil {

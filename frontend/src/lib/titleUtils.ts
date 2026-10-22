@@ -9,16 +9,16 @@ export function getCleanCustomerName(
   rawTitle?: string | null,
   leadName?: string | null
 ): string {
-  // 1. If explicit customer name is available, prioritize it
-  const cName = customer?.name?.trim();
-  if (cName && cName !== "—" && cName !== "-" && !cName.toLowerCase().includes("opportunity")) {
-    return cName;
-  }
-
-  // 2. If explicit lead name is available, use it
+  // 1. If explicit lead name is available, prioritize it
   const lName = leadName?.trim();
   if (lName && lName !== "—" && lName !== "-") {
     return lName;
+  }
+
+  // 2. If explicit customer name is available, prioritize it
+  const cName = customer?.name?.trim();
+  if (cName && cName !== "—" && cName !== "-" && !cName.toLowerCase().includes("opportunity")) {
+    return cName;
   }
 
   // 3. Fallback to stripping legacy title artifacts
