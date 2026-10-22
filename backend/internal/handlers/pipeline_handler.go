@@ -159,7 +159,14 @@ func (h *PipelineHandler) DeleteStage(c *gin.Context) {
 		return
 	}
 
-	if err := h.repo.DeleteStage(c.Request.Context(), stageID); err != nil {
+	var targetStageID *int
+	if targetStr := c.Query("target_stage_id"); targetStr != "" {
+		if tid, err := strconv.Atoi(targetStr); err == nil {
+			targetStageID = &tid
+		}
+	}
+
+	if err := h.repo.DeleteStage(c.Request.Context(), stageID, targetStageID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
 		return
 	}

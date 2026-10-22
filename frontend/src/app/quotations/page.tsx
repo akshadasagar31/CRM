@@ -292,7 +292,13 @@ function QuotationsContent() {
     const deal = deals.find((d) => d.id === dealId);
     const linkedCust = deal?.customer || customers.find((c) => c.id === deal?.customer_id);
 
-    setQuotationTitle(deal ? getCleanCustomerName(deal.customer, deal.name, deal.lead?.name) : "Sales Quotation");
+    const defaultTitle = deal?.requirement
+      ? `Proposal - ${deal.requirement}`
+      : deal?.name
+        ? `Proposal - ${deal.name}`
+        : "Sales Quotation";
+
+    setQuotationTitle(defaultTitle);
     setValidUntil(dateStr);
     setCurrency(companyProfile?.default_currency || "INR");
     setCustomerState(linkedCust?.state || companyProfile?.state || "Maharashtra");
@@ -498,7 +504,15 @@ function QuotationsContent() {
     if (dId) {
       const deal = deals.find((d) => d.id === dId);
       if (deal) {
-        setQuotationTitle(getCleanCustomerName(deal.customer, deal.name, deal.lead?.name));
+        const defaultTitle = deal.requirement
+          ? `Proposal - ${deal.requirement}`
+          : deal.name
+            ? `Proposal - ${deal.name}`
+            : "Sales Quotation";
+
+        if (!quotationTitle || quotationTitle === "Sales Quotation" || quotationTitle.startsWith("Proposal - ")) {
+          setQuotationTitle(defaultTitle);
+        }
         const linkedCust = deal.customer || customers.find((c) => c.id === deal.customer_id);
         if (linkedCust?.state) {
           setCustomerState(linkedCust.state);
@@ -825,7 +839,9 @@ function QuotationsContent() {
         const query = searchQuery.toLowerCase();
         const matchesNum = q.quotation_number.toLowerCase().includes(query);
         const matchesTitle = q.title.toLowerCase().includes(query);
-        const matchesDeal = q.deal ? q.deal.name.toLowerCase().includes(query) : false;
+        const matchesDeal = q.deal
+          ? q.deal.name.toLowerCase().includes(query) || (q.deal.deal_number && q.deal.deal_number.toLowerCase().includes(query))
+          : false;
         const matchesCustomer = q.customer ? q.customer.name.toLowerCase().includes(query) : false;
         const matchesLead = q.lead_number ? q.lead_number.toLowerCase().includes(query) : false;
         if (!matchesNum && !matchesTitle && !matchesDeal && !matchesCustomer && !matchesLead) {
@@ -1226,7 +1242,7 @@ function QuotationsContent() {
                   <thead>
                     <tr style={{ backgroundColor: "#F8FAFC", borderBottom: "1px solid #E2E8F0", color: "#64748B", fontWeight: 600, textTransform: "uppercase", fontSize: "0.6875rem", letterSpacing: "0.04em" }}>
                       <th style={{ padding: "12px 16px" }}>Quotation #</th>
-                      <th style={{ padding: "12px 16px" }}>Title / Ref</th>
+                      <th style={{ padding: "12px 16px" }}>Quotation Title</th>
                       <th style={{ padding: "12px 16px" }}>Linked Deal</th>
                       <th style={{ padding: "12px 16px" }}>Customer / Company</th>
                       <th style={{ padding: "12px 16px" }}>Lead Ref</th>
@@ -1261,19 +1277,66 @@ function QuotationsContent() {
                             </div>
                           </td>
 
-                          {/* Title */}
-                          <td style={{ padding: "14px 16px", color: "#0F172A", fontWeight: 600, maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {getCleanCustomerName(quote.customer, quote.title)}
+                          {/* Quotation Title */}
+                          <td style={{ padding: "14px 16px", color: "#0F172A", fontWeight: 600, maxWidth: "230px" }}>
+                            <div
+                              style={{
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                color: "#0F172A",
+                              }}
+                              title={quote.title || "Sales Quotation"}
+                            >
+                              {quote.title || "Sales Quotation"}
+                            </div>
                           </td>
 
                           {/* Linked Deal */}
                           <td style={{ padding: "14px 16px", color: "#334155" }}>
                             {quote.deal ? (
-                              <div style={{ display: "flex", flexDirection: "column" }}>
-                                <span style={{ fontWeight: 600, color: "#2563EB" }}>{getCleanCustomerName(quote.deal.customer, quote.deal.name, quote.deal.lead?.name)}</span>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                  <span
+                                    style={{
+                                      display: "inline-block",
+                                      padding: "1px 6px",
+                                      borderRadius: "4px",
+                                      backgroundColor: "#EFF6FF",
+                                      color: "#1D4ED8",
+                                      fontSize: "0.6875rem",
+                                      fontWeight: 700,
+                                      fontFamily: "monospace",
+                                      border: "1px solid #BFDBFE",
+                                    }}
+                                  >
+                                    {quote.deal.deal_number || `Deal #${quote.deal.id}`}
+                                  </span>
+                                  <span
+                                    style={{
+                                      fontWeight: 600,
+                                      color: "#0F172A",
+                                      maxWidth: "160px",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                    title={quote.deal.name}
+                                  >
+                                    {quote.deal.name}
+                                  </span>
+                                </div>
                                 {quote.deal.stage && (
-                                  <span style={{ fontSize: "0.6875rem", color: "#64748B" }}>
-                                    Stage: {quote.deal.stage.name}
+                                  <span style={{ fontSize: "0.6875rem", color: "#64748B", display: "flex", alignItems: "center", gap: "4px" }}>
+                                    <span
+                                      style={{
+                                        width: "6px",
+                                        height: "6px",
+                                        borderRadius: "999px",
+                                        backgroundColor: quote.deal.stage.color || "#0D9488",
+                                      }}
+                                    />
+                                    <span>{quote.deal.stage.name}</span>
                                   </span>
                                 )}
                               </div>
@@ -1285,12 +1348,14 @@ function QuotationsContent() {
                           {/* Customer / Company */}
                           <td style={{ padding: "14px 16px", color: "#334155" }}>
                             {quote.customer ? (
-                              <div style={{ display: "flex", flexDirection: "column" }}>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                                 <span style={{ fontWeight: 600, color: "#0F172A" }}>{quote.customer.name}</span>
-                                {quote.customer.company && (
+                                {quote.customer.company ? (
                                   <span style={{ fontSize: "0.6875rem", color: "#64748B" }}>
                                     {quote.customer.company}
                                   </span>
+                                ) : (
+                                  <span style={{ fontSize: "0.6875rem", color: "#94A3B8" }}>Personal Account</span>
                                 )}
                               </div>
                             ) : (
@@ -2436,8 +2501,12 @@ function QuotationsContent() {
                     })()}
                   </div>
                   <h2 style={{ fontSize: "1.125rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
-                    {getCleanCustomerName(selectedQuotation.customer, selectedQuotation.title)}
+                    {selectedQuotation.title || "Sales Quotation"}
                   </h2>
+                  <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
+                    Quotation for <strong style={{ color: "#0F172A" }}>{selectedQuotation.customer?.name || "Customer"}</strong>
+                    {selectedQuotation.customer?.company ? ` (${selectedQuotation.customer.company})` : ""}
+                  </div>
                 </div>
               </div>
 
@@ -2502,8 +2571,25 @@ function QuotationsContent() {
                           <ExternalLink size={12} />
                         </Link>
                       </div>
-                      <div style={{ fontSize: "0.875rem", fontWeight: 700, color: "#0F172A" }}>
-                        {selectedQuotation.deal.name || `Deal #${selectedQuotation.deal_id}`}
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "2px 7px",
+                            borderRadius: "4px",
+                            backgroundColor: "#EFF6FF",
+                            color: "#1D4ED8",
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            fontFamily: "monospace",
+                            border: "1px solid #BFDBFE",
+                          }}
+                        >
+                          {selectedQuotation.deal.deal_number || `Deal #${selectedQuotation.deal.id}`}
+                        </span>
+                        <span style={{ fontSize: "0.9375rem", fontWeight: 700, color: "#0F172A" }}>
+                          {selectedQuotation.deal.name}
+                        </span>
                       </div>
                       {selectedQuotation.deal.stage && (
                         <div style={{ fontSize: "0.75rem", color: "#64748B" }}>

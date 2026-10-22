@@ -64,7 +64,13 @@ func (r *QuotationRepository) Create(ctx context.Context, input models.Quotation
 
 	title := strings.TrimSpace(input.Title)
 	if title == "" {
-		title = fmt.Sprintf("Quote for %s", deal.Name)
+		if req := strings.TrimSpace(deal.Requirement); req != "" {
+			title = fmt.Sprintf("Proposal - %s", req)
+		} else if strings.TrimSpace(deal.Name) != "" {
+			title = fmt.Sprintf("Proposal - %s", strings.TrimSpace(deal.Name))
+		} else {
+			title = "Sales Quotation"
+		}
 	}
 
 	currency := input.Currency
@@ -586,10 +592,12 @@ func (r *QuotationRepository) List(ctx context.Context, filter QuotationFilter, 
 		       COALESCE(q.igst_amount, 0), COALESCE(q.total_gst_amount, q.tax_amount), COALESCE(q.round_off_amount, 0),
 		       q.workspace_id, q.created_by_id, q.sent_at, q.delivery_status, q.created_at, q.updated_at,
 		       d.id, d.deal_number, d.name, d.value, d.currency, d.requirement, d.pipeline_id, d.stage_id,
+		       COALESCE(ds.name, 'New Opportunity'), COALESCE(ds.color, '#0D9488'),
 		       c.id, c.name, c.email, c.phone, c.company, c.city, c.state, c.pincode, c.gstin,
 		       u.id, u.name, u.email
 		FROM quotations q
 		JOIN deals d ON q.deal_id = d.id
+		LEFT JOIN deal_stages ds ON d.stage_id = ds.id
 		JOIN customers c ON q.customer_id = c.id
 		LEFT JOIN users u ON q.created_by_id = u.id
 		` + whereSQL + `
@@ -612,6 +620,7 @@ func (r *QuotationRepository) List(ctx context.Context, filter QuotationFilter, 
 		var dVal float64
 		var dCurr, dReq string
 		var dPipeID, dStageID int
+		var dsName, dsColor string
 		var cID int
 		var cName string
 		var cEmail, cPhone, cCompany, cCity, cState, cPincode, cGSTIN *string
@@ -628,6 +637,7 @@ func (r *QuotationRepository) List(ctx context.Context, filter QuotationFilter, 
 			&q.IGSTAmount, &q.TotalGSTAmount, &q.RoundOffAmount,
 			&q.WorkspaceID, &q.CreatedByID, &q.SentAt, &q.DeliveryStatus, &q.CreatedAt, &q.UpdatedAt,
 			&dID, &dNum, &dName, &dVal, &dCurr, &dReq, &dPipeID, &dStageID,
+			&dsName, &dsColor,
 			&cID, &cName, &cEmail, &cPhone, &cCompany, &cCity, &cState, &cPincode, &cGSTIN,
 			&uID, &uName, &uEmail,
 		); err != nil {
@@ -643,6 +653,11 @@ func (r *QuotationRepository) List(ctx context.Context, filter QuotationFilter, 
 			Requirement: dReq,
 			PipelineID:  dPipeID,
 			StageID:     dStageID,
+			Stage: &models.DealStage{
+				ID:    dStageID,
+				Name:  dsName,
+				Color: dsColor,
+			},
 		}
 		q.Customer = &models.Customer{
 			ID:      cID,

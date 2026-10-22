@@ -1353,8 +1353,9 @@ export const pipelinesApi = {
     });
   },
 
-  deleteStage: async (stageId: number): Promise<{ message: string }> => {
-    return request<{ message: string }>(`/stages/${stageId}`, {
+  deleteStage: async (stageId: number, targetStageId?: number): Promise<{ message: string }> => {
+    const query = targetStageId ? `?target_stage_id=${targetStageId}` : "";
+    return request<{ message: string }>(`/stages/${stageId}${query}`, {
       method: "DELETE",
     });
   },

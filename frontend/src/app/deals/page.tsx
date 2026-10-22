@@ -40,6 +40,9 @@ import {
   Power,
   LayoutGrid,
   Table as TableIcon,
+  GripVertical,
+  Lock,
+  ShieldCheck,
 } from "lucide-react";
 import {
   dealsApi,
@@ -177,6 +180,10 @@ export default function DealsPage({
   const [newCustomStageName, setNewCustomStageName] = useState("");
   const [newCustomStageColor, setNewCustomStageColor] = useState("#3B82F6");
   const [newCustomStageProbability, setNewCustomStageProbability] = useState<number>(50);
+  const [stageToDelete, setStageToDelete] = useState<DealStage | null>(null);
+  const [reassignTargetStageId, setReassignTargetStageId] = useState<number | "">("");
+  const [isDeletingStage, setIsDeletingStage] = useState(false);
+  const [draggedStageIdx, setDraggedStageIdx] = useState<number | null>(null);
 
   // Toast
   const [toastMessage, setToastMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -364,6 +371,9 @@ export default function DealsPage({
     setNewCustomStageName("");
     setNewCustomStageColor("#3B82F6");
     setNewCustomStageProbability(50);
+    setStageToDelete(null);
+    setReassignTargetStageId("");
+    setDraggedStageIdx(null);
     setIsCustomizeStagesModalOpen(true);
   };
 
@@ -389,6 +399,63 @@ export default function DealsPage({
       s.stage_order = idx + 1;
     });
     setEditingStages(list);
+  };
+
+  const handleDropStage = (targetIndex: number) => {
+    if (draggedStageIdx === null || draggedStageIdx === targetIndex) return;
+    const list = [...editingStages];
+    const [moved] = list.splice(draggedStageIdx, 1);
+    list.splice(targetIndex, 0, moved);
+    list.forEach((s, idx) => {
+      s.stage_order = idx + 1;
+    });
+    setEditingStages(list);
+    setDraggedStageIdx(null);
+  };
+
+  const handleDeleteStageClick = (stage: DealStage) => {
+    if (stage.is_won || stage.is_lost) {
+      showToast("System-critical Won and Lost stages cannot be deleted", "error");
+      return;
+    }
+    const dealsInStage = deals.filter((d) => d.stage_id === stage.id);
+    const otherStages = editingStages.filter((s) => s.id !== stage.id);
+    if (dealsInStage.length > 0 && otherStages.length === 0) {
+      showToast("Cannot delete stage: it contains deals and there are no other stages to reassign them to", "error");
+      return;
+    }
+    setStageToDelete(stage);
+    setReassignTargetStageId(otherStages.length > 0 ? otherStages[0].id : "");
+  };
+
+  const handleConfirmDeleteStage = async () => {
+    if (!stageToDelete || !activePipeline) return;
+    const dealsInStage = deals.filter((d) => d.stage_id === stageToDelete.id);
+    if (dealsInStage.length > 0 && !reassignTargetStageId) {
+      showToast("Please choose a destination stage for active deals", "error");
+      return;
+    }
+
+    setIsDeletingStage(true);
+    try {
+      const targetId = typeof reassignTargetStageId === "number" ? reassignTargetStageId : undefined;
+      await pipelinesApi.deleteStage(stageToDelete.id, targetId);
+
+      setEditingStages((prev) => prev.filter((s) => s.id !== stageToDelete.id));
+      setStages((prev) => prev.filter((s) => s.id !== stageToDelete.id));
+
+      if (dealsInStage.length > 0) {
+        await loadDeals(activePipeline.id);
+      }
+
+      showToast(`Stage "${stageToDelete.name}" deleted successfully`, "success");
+      setStageToDelete(null);
+      setReassignTargetStageId("");
+    } catch (err: any) {
+      showToast(err.message || "Failed to delete stage", "error");
+    } finally {
+      setIsDeletingStage(false);
+    }
   };
 
   const handleToggleStageActive = (stageId: number) => {
@@ -795,8 +862,9 @@ export default function DealsPage({
 
   // Open Create Deal Modal
   const handleOpenCreateModal = (preselectedStageId?: number) => {
-    setNewDealName("");
-    setNewDealCustomerId(customers.length > 0 ? customers[0].id : "");
+    const firstCust = customers.length > 0 ? customers[0] : null;
+    setNewDealCustomerId(firstCust ? firstCust.id : "");
+    setNewDealName(firstCust ? firstCust.name : "");
     setNewDealStageId(preselectedStageId || (stages.length > 0 ? stages[0].id : ""));
     setNewDealOwnerId(currentUser?.id || "");
     setNewDealValue("");
@@ -1192,10 +1260,10 @@ export default function DealsPage({
               </button>
             </div>
 
-            {/* Customize Stages Button */}
+            {/* Edit Stages Button */}
             <button
               onClick={handleOpenCustomizeStages}
-              title="Customize Pipeline Stages"
+              title="Edit Pipeline Stages (Add, Rename, Delete, Reorder)"
               style={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -1203,17 +1271,23 @@ export default function DealsPage({
                 padding: "8px 14px",
                 fontSize: "0.8125rem",
                 fontWeight: 600,
-                color: "#1E293B",
-                backgroundColor: "#FFFFFF",
-                border: "1px solid #CBD5E1",
+                color: "#0F766E",
+                backgroundColor: "#F0FDFA",
+                border: "1px solid #99F6E4",
                 borderRadius: "8px",
                 boxShadow: "0 1px 2px rgba(0, 0, 0, 0.04)",
                 cursor: "pointer",
                 transition: "all 0.15s ease",
               }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#CCFBF1";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "#F0FDFA";
+              }}
             >
-              <Sliders size={15} color="#009F9A" />
-              <span>Customize Stages</span>
+              <Sliders size={15} color="#0D9488" />
+              <span>Edit Stages</span>
             </button>
 
             {/* + Add Deal Button */}
@@ -1882,7 +1956,7 @@ export default function DealsPage({
                           required
                           value={drawerDealName}
                           onChange={(e) => setDrawerDealName(e.target.value)}
-                          placeholder="e.g. Enterprise License"
+                          placeholder="e.g. Customer Name or Customer Name - Topic"
                           style={{
                             width: "100%",
                             padding: "8px 12px",
@@ -1895,6 +1969,9 @@ export default function DealsPage({
                             boxSizing: "border-box",
                           }}
                         />
+                        <span style={{ fontSize: "0.6875rem", color: "#64748B", marginTop: "3px", display: "block" }}>
+                          Defaults to linked Customer / Lead name. Sales reps can optionally append a deal topic.
+                        </span>
                       </div>
 
                       {/* Customer / Lead Dropdown */}
@@ -2830,7 +2907,7 @@ export default function DealsPage({
                   required
                   value={newDealName}
                   onChange={(e) => setNewDealName(e.target.value)}
-                  placeholder="e.g. Enterprise License Deal"
+                  placeholder="e.g. Customer Name or Customer Name - Topic"
                   style={{
                     width: "100%",
                     padding: "8px 12px",
@@ -2843,6 +2920,9 @@ export default function DealsPage({
                     boxSizing: "border-box",
                   }}
                 />
+                <span style={{ fontSize: "0.6875rem", color: "#64748B", marginTop: "3px", display: "block" }}>
+                  Defaults to linked Customer / Lead name. Sales reps can optionally append a deal topic.
+                </span>
               </div>
 
               {/* Customer Selection or Inline Creation */}
@@ -2866,9 +2946,16 @@ export default function DealsPage({
                     onChange={(e) => {
                       const cid = e.target.value ? Number(e.target.value) : "";
                       setNewDealCustomerId(cid);
-                      if (cid && !newDealName) {
+                      if (cid) {
                         const sel = customers.find((c) => c.id === cid);
-                        if (sel) setNewDealName(sel.name);
+                        if (sel) {
+                          if (!newDealName || customers.some((c) => c.name === newDealName)) {
+                            setNewDealName(sel.name);
+                          } else if (newDealName.includes(" - ")) {
+                            const suffix = newDealName.split(" - ").slice(1).join(" - ");
+                            setNewDealName(`${sel.name} - ${suffix}`);
+                          }
+                        }
                       }
                     }}
                     style={{
@@ -2899,7 +2986,13 @@ export default function DealsPage({
                         placeholder="Contact Name *"
                         required
                         value={inlineCustName}
-                        onChange={(e) => setInlineCustName(e.target.value)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setInlineCustName(val);
+                          if (!newDealName || customers.some((c) => c.name === newDealName) || newDealName === inlineCustName) {
+                            setNewDealName(val);
+                          }
+                        }}
                         style={{ padding: "6px 10px", fontSize: "0.75rem", backgroundColor: "#FFFFFF", border: "1px solid #CBD5E1", borderRadius: "6px", boxSizing: "border-box" }}
                       />
                       <input
@@ -3197,16 +3290,19 @@ export default function DealsPage({
                 </div>
                 <div>
                   <h3 style={{ fontSize: "1.0625rem", fontWeight: 700, color: "#0F172A", margin: 0 }}>
-                    Customize Pipeline Stages
+                    Edit Pipeline Stages
                   </h3>
                   <p style={{ fontSize: "0.75rem", color: "#64748B", margin: "2px 0 0 0" }}>
-                    Reorder, rename, adjust win probability, set colors, and enable/disable stages
+                    Add, rename, delete, reorder, and configure pipeline stages
                   </p>
                 </div>
               </div>
 
               <button
-                onClick={() => setIsCustomizeStagesModalOpen(false)}
+                onClick={() => {
+                  setIsCustomizeStagesModalOpen(false);
+                  setStageToDelete(null);
+                }}
                 style={{
                   width: "32px",
                   height: "32px",
@@ -3236,13 +3332,163 @@ export default function DealsPage({
                 backgroundColor: "#F8FAFC",
               }}
             >
+              {/* Reassign Deals & Delete Confirmation Dialog */}
+              {stageToDelete && (
+                <div
+                  style={{
+                    backgroundColor: "#FFFBEB",
+                    border: "1px solid #FCD34D",
+                    borderRadius: "12px",
+                    padding: "16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                    boxShadow: "0 2px 8px rgba(245, 158, 11, 0.12)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#B45309", fontWeight: 700, fontSize: "0.875rem" }}>
+                    <AlertTriangle size={18} color="#D97706" />
+                    <span>Delete Stage: {stageToDelete.name}</span>
+                  </div>
+
+                  {deals.filter((d) => d.stage_id === stageToDelete.id).length > 0 ? (
+                    <div>
+                      <p style={{ margin: "0 0 10px 0", fontSize: "0.8125rem", color: "#78350F", lineHeight: 1.4 }}>
+                        This stage currently contains <strong>{deals.filter((d) => d.stage_id === stageToDelete.id).length} active deal(s)</strong>.
+                        To protect these deals, choose another stage to move them to before deleting:
+                      </p>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                        <select
+                          value={reassignTargetStageId}
+                          onChange={(e) => setReassignTargetStageId(Number(e.target.value))}
+                          style={{
+                            flex: 1,
+                            minWidth: "220px",
+                            padding: "8px 12px",
+                            fontSize: "0.8125rem",
+                            borderRadius: "8px",
+                            border: "1px solid #F59E0B",
+                            backgroundColor: "#FFFFFF",
+                            color: "#0F172A",
+                            fontWeight: 600,
+                            outline: "none",
+                          }}
+                        >
+                          {editingStages
+                            .filter((s) => s.id !== stageToDelete.id)
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>
+                                Move to: {s.name} ({s.probability}%)
+                              </option>
+                            ))}
+                        </select>
+
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <button
+                            type="button"
+                            disabled={isDeletingStage}
+                            onClick={() => setStageToDelete(null)}
+                            style={{
+                              padding: "8px 14px",
+                              fontSize: "0.8125rem",
+                              borderRadius: "8px",
+                              border: "1px solid #CBD5E1",
+                              backgroundColor: "#FFFFFF",
+                              color: "#475569",
+                              cursor: "pointer",
+                              fontWeight: 600,
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isDeletingStage || !reassignTargetStageId}
+                            onClick={handleConfirmDeleteStage}
+                            style={{
+                              padding: "8px 16px",
+                              fontSize: "0.8125rem",
+                              borderRadius: "8px",
+                              border: "none",
+                              backgroundColor: "#DC2626",
+                              color: "#FFFFFF",
+                              cursor: isDeletingStage ? "not-allowed" : "pointer",
+                              fontWeight: 600,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            <Trash2 size={14} />
+                            <span>{isDeletingStage ? "Reassigning & Deleting..." : "Reassign & Delete"}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <p style={{ margin: "0 0 10px 0", fontSize: "0.8125rem", color: "#78350F" }}>
+                        Are you sure you want to delete stage <strong>"{stageToDelete.name}"</strong>? There are currently no deals in this stage.
+                      </p>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "8px" }}>
+                        <button
+                          type="button"
+                          disabled={isDeletingStage}
+                          onClick={() => setStageToDelete(null)}
+                          style={{
+                            padding: "8px 14px",
+                            fontSize: "0.8125rem",
+                            borderRadius: "8px",
+                            border: "1px solid #CBD5E1",
+                            backgroundColor: "#FFFFFF",
+                            color: "#475569",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isDeletingStage}
+                          onClick={handleConfirmDeleteStage}
+                          style={{
+                            padding: "8px 16px",
+                            fontSize: "0.8125rem",
+                            borderRadius: "8px",
+                            border: "none",
+                            backgroundColor: "#DC2626",
+                            color: "#FFFFFF",
+                            cursor: isDeletingStage ? "not-allowed" : "pointer",
+                            fontWeight: 600,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                        >
+                          <Trash2 size={14} />
+                          <span>{isDeletingStage ? "Deleting..." : "Delete Stage"}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {editingStages.map((stage, index) => {
                   const isDisabled = stage.is_active === false;
+                  const isWonOrLost = stage.is_won || stage.is_lost;
+                  const dealsInStageCount = deals.filter((d) => d.stage_id === stage.id).length;
+                  const isDragging = draggedStageIdx === index;
 
                   return (
                     <div
                       key={stage.id}
+                      draggable={true}
+                      onDragStart={() => setDraggedStageIdx(index)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleDropStage(index)}
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -3252,11 +3498,25 @@ export default function DealsPage({
                         borderRadius: "10px",
                         border: `1px solid ${isDisabled ? "#FECACA" : "#E2E8F0"}`,
                         boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
-                        opacity: isDisabled ? 0.75 : 1,
+                        opacity: isDragging ? 0.4 : isDisabled ? 0.75 : 1,
                         transition: "all 0.15s ease",
                       }}
                     >
-                      {/* Order Controls */}
+                      {/* Drag Handle */}
+                      <div
+                        style={{
+                          cursor: "grab",
+                          color: "#94A3B8",
+                          display: "flex",
+                          alignItems: "center",
+                          padding: "2px",
+                        }}
+                        title="Drag to reorder"
+                      >
+                        <GripVertical size={16} />
+                      </div>
+
+                      {/* Order Controls (Up/Down Arrows) */}
                       <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
                         <button
                           type="button"
@@ -3274,7 +3534,7 @@ export default function DealsPage({
                             justifyContent: "center",
                           }}
                         >
-                          <ChevronUp size={16} />
+                          <ChevronUp size={15} />
                         </button>
                         <button
                           type="button"
@@ -3292,7 +3552,7 @@ export default function DealsPage({
                             justifyContent: "center",
                           }}
                         >
-                          <ChevronDown size={16} />
+                          <ChevronDown size={15} />
                         </button>
                       </div>
 
@@ -3327,15 +3587,15 @@ export default function DealsPage({
                         }}
                       />
 
-                      {/* Stage Name Input */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Stage Name Input & Deals Badge */}
+                      <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                         <input
                           type="text"
                           value={stage.name}
                           onChange={(e) => handleUpdateStageName(stage.id, e.target.value)}
                           placeholder="Stage Name"
                           style={{
-                            width: "100%",
+                            flex: 1,
                             padding: "8px 12px",
                             fontSize: "0.8125rem",
                             fontWeight: 600,
@@ -3347,6 +3607,23 @@ export default function DealsPage({
                             boxSizing: "border-box",
                           }}
                         />
+                        {dealsInStageCount > 0 && (
+                          <span
+                            title={`${dealsInStageCount} active deals in this stage`}
+                            style={{
+                              fontSize: "0.6875rem",
+                              fontWeight: 700,
+                              padding: "3px 8px",
+                              borderRadius: "999px",
+                              backgroundColor: "#E0F2FE",
+                              color: "#0369A1",
+                              flexShrink: 0,
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {dealsInStageCount} {dealsInStageCount === 1 ? "deal" : "deals"}
+                          </span>
+                        )}
                       </div>
 
                       {/* Probability % Input */}
@@ -3398,6 +3675,52 @@ export default function DealsPage({
                         <Power size={13} />
                         <span>{isDisabled ? "Disabled" : "Active"}</span>
                       </button>
+
+                      {/* Delete or Protected System Stage Badge */}
+                      {isWonOrLost ? (
+                        <div
+                          title="System-critical Won and Lost stages cannot be deleted to protect order creation and analytics"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            padding: "7px 10px",
+                            fontSize: "0.6875rem",
+                            fontWeight: 700,
+                            borderRadius: "8px",
+                            backgroundColor: "#F1F5F9",
+                            color: "#64748B",
+                            border: "1px solid #E2E8F0",
+                            flexShrink: 0,
+                            userSelect: "none",
+                          }}
+                        >
+                          <Lock size={12} color="#64748B" />
+                          <span>{stage.is_won ? "Won" : "Lost"}</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteStageClick(stage)}
+                          title={`Delete stage "${stage.name}"`}
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "8px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            border: "1px solid #FEE2E2",
+                            backgroundColor: "#FEF2F2",
+                            color: "#EF4444",
+                            cursor: "pointer",
+                            flexShrink: 0,
+                            transition: "all 0.15s ease",
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   );
                 })}

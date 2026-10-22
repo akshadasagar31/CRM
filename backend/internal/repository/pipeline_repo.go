@@ -333,11 +333,59 @@ func (r *PipelineRepository) UpdateStage(ctx context.Context, stageID int, input
 	return &s, nil
 }
 
-func (r *PipelineRepository) DeleteStage(ctx context.Context, stageID int) error {
+func (r *PipelineRepository) DeleteStage(ctx context.Context, stageID int, targetStageID *int) error {
+	// 1. Check if stage exists and whether it is a system-critical Won or Lost stage
+	var pipelineID int
+	var wonInt, lostInt int
+	err := r.db.Pool.QueryRow(ctx, "SELECT pipeline_id, is_won, is_lost FROM deal_stages WHERE id = $1", stageID).Scan(&pipelineID, &wonInt, &lostInt)
+	if err != nil {
+		return errors.New("stage not found")
+	}
+	if wonInt == 1 || lostInt == 1 {
+		return errors.New("cannot delete system-critical Won or Lost stage")
+	}
+
+	// 2. Count active deals in this stage
 	var dealCount int
-	err := r.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM deals WHERE stage_id = $1", stageID).Scan(&dealCount)
-	if err == nil && dealCount > 0 {
-		return fmt.Errorf("cannot delete stage with %d active deals", dealCount)
+	_ = r.db.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM deals WHERE stage_id = $1", stageID).Scan(&dealCount)
+
+	// 3. If targetStageID provided, reassign deals atomically
+	if targetStageID != nil && *targetStageID > 0 {
+		if *targetStageID == stageID {
+			return errors.New("target destination stage cannot be the same as the stage being deleted")
+		}
+
+		var targetPipelineID int
+		err := r.db.Pool.QueryRow(ctx, "SELECT pipeline_id FROM deal_stages WHERE id = $1", *targetStageID).Scan(&targetPipelineID)
+		if err != nil {
+			return errors.New("target destination stage not found")
+		}
+		if targetPipelineID != pipelineID {
+			return errors.New("target destination stage must belong to the same pipeline")
+		}
+
+		tx, err := r.db.Pool.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to begin transaction: %w", err)
+		}
+		defer tx.Rollback(ctx)
+
+		if dealCount > 0 {
+			if _, err := tx.Exec(ctx, "UPDATE deals SET stage_id = $1, updated_at = NOW() WHERE stage_id = $2", *targetStageID, stageID); err != nil {
+				return fmt.Errorf("failed to reassign deals: %w", err)
+			}
+		}
+
+		if _, err := tx.Exec(ctx, "DELETE FROM deal_stages WHERE id = $1", stageID); err != nil {
+			return fmt.Errorf("failed to delete stage: %w", err)
+		}
+
+		return tx.Commit(ctx)
+	}
+
+	// 4. If no target stage provided, block if deals exist
+	if dealCount > 0 {
+		return fmt.Errorf("stage contains %d active deals; please choose a target stage to reassign deals before deleting", dealCount)
 	}
 
 	_, err = r.db.Pool.Exec(ctx, "DELETE FROM deal_stages WHERE id = $1", stageID)
