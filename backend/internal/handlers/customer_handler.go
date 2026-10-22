@@ -7,6 +7,7 @@ import (
 	"crm-backend-go/internal/middleware"
 	"crm-backend-go/internal/models"
 	"crm-backend-go/internal/repository"
+	"crm-backend-go/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -75,6 +76,24 @@ func (h *CustomerHandler) Create(c *gin.Context) {
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
 		return
+	}
+
+	if input.Phone != nil && *input.Phone != "" {
+		cleanPhone, err := utils.SanitizeIndianPhone(*input.Phone)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+			return
+		}
+		input.Phone = &cleanPhone
+	}
+
+	if input.Email != nil && *input.Email != "" {
+		cleanEmail, err := utils.ValidateEmail(*input.Email)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+			return
+		}
+		input.Email = &cleanEmail
 	}
 
 	user := middleware.GetCurrentUser(c)

@@ -339,6 +339,24 @@ func (h *DealHandler) ConvertLead(c *gin.Context) {
 		return
 	}
 
+	if input.CustomerPhone != "" {
+		cleanPhone, err := utils.SanitizeIndianPhone(input.CustomerPhone)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+			return
+		}
+		input.CustomerPhone = cleanPhone
+	}
+
+	if input.CustomerEmail != "" {
+		cleanEmail, err := utils.ValidateEmail(input.CustomerEmail)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+			return
+		}
+		input.CustomerEmail = cleanEmail
+	}
+
 	user := middleware.GetCurrentUser(c)
 	var userID *int
 	if user != nil {

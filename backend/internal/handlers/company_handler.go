@@ -9,6 +9,7 @@ import (
 	"crm-backend-go/internal/middleware"
 	"crm-backend-go/internal/models"
 	"crm-backend-go/internal/repository"
+	"crm-backend-go/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,6 +40,24 @@ func (h *CompanyHandler) UpdateCompanyProfile(c *gin.Context) {
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": fmt.Sprintf("Invalid company profile input: %v", err)})
 		return
+	}
+
+	if input.Phone != nil && strings.TrimSpace(*input.Phone) != "" {
+		cleaned, err := utils.SanitizeIndianPhone(*input.Phone)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": fmt.Sprintf("Invalid company phone: %v", err)})
+			return
+		}
+		input.Phone = &cleaned
+	}
+
+	if input.Email != nil && strings.TrimSpace(*input.Email) != "" {
+		cleaned, err := utils.ValidateEmail(*input.Email)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": fmt.Sprintf("Invalid company email: %v", err)})
+			return
+		}
+		input.Email = &cleaned
 	}
 
 	user := middleware.GetCurrentUser(c)

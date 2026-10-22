@@ -306,22 +306,29 @@ type CreateLeadInput struct {
 	CustomFields      map[string]interface{} `json:"custom_fields"`
 }
 func (r *LeadRepository) Create(ctx context.Context, in CreateLeadInput, currentUserID int) (*models.LeadResponse, error) {
-	cleanNumber := strings.TrimSpace(in.Number)
 	phoneVal := ""
-	if in.Phone != nil {
+	if in.Phone != nil && strings.TrimSpace(*in.Phone) != "" {
 		phoneVal = *in.Phone
 	} else {
-		phoneVal = cleanNumber
+		phoneVal = in.Number
 	}
-	normPhone := utils.NormalizePhone(phoneVal)
-	if cleanNumber == "" {
-		if normPhone != "" {
-			cleanNumber = normPhone
-		} else {
-			cleanNumber = fmt.Sprintf("LEAD-%d", time.Now().UnixNano()%1000000)
+	cleanPhone, err := utils.SanitizeIndianPhone(phoneVal)
+	if err != nil {
+		return nil, err
+	}
+	cleanEmail, err := utils.ValidateEmail(in.Email)
+	if err != nil {
+		return nil, err
+	}
+	cleanNumber := strings.TrimSpace(in.Number)
+	if cleanNumber != "" {
+		if sNum, err := utils.SanitizeIndianPhone(cleanNumber); err == nil {
+			cleanNumber = sNum
 		}
+	} else {
+		cleanNumber = cleanPhone
 	}
-	cleanEmail := strings.ToLower(strings.TrimSpace(in.Email))
+	normPhone := cleanPhone
 
 	if err := r.CheckDuplicates(ctx, cleanNumber, normPhone, cleanEmail, ""); err != nil {
 		return nil, err
@@ -392,7 +399,7 @@ func (r *LeadRepository) Create(ctx context.Context, in CreateLeadInput, current
 			NOW(), NOW(), NOW()
 		) RETURNING created_at, updated_at, last_activity_at
 	`
-	err := r.db.Pool.QueryRow(ctx, query,
+	err = r.db.Pool.QueryRow(ctx, query,
 		lead.Number, lead.Name, lead.Email, lead.Phone, lead.Requirement, lead.Source, lead.City, lead.Status,
 		lead.OwnerID, lead.Score, lead.LostReason, lead.Tags, lead.FollowUpDate, lead.FollowUpType,
 		lead.FollowUpNotes, lead.FollowUpCompleted, lead.CreatedByID,
@@ -811,11 +818,18 @@ func (r *LeadRepository) Update(ctx context.Context, number string, in UpdateLea
 		lead.Name = strings.TrimSpace(*in.Name)
 	}
 	if in.Email != nil {
-		lead.Email = strings.ToLower(strings.TrimSpace(*in.Email))
+		cleanEmail, err := utils.ValidateEmail(*in.Email)
+		if err != nil {
+			return nil, err
+		}
+		lead.Email = cleanEmail
 	}
 	if in.Phone != nil {
-		p := utils.NormalizePhone(*in.Phone)
-		lead.Phone = &p
+		cleanPhone, err := utils.SanitizeIndianPhone(*in.Phone)
+		if err != nil {
+			return nil, err
+		}
+		lead.Phone = &cleanPhone
 	}
 	if in.Requirement != nil {
 		lead.Requirement = strings.TrimSpace(*in.Requirement)

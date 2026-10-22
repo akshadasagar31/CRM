@@ -64,6 +64,10 @@ func (h *LeadHandler) Create(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"detail": confErr.Message})
 			return
 		}
+		if strings.Contains(err.Error(), "invalid phone number") || strings.Contains(err.Error(), "invalid email address") || strings.Contains(err.Error(), "cannot be empty") {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to create lead: " + err.Error()})
 		return
 	}
@@ -195,6 +199,10 @@ func (h *LeadHandler) Update(c *gin.Context) {
 		}
 		if err.Error() == "lead not found" {
 			c.JSON(http.StatusNotFound, gin.H{"detail": fmt.Sprintf("Lead with number '%s' not found.", number)})
+			return
+		}
+		if strings.Contains(err.Error(), "invalid phone number") || strings.Contains(err.Error(), "invalid email address") || strings.Contains(err.Error(), "cannot be empty") {
+			c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to update lead: " + err.Error()})

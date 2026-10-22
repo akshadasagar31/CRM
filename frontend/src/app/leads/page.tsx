@@ -81,6 +81,7 @@ import {
   Customer,
   customersApi,
 } from "@/lib/api";
+import { validateIndianPhone, validateEmail } from "@/lib/validation";
 import Sidebar, { SidebarTab } from "@/components/Sidebar";
 import ProfileView from "@/components/ProfileView";
 import ApiKeysPage from "@/app/api-keys/page";
@@ -381,6 +382,12 @@ export default function UniversalLeadsPage() {
   const [matchingCustomer, setMatchingCustomer] = useState<Customer | null>(null);
   const [customerChoice, setCustomerChoice] = useState<"new" | "link">("new");
 
+  // Inline validation errors
+  const [formPhoneError, setFormPhoneError] = useState("");
+  const [formEmailError, setFormEmailError] = useState("");
+  const [convCustomerPhoneError, setConvCustomerPhoneError] = useState("");
+  const [convCustomerEmailError, setConvCustomerEmailError] = useState("");
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
@@ -657,6 +664,8 @@ export default function UniversalLeadsPage() {
 
   // Open Create Lead Modal
   const handleOpenAddModal = () => {
+    setFormPhoneError("");
+    setFormEmailError("");
     setFormData({
       number: "",
       name: "",
@@ -681,6 +690,21 @@ export default function UniversalLeadsPage() {
   // Submit Lead Create
   const handleCreateLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const phoneVal = validateIndianPhone(formData.number, true);
+    if (!phoneVal.isValid) {
+      setFormPhoneError(phoneVal.error || "Invalid phone number");
+      showToast("error", phoneVal.error || "Invalid phone number");
+      return;
+    }
+    const emailVal = validateEmail(formData.email, true);
+    if (!emailVal.isValid) {
+      setFormEmailError(emailVal.error || "Invalid email address");
+      showToast("error", emailVal.error || "Invalid email address");
+      return;
+    }
+    setFormPhoneError("");
+    setFormEmailError("");
+
     setIsSubmitting(true);
     try {
       const tagsArray = formData.tagsText
@@ -695,10 +719,10 @@ export default function UniversalLeadsPage() {
       }
 
       const created = await leadsApi.create({
-        number: formData.number.trim(),
+        number: phoneVal.sanitized,
         name: formData.name.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim() || formData.number.trim(),
+        email: emailVal.sanitized,
+        phone: phoneVal.sanitized,
         requirement: formData.requirement.trim(),
         source: formData.source,
         city: formData.city.trim(),
@@ -737,6 +761,8 @@ export default function UniversalLeadsPage() {
 
   // Open Edit Modal
   const handleOpenEditModal = (lead: Lead) => {
+    setFormPhoneError("");
+    setFormEmailError("");
     setActiveLead(lead);
     setFormData({
       number: lead.number,
@@ -761,6 +787,8 @@ export default function UniversalLeadsPage() {
 
   // Open Convert Lead Modal
   const openConvertLeadModal = async (lead: Lead) => {
+    setConvCustomerPhoneError("");
+    setConvCustomerEmailError("");
     setLeadToConvert(lead);
     setConvDealName(`${lead.name} - Deal`);
     setConvCustomerName(lead.name);
@@ -822,6 +850,30 @@ export default function UniversalLeadsPage() {
       return;
     }
 
+    let cleanPhone = convCustomerPhone.trim();
+    if (cleanPhone) {
+      const pVal = validateIndianPhone(cleanPhone, true);
+      if (!pVal.isValid) {
+        setConvCustomerPhoneError(pVal.error || "Invalid phone number");
+        showToast("error", pVal.error || "Invalid phone number");
+        return;
+      }
+      cleanPhone = pVal.sanitized;
+    }
+
+    let cleanEmail = convCustomerEmail.trim();
+    if (cleanEmail) {
+      const eVal = validateEmail(cleanEmail, true);
+      if (!eVal.isValid) {
+        setConvCustomerEmailError(eVal.error || "Invalid email address");
+        showToast("error", eVal.error || "Invalid email address");
+        return;
+      }
+      cleanEmail = eVal.sanitized;
+    }
+    setConvCustomerPhoneError("");
+    setConvCustomerEmailError("");
+
     setIsConverting(true);
     try {
       const res = await leadsApi.convertToDeal(leadToConvert.number, {
@@ -834,8 +886,8 @@ export default function UniversalLeadsPage() {
         owner_id: leadToConvert.owner_id || undefined,
         requirement: leadToConvert.requirement,
         customer_name: convCustomerName.trim() || leadToConvert.name,
-        customer_email: convCustomerEmail.trim() || leadToConvert.email,
-        customer_phone: convCustomerPhone.trim() || undefined,
+        customer_email: cleanEmail || leadToConvert.email,
+        customer_phone: cleanPhone || undefined,
         customer_company: convCustomerCompany.trim() || undefined,
         customer_id: customerChoice === "link" && matchingCustomer ? matchingCustomer.id : undefined,
         create_new_customer: customerChoice === "new" || !matchingCustomer,
@@ -862,6 +914,22 @@ export default function UniversalLeadsPage() {
   const handleEditLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeLead) return;
+
+    const phoneVal = validateIndianPhone(formData.phone || activeLead.number, true);
+    if (!phoneVal.isValid) {
+      setFormPhoneError(phoneVal.error || "Invalid phone number");
+      showToast("error", phoneVal.error || "Invalid phone number");
+      return;
+    }
+    const emailVal = validateEmail(formData.email, true);
+    if (!emailVal.isValid) {
+      setFormEmailError(emailVal.error || "Invalid email address");
+      showToast("error", emailVal.error || "Invalid email address");
+      return;
+    }
+    setFormPhoneError("");
+    setFormEmailError("");
+
     setIsSubmitting(true);
     try {
       const tagsArray = formData.tagsText
@@ -879,8 +947,8 @@ export default function UniversalLeadsPage() {
 
       const updated = await leadsApi.update(activeLead.number, {
         name: formData.name.trim(),
-        email: formData.email.trim(),
-        phone: formData.phone.trim(),
+        email: emailVal.sanitized,
+        phone: phoneVal.sanitized,
         requirement: formData.requirement.trim(),
         source: formData.source,
         city: formData.city.trim(),
@@ -1053,6 +1121,27 @@ export default function UniversalLeadsPage() {
         headers.forEach((h, idx) => {
           if (vals[idx] !== undefined) rowObj[h] = vals[idx];
         });
+
+        // Validate row phone and email
+        const rawPhone = rowObj.number || rowObj.phone;
+        if (rawPhone) {
+          const pVal = validateIndianPhone(rawPhone, true);
+          if (!pVal.isValid) {
+            throw new Error(`Row ${i} (${rowObj.name || "Lead"}): ${pVal.error}`);
+          }
+          rowObj.number = pVal.sanitized;
+          rowObj.phone = pVal.sanitized;
+        }
+
+        const rawEmail = rowObj.email;
+        if (rawEmail) {
+          const eVal = validateEmail(rawEmail, true);
+          if (!eVal.isValid) {
+            throw new Error(`Row ${i} (${rowObj.name || "Lead"}): ${eVal.error}`);
+          }
+          rowObj.email = eVal.sanitized;
+        }
+
         parsedRows.push(rowObj);
       }
 
@@ -3201,9 +3290,31 @@ export default function UniversalLeadsPage() {
                     required
                     placeholder="+91-9876543210"
                     value={formData.number}
-                    onChange={(e) => setFormData({ ...formData, number: e.target.value, phone: e.target.value })}
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({ ...formData, number: val, phone: val });
+                      const res = validateIndianPhone(val, true);
+                      setFormPhoneError(res.isValid ? "" : (res.error || ""));
+                    }}
+                    onBlur={() => {
+                      const res = validateIndianPhone(formData.number, true);
+                      setFormPhoneError(res.isValid ? "" : (res.error || ""));
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: formPhoneError ? "1.5px solid #DC2626" : "1px solid #CBD5E1",
+                      fontSize: "0.8125rem",
+                      outline: formPhoneError ? "none" : undefined,
+                      boxSizing: "border-box",
+                    }}
                   />
+                  {formPhoneError && (
+                    <span style={{ display: "block", marginTop: "0.25rem", color: "#DC2626", fontSize: "0.75rem", fontWeight: 500 }}>
+                      {formPhoneError}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -3216,7 +3327,7 @@ export default function UniversalLeadsPage() {
                     placeholder="Rahul Sharma"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem", boxSizing: "border-box" }}
                   />
                 </div>
               </div>
@@ -3231,9 +3342,31 @@ export default function UniversalLeadsPage() {
                     required
                     placeholder="rahul.sharma@gmail.com"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({ ...formData, email: val });
+                      const res = validateEmail(val, true);
+                      setFormEmailError(res.isValid ? "" : (res.error || ""));
+                    }}
+                    onBlur={() => {
+                      const res = validateEmail(formData.email, true);
+                      setFormEmailError(res.isValid ? "" : (res.error || ""));
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: formEmailError ? "1.5px solid #DC2626" : "1px solid #CBD5E1",
+                      fontSize: "0.8125rem",
+                      outline: formEmailError ? "none" : undefined,
+                      boxSizing: "border-box",
+                    }}
                   />
+                  {formEmailError && (
+                    <span style={{ display: "block", marginTop: "0.25rem", color: "#DC2626", fontSize: "0.75rem", fontWeight: 500 }}>
+                      {formEmailError}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -3246,7 +3379,7 @@ export default function UniversalLeadsPage() {
                     placeholder="Pune"
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
+                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem", boxSizing: "border-box" }}
                   />
                 </div>
               </div>
@@ -3431,16 +3564,16 @@ export default function UniversalLeadsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!formPhoneError || !!formEmailError}
                   style={{
                     padding: "0.5rem 1.25rem",
                     borderRadius: "6px",
-                    backgroundColor: "#0D9488",
+                    backgroundColor: (formPhoneError || formEmailError) ? "#94A3B8" : "#0D9488",
                     color: "#FFFFFF",
                     fontSize: "0.8125rem",
                     fontWeight: 700,
                     border: "none",
-                    cursor: isSubmitting ? "not-allowed" : "pointer",
+                    cursor: (isSubmitting || formPhoneError || formEmailError) ? "not-allowed" : "pointer",
                   }}
                 >
                   {isSubmitting ? "Saving..." : "Create Lead"}
@@ -3509,31 +3642,76 @@ export default function UniversalLeadsPage() {
 
                 <div>
                   <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
-                    Email Address
+                    Email Address *
                   </label>
                   <input
                     type="email"
                     required
                     placeholder="rahul.sharma@gmail.com"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({ ...formData, email: val });
+                      const res = validateEmail(val, true);
+                      setFormEmailError(res.isValid ? "" : (res.error || ""));
+                    }}
+                    onBlur={() => {
+                      const res = validateEmail(formData.email, true);
+                      setFormEmailError(res.isValid ? "" : (res.error || ""));
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: formEmailError ? "1.5px solid #DC2626" : "1px solid #CBD5E1",
+                      fontSize: "0.8125rem",
+                      outline: formEmailError ? "none" : undefined,
+                      boxSizing: "border-box",
+                    }}
                   />
+                  {formEmailError && (
+                    <span style={{ display: "block", marginTop: "0.25rem", color: "#DC2626", fontSize: "0.75rem", fontWeight: 500 }}>
+                      {formEmailError}
+                    </span>
+                  )}
                 </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#475569", marginBottom: "0.25rem" }}>
-                    Phone Number
+                    Phone Number *
                   </label>
                   <input
                     type="text"
+                    required
                     placeholder="+91-9876543210"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    style={{ width: "100%", padding: "0.5rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.8125rem" }}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setFormData({ ...formData, phone: val });
+                      const res = validateIndianPhone(val, true);
+                      setFormPhoneError(res.isValid ? "" : (res.error || ""));
+                    }}
+                    onBlur={() => {
+                      const res = validateIndianPhone(formData.phone, true);
+                      setFormPhoneError(res.isValid ? "" : (res.error || ""));
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "0.5rem",
+                      borderRadius: "6px",
+                      border: formPhoneError ? "1.5px solid #DC2626" : "1px solid #CBD5E1",
+                      fontSize: "0.8125rem",
+                      outline: formPhoneError ? "none" : undefined,
+                      boxSizing: "border-box",
+                    }}
                   />
+                  {formPhoneError && (
+                    <span style={{ display: "block", marginTop: "0.25rem", color: "#DC2626", fontSize: "0.75rem", fontWeight: 500 }}>
+                      {formPhoneError}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -3714,16 +3892,16 @@ export default function UniversalLeadsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!formPhoneError || !!formEmailError}
                   style={{
                     padding: "0.5rem 1.25rem",
                     borderRadius: "6px",
-                    backgroundColor: "#0D9488",
+                    backgroundColor: (formPhoneError || formEmailError) ? "#94A3B8" : "#0D9488",
                     color: "#FFFFFF",
                     fontSize: "0.8125rem",
                     fontWeight: 700,
                     border: "none",
-                    cursor: isSubmitting ? "not-allowed" : "pointer",
+                    cursor: (isSubmitting || formPhoneError || formEmailError) ? "not-allowed" : "pointer",
                   }}
                 >
                   {isSubmitting ? "Saving..." : "Save Changes"}
@@ -3931,7 +4109,7 @@ export default function UniversalLeadsPage() {
                   type="button"
                   onClick={() =>
                     setImportCsvText(
-                      `number,name,email,city,requirement,source,industry\n+1-555-8001,Alpha Tech,contact@alpha.com,Boston,Needs cloud CRM,Website,Technology\n+1-555-8002,Apex Properties,apex@properties.io,Dallas,Luxury real estate leads,Referral,Real Estate`
+                      `number,name,email,city,requirement,source,industry\n9876543210,Alpha Tech,contact@alpha.com,Pune,Needs cloud CRM,Website,Technology\n9123456780,Apex Properties,apex@properties.io,Mumbai,Luxury real estate leads,Referral,Real Estate`
                     )
                   }
                   style={{
@@ -4852,34 +5030,98 @@ export default function UniversalLeadsPage() {
                   Customer Details ({customerChoice === "link" && matchingCustomer ? `Linked: ${matchingCustomer.name}` : "New Dedicated Customer"})
                 </h4>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
-                  <input
-                    type="text"
-                    placeholder="Rahul Sharma"
-                    value={convCustomerName}
-                    onChange={(e) => setConvCustomerName(e.target.value)}
-                    style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
-                  />
-                  <input
-                    type="text"
-                    placeholder="ABC Technologies Pvt. Ltd."
-                    value={convCustomerCompany}
-                    onChange={(e) => setConvCustomerCompany(e.target.value)}
-                    style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
-                  />
-                  <input
-                    type="email"
-                    placeholder="rahul.sharma@gmail.com"
-                    value={convCustomerEmail}
-                    onChange={(e) => setConvCustomerEmail(e.target.value)}
-                    style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
-                  />
-                  <input
-                    type="tel"
-                    placeholder="+91-9876543210"
-                    value={convCustomerPhone}
-                    onChange={(e) => setConvCustomerPhone(e.target.value)}
-                    style={{ padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem" }}
-                  />
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Rahul Sharma"
+                      value={convCustomerName}
+                      onChange={(e) => setConvCustomerName(e.target.value)}
+                      style={{ width: "100%", padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="ABC Technologies Pvt. Ltd."
+                      value={convCustomerCompany}
+                      onChange={(e) => setConvCustomerCompany(e.target.value)}
+                      style={{ width: "100%", padding: "0.45rem", borderRadius: "6px", border: "1px solid #CBD5E1", fontSize: "0.75rem", boxSizing: "border-box" }}
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="email"
+                      placeholder="rahul.sharma@gmail.com"
+                      value={convCustomerEmail}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setConvCustomerEmail(val);
+                        if (val.trim()) {
+                          const res = validateEmail(val, true);
+                          setConvCustomerEmailError(res.isValid ? "" : (res.error || ""));
+                        } else {
+                          setConvCustomerEmailError("");
+                        }
+                      }}
+                      onBlur={() => {
+                        if (convCustomerEmail.trim()) {
+                          const res = validateEmail(convCustomerEmail, true);
+                          setConvCustomerEmailError(res.isValid ? "" : (res.error || ""));
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "0.45rem",
+                        borderRadius: "6px",
+                        border: convCustomerEmailError ? "1.5px solid #DC2626" : "1px solid #CBD5E1",
+                        fontSize: "0.75rem",
+                        outline: convCustomerEmailError ? "none" : undefined,
+                        boxSizing: "border-box",
+                      }}
+                    />
+                    {convCustomerEmailError && (
+                      <span style={{ display: "block", marginTop: "0.2rem", color: "#DC2626", fontSize: "0.7rem", fontWeight: 500 }}>
+                        {convCustomerEmailError}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="tel"
+                      placeholder="+91-9876543210"
+                      value={convCustomerPhone}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setConvCustomerPhone(val);
+                        if (val.trim()) {
+                          const res = validateIndianPhone(val, true);
+                          setConvCustomerPhoneError(res.isValid ? "" : (res.error || ""));
+                        } else {
+                          setConvCustomerPhoneError("");
+                        }
+                      }}
+                      onBlur={() => {
+                        if (convCustomerPhone.trim()) {
+                          const res = validateIndianPhone(convCustomerPhone, true);
+                          setConvCustomerPhoneError(res.isValid ? "" : (res.error || ""));
+                        }
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "0.45rem",
+                        borderRadius: "6px",
+                        border: convCustomerPhoneError ? "1.5px solid #DC2626" : "1px solid #CBD5E1",
+                        fontSize: "0.75rem",
+                        outline: convCustomerPhoneError ? "none" : undefined,
+                        boxSizing: "border-box",
+                      }}
+                    />
+                    {convCustomerPhoneError && (
+                      <span style={{ display: "block", marginTop: "0.2rem", color: "#DC2626", fontSize: "0.7rem", fontWeight: 500 }}>
+                        {convCustomerPhoneError}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -4893,16 +5135,16 @@ export default function UniversalLeadsPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isConverting}
+                  disabled={isConverting || !!convCustomerPhoneError || !!convCustomerEmailError}
                   style={{
                     padding: "0.5rem 1.25rem",
                     borderRadius: "6px",
-                    backgroundColor: "#4F46E5",
+                    backgroundColor: (convCustomerPhoneError || convCustomerEmailError) ? "#94A3B8" : "#4F46E5",
                     color: "#FFFFFF",
                     fontSize: "0.8125rem",
                     fontWeight: 700,
                     border: "none",
-                    cursor: "pointer",
+                    cursor: (isConverting || convCustomerPhoneError || convCustomerEmailError) ? "not-allowed" : "pointer",
                   }}
                 >
                   {isConverting ? "Converting..." : "Convert to Deal"}

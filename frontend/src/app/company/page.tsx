@@ -42,6 +42,7 @@ import {
   EmailLog,
   DeliverabilityConfig,
 } from "@/lib/api";
+import { validateIndianPhone, validateEmail } from "@/lib/validation";
 import Sidebar, { SidebarTab } from "@/components/Sidebar";
 
 export default function CompanyPage() {
@@ -74,6 +75,10 @@ export default function CompanyPage() {
     pincode: "",
     default_currency: "INR",
   });
+
+  // Validation States
+  const [phoneError, setPhoneError] = useState("");
+  const [emailError, setEmailError] = useState("");
 
   // Logo upload state
   const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
@@ -248,6 +253,30 @@ export default function CompanyPage() {
       return;
     }
 
+    let cleanPhone = formData.phone || "";
+    if (cleanPhone.trim()) {
+      const pVal = validateIndianPhone(cleanPhone, true);
+      if (!pVal.isValid) {
+        setPhoneError(pVal.error || "Invalid phone number");
+        showToast(pVal.error || "Invalid phone number", "error");
+        return;
+      }
+      cleanPhone = pVal.sanitized;
+    }
+
+    let cleanEmail = formData.email || "";
+    if (cleanEmail.trim()) {
+      const eVal = validateEmail(cleanEmail, true);
+      if (!eVal.isValid) {
+        setEmailError(eVal.error || "Invalid email address");
+        showToast(eVal.error || "Invalid email address", "error");
+        return;
+      }
+      cleanEmail = eVal.sanitized;
+    }
+    setPhoneError("");
+    setEmailError("");
+
     try {
       setIsSaving(true);
 
@@ -260,7 +289,11 @@ export default function CompanyPage() {
       }
 
       // Update text details
-      const updated = await companyApi.update(formData);
+      const updated = await companyApi.update({
+        ...formData,
+        phone: cleanPhone,
+        email: cleanEmail,
+      });
       setProfile(updated);
       setIsEditing(false);
       showToast("Company profile updated successfully!");
@@ -274,6 +307,8 @@ export default function CompanyPage() {
 
   // Cancel Edit
   const handleCancelEdit = () => {
+    setPhoneError("");
+    setEmailError("");
     if (profile) {
       setFormData({
         company_name: profile.company_name || "",
@@ -614,19 +649,19 @@ export default function CompanyPage() {
                 <button
                   type="button"
                   onClick={handleSaveChanges}
-                  disabled={isSaving}
+                  disabled={isSaving || !!emailError || !!phoneError}
                   style={{
                     padding: "8px 20px",
                     borderRadius: "8px",
                     border: "none",
-                    backgroundColor: "#009F9A",
+                    backgroundColor: (emailError || phoneError) ? "#94A3B8" : "#009F9A",
                     color: "#FFFFFF",
                     fontSize: "0.8125rem",
                     fontWeight: 600,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: "8px",
-                    cursor: isSaving ? "not-allowed" : "pointer",
+                    cursor: (isSaving || emailError || phoneError) ? "not-allowed" : "pointer",
                     opacity: isSaving ? 0.7 : 1,
                   }}
                 >
@@ -2195,18 +2230,39 @@ export default function CompanyPage() {
                       <input
                         type="email"
                         value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData({ ...formData, email: val });
+                          if (val.trim()) {
+                            const res = validateEmail(val, true);
+                            setEmailError(res.isValid ? "" : (res.error || ""));
+                          } else {
+                            setEmailError("");
+                          }
+                        }}
+                        onBlur={() => {
+                          if (formData.email?.trim()) {
+                            const res = validateEmail(formData.email, true);
+                            setEmailError(res.isValid ? "" : (res.error || ""));
+                          }
+                        }}
                         placeholder="e.g. info@company.com"
                         style={{
                           width: "100%",
                           padding: "9px 12px",
                           borderRadius: "8px",
-                          border: "1px solid #CBD5E1",
+                          border: emailError ? "1.5px solid #DC2626" : "1px solid #CBD5E1",
                           fontSize: "0.8125rem",
                           color: "#0F172A",
                           boxSizing: "border-box",
+                          outline: emailError ? "none" : undefined,
                         }}
                       />
+                      {emailError && (
+                        <span style={{ display: "block", marginTop: "4px", color: "#DC2626", fontSize: "0.75rem", fontWeight: 500 }}>
+                          {emailError}
+                        </span>
+                      )}
                     </div>
 
                     <div>
@@ -2216,18 +2272,39 @@ export default function CompanyPage() {
                       <input
                         type="tel"
                         value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setFormData({ ...formData, phone: val });
+                          if (val.trim()) {
+                            const res = validateIndianPhone(val, true);
+                            setPhoneError(res.isValid ? "" : (res.error || ""));
+                          } else {
+                            setPhoneError("");
+                          }
+                        }}
+                        onBlur={() => {
+                          if (formData.phone?.trim()) {
+                            const res = validateIndianPhone(formData.phone, true);
+                            setPhoneError(res.isValid ? "" : (res.error || ""));
+                          }
+                        }}
                         placeholder="e.g. +91 98765 43210"
                         style={{
                           width: "100%",
                           padding: "9px 12px",
                           borderRadius: "8px",
-                          border: "1px solid #CBD5E1",
+                          border: phoneError ? "1.5px solid #DC2626" : "1px solid #CBD5E1",
                           fontSize: "0.8125rem",
                           color: "#0F172A",
                           boxSizing: "border-box",
+                          outline: phoneError ? "none" : undefined,
                         }}
                       />
+                      {phoneError && (
+                        <span style={{ display: "block", marginTop: "4px", color: "#DC2626", fontSize: "0.75rem", fontWeight: 500 }}>
+                          {phoneError}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2380,19 +2457,19 @@ export default function CompanyPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={isSaving}
+                    disabled={isSaving || !!emailError || !!phoneError}
                     style={{
                       padding: "9px 26px",
                       borderRadius: "8px",
                       border: "none",
-                      backgroundColor: "#009F9A",
+                      backgroundColor: (emailError || phoneError) ? "#94A3B8" : "#009F9A",
                       color: "#FFFFFF",
                       fontSize: "0.8125rem",
                       fontWeight: 600,
                       display: "inline-flex",
                       alignItems: "center",
                       gap: "8px",
-                      cursor: isSaving ? "not-allowed" : "pointer",
+                      cursor: (isSaving || emailError || phoneError) ? "not-allowed" : "pointer",
                       opacity: isSaving ? 0.7 : 1,
                       boxShadow: "0 1px 2px rgba(0, 0, 0, 0.05)",
                     }}

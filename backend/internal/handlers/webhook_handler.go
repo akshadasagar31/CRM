@@ -8,6 +8,7 @@ import (
 
 	"crm-backend-go/internal/models"
 	"crm-backend-go/internal/repository"
+	"crm-backend-go/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -127,6 +128,12 @@ func (h *WebhookHandler) IngestLead(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": "Lead phone/number is required."})
 		return
 	}
+	cleanPhone, err := utils.SanitizeIndianPhone(resNumber)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+		return
+	}
+	resNumber = cleanPhone
 
 	resName := p.Name
 	if resName == "" {
@@ -150,6 +157,12 @@ func (h *WebhookHandler) IngestLead(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": "Lead 'email' is required."})
 		return
 	}
+	cleanEmail, err := utils.ValidateEmail(resEmail)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"detail": err.Error()})
+		return
+	}
+	resEmail = cleanEmail
 
 	resReq := p.Requirement
 	if resReq == "" {
