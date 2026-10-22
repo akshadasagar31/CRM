@@ -568,12 +568,13 @@ export default function PaymentsPage() {
           else if (tab === "api-keys") router.push("/leads?tab=api-keys");
           else if (tab === "api-docs") router.push("/leads?tab=api-docs");
           else if (tab === "profile") router.push("/leads?tab=profile");
+          else if (tab === "admin-settings") router.push("/admin-settings");
         }}
         paymentsCount={summary.overdue_invoices_count > 0 ? summary.overdue_invoices_count : undefined}
         user={currentUser}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        onOpenAdminSettings={() => router.push("/leads?tab=profile")}
+        onOpenAdminSettings={() => router.push("/admin-settings")}
       />
 
       {/* Main Workspace */}

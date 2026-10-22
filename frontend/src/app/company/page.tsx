@@ -354,15 +354,16 @@ export default function CompanyPage() {
           else if (tab === "orders") router.push("/orders");
           else if (tab === "invoices") router.push("/invoices");
           else if (tab === "products") router.push("/products");
-          else if (tab === "follow-ups") router.push("/follow-ups");
+          else if (tab === "company") router.push("/company");
           else if (tab === "api-keys") router.push("/leads?tab=api-keys");
           else if (tab === "api-docs") router.push("/leads?tab=api-docs");
           else if (tab === "profile") router.push("/leads?tab=profile");
+          else if (tab === "admin-settings") router.push("/admin-settings");
         }}
         user={currentUser}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        onOpenAdminSettings={() => {}}
+        onOpenAdminSettings={() => router.push("/admin-settings")}
       />
 
       {/* Main Content Workspace */}

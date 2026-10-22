@@ -40,10 +40,11 @@ export type SidebarTab =
   | "company"
   | "api-keys"
   | "api-docs"
-  | "profile";
+  | "profile"
+  | "admin-settings";
 
 interface SubcategoryItem {
-  id: SidebarTab | "admin-settings";
+  id: SidebarTab;
   label: string;
   icon: React.ComponentType<{ size?: number; style?: React.CSSProperties; color?: string; className?: string }>;
   domId: string;
@@ -77,7 +78,7 @@ interface SidebarProps {
   onLogout?: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
-  onOpenAdminSettings: () => void;
+  onOpenAdminSettings?: () => void;
 }
 
 // Maps any active tab to its parent category ID
@@ -86,7 +87,7 @@ function getParentCategoryId(tab: SidebarTab): string | null {
   if (tab === "quotations" || tab === "orders") return "sales";
   if (tab === "invoices" || tab === "payments") return "finance";
   if (tab === "inventory" || tab === "products") return "inventory";
-  if (tab === "company" || tab === "api-keys" || tab === "api-docs" || tab === "profile") return "settings";
+  if (tab === "company" || tab === "api-keys" || tab === "api-docs" || tab === "profile" || tab === "admin-settings") return "settings";
   return null;
 }
 
@@ -180,12 +181,12 @@ export default function Sidebar({
   }, [activeTab]);
 
   // Handle Admin Settings click:
-  // Triggers drawer on Leads page or navigates to profile/admin settings tab
+  // Triggers drawer on Leads page or navigates to dedicated admin-settings page
   const handleAdminSettingsClick = () => {
     if (activeTab === "leads" && onOpenAdminSettings) {
       onOpenAdminSettings();
     } else {
-      onSelectTab("profile");
+      onSelectTab("admin-settings");
     }
   };
 

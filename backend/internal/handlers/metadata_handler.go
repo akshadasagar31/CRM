@@ -201,7 +201,11 @@ func (h *MetadataHandler) DeleteStatus(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid status ID"})
 		return
 	}
-	_ = h.metaRepo.DeleteStatus(c.Request.Context(), id)
+	err = h.metaRepo.DeleteStatus(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to delete status: " + err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Status deleted"})
 }
 
@@ -265,7 +269,11 @@ func (h *MetadataHandler) DeleteSource(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid source ID"})
 		return
 	}
-	_ = h.metaRepo.DeleteSource(c.Request.Context(), id)
+	err = h.metaRepo.DeleteSource(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to delete source: " + err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Source deleted"})
 }
 
@@ -332,7 +340,11 @@ func (h *MetadataHandler) DeleteTag(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"detail": "Invalid tag ID"})
 		return
 	}
-	_ = h.metaRepo.DeleteTag(c.Request.Context(), id)
+	err = h.metaRepo.DeleteTag(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"detail": "Failed to delete tag: " + err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "Tag deleted"})
 }
 

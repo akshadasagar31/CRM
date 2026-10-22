@@ -1944,6 +1944,7 @@ export default function FollowUpsPage({
           else if (tab === "api-keys") router.push("/leads?tab=api-keys");
           else if (tab === "api-docs") router.push("/leads?tab=api-docs");
           else if (tab === "profile") router.push("/leads?tab=profile");
+          else if (tab === "admin-settings") router.push("/admin-settings");
         }}
         followUpsCount={counts.pending ?? counts.all}
         user={user}
@@ -1953,7 +1954,7 @@ export default function FollowUpsPage({
         }}
         isCollapsed={false}
         onToggleCollapse={() => {}}
-        onOpenAdminSettings={() => {}}
+        onOpenAdminSettings={() => router.push("/admin-settings")}
       />
       {mainContent}
     </div>

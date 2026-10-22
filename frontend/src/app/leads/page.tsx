@@ -397,6 +397,10 @@ export default function UniversalLeadsPage() {
         router.push("/inventory");
         return;
       }
+      if (tabParam === "admin-settings") {
+        router.push("/admin-settings");
+        return;
+      }
       if (tabParam && ["leads", "follow-ups", "api-keys", "api-docs", "profile"].includes(tabParam)) {
         setActiveTab(tabParam);
       }
@@ -452,6 +456,10 @@ export default function UniversalLeadsPage() {
     }
     if (tab === "company") {
       router.push("/company");
+      return;
+    }
+    if (tab === "admin-settings") {
+      router.push("/admin-settings");
       return;
     }
     setActiveTab(tab);
@@ -4167,9 +4175,34 @@ export default function UniversalLeadsPage() {
                   Lead Module Admin Settings
                 </h2>
               </div>
-              <button onClick={() => setIsAdminSettingsOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B" }}>
-                <X size={18} />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminSettingsOpen(false);
+                    router.push("/admin-settings");
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    background: "#F0FDFA",
+                    border: "1px solid #99F6E4",
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    color: "#0F766E",
+                    cursor: "pointer",
+                  }}
+                >
+                  <span>Open Full Page</span>
+                  <ExternalLink size={12} />
+                </button>
+                <button onClick={() => setIsAdminSettingsOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#64748B" }}>
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Admin Tabs */}

@@ -256,6 +256,8 @@ export default function ProductsPage() {
       router.push("/follow-ups");
     } else if (tab === "company") {
       router.push("/company");
+    } else if (tab === "admin-settings") {
+      router.push("/admin-settings");
     } else {
       router.push(`/leads?tab=${tab}`);
     }
@@ -526,7 +528,7 @@ export default function ProductsPage() {
         }}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={handleToggleSidebar}
-        onOpenAdminSettings={() => {}}
+        onOpenAdminSettings={() => router.push("/admin-settings")}
       />
 
       {/* Main Content Workspace */}

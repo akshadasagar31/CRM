@@ -395,12 +395,13 @@ export default function OrdersPage() {
           else if (tab === "api-keys") router.push("/leads?tab=api-keys");
           else if (tab === "api-docs") router.push("/leads?tab=api-docs");
           else if (tab === "profile") router.push("/leads?tab=profile");
+          else if (tab === "admin-settings") router.push("/admin-settings");
         }}
         ordersCount={totalOrders}
         user={currentUser}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        onOpenAdminSettings={() => {}}
+        onOpenAdminSettings={() => router.push("/admin-settings")}
       />
 
       {/* Main Content */}

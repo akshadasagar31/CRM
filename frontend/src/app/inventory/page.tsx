@@ -185,6 +185,7 @@ export default function InventoryPage() {
     else if (tab === "api-keys") router.push("/leads?tab=api-keys");
     else if (tab === "api-docs") router.push("/leads?tab=api-docs");
     else if (tab === "profile") router.push("/leads?tab=profile");
+    else if (tab === "admin-settings") router.push("/admin-settings");
   };
 
   // Filtered Products
@@ -459,7 +460,7 @@ export default function InventoryPage() {
         }}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={handleToggleSidebar}
-        onOpenAdminSettings={() => {}}
+        onOpenAdminSettings={() => router.push("/admin-settings")}
       />
 
       {/* Content Workspace */}

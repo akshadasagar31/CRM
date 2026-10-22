@@ -167,28 +167,28 @@ func main() {
 
 		// Custom Fields Metadata
 		protected.GET("/leads/custom-fields", metaHandler.ListCustomFields)
-		protected.POST("/leads/custom-fields", metaHandler.CreateCustomField)
-		protected.PATCH("/leads/custom-fields/:field_id", metaHandler.UpdateCustomField)
-		protected.DELETE("/leads/custom-fields/:field_id", metaHandler.DeleteCustomField)
+		protected.POST("/leads/custom-fields", middleware.RequireRole("admin"), metaHandler.CreateCustomField)
+		protected.PATCH("/leads/custom-fields/:field_id", middleware.RequireRole("admin"), metaHandler.UpdateCustomField)
+		protected.DELETE("/leads/custom-fields/:field_id", middleware.RequireRole("admin"), metaHandler.DeleteCustomField)
 
 		// Statuses Metadata
 		protected.GET("/leads/statuses", metaHandler.ListStatuses)
-		protected.POST("/leads/statuses", metaHandler.CreateStatus)
-		protected.DELETE("/leads/statuses/:status_id", metaHandler.DeleteStatus)
+		protected.POST("/leads/statuses", middleware.RequireRole("admin"), metaHandler.CreateStatus)
+		protected.DELETE("/leads/statuses/:status_id", middleware.RequireRole("admin"), metaHandler.DeleteStatus)
 
 		// Sources Metadata
 		protected.GET("/leads/sources", metaHandler.ListSources)
-		protected.POST("/leads/sources", metaHandler.CreateSource)
-		protected.DELETE("/leads/sources/:source_id", metaHandler.DeleteSource)
+		protected.POST("/leads/sources", middleware.RequireRole("admin"), metaHandler.CreateSource)
+		protected.DELETE("/leads/sources/:source_id", middleware.RequireRole("admin"), metaHandler.DeleteSource)
 
 		// Tags Metadata
 		protected.GET("/leads/tags", metaHandler.ListTags)
-		protected.POST("/leads/tags", metaHandler.CreateTag)
-		protected.DELETE("/leads/tags/:tag_id", metaHandler.DeleteTag)
+		protected.POST("/leads/tags", middleware.RequireRole("admin"), metaHandler.CreateTag)
+		protected.DELETE("/leads/tags/:tag_id", middleware.RequireRole("admin"), metaHandler.DeleteTag)
 
 		// Duplicate Settings
 		protected.GET("/leads/settings/duplicates", metaHandler.GetDuplicateSettings)
-		protected.PUT("/leads/settings/duplicates", metaHandler.UpdateDuplicateSettings)
+		protected.PUT("/leads/settings/duplicates", middleware.RequireRole("admin"), metaHandler.UpdateDuplicateSettings)
 
 		// Saved Views
 		protected.GET("/leads/saved-views", metaHandler.ListSavedViews)
